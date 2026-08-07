@@ -215,21 +215,32 @@ Common items:
 
 ## Size and performance
 
-`@logcn/core` bundle (esbuild, ESM):
+Measured on Node 22 (`pnpm build && pnpm size && pnpm bench`). Higher ops/s is faster.
 
-| Metric | Value |
+| | |
 |---|---|
-| Raw | 5.65 KB (5,784 bytes) |
-| Gzip | 2.29 KB (2,346 bytes) |
+| `@logcn/core` gzip | ~4.5 KB |
+| Runtime deps | **0** (optional `zod` peer) |
 
-Hot-path benchmark (per-op latency, noop sink):
+### `pnpm bench` (default redaction ON)
 
-```bash
-pnpm build
-pnpm bench
-```
+| Workload | ops/s | median |
+|---|---:|---:|
+| Flat `create` → `.set()` → `.emit()` | ~1.0M | ~0.001 ms |
+| Nested ~1 KB payload | ~166k | ~0.006 ms |
 
-Reports ops/sec plus **median** and **p99** for flat and ~1 KB nested `set` + `emit`.
+### Local compare harness (noop / discard sink, `redact: false`)
+
+Same machine; create→emit style workload for logcn/evlog vs `info(obj)` for LogTape/Pino. Not identical to LogTape marketing nanosecond figures.
+
+| Library | Flat ops/s | Nested ~1 KB ops/s | Median (flat) |
+|---|---:|---:|---:|
+| **logcn** | ~2.1M | ~1.6M | ~370 ns |
+| Pino (discard stream) | ~610k | ~185k | ~1.4 µs |
+| LogTape (null sink) | ~280k | ~290k | ~2.4 µs |
+| evlog (silent + drain noop) | ~290k | ~245k | ~1.9 µs |
+
+Reproduce with `pnpm bench`. Compare harness is local (not shipped). Numbers are machine-dependent; we do not claim “fastest logger in the world.”
 
 
 ## logcn vs evlog

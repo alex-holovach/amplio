@@ -43,9 +43,12 @@ export function shouldSample(record: LogRecord, config?: SamplingConfig): boolea
     return true;
   }
 
-  for (const rule of config.keep ?? []) {
-    if (matchesKeepRule(record, rule)) {
-      return true;
+  const keep = config.keep;
+  if (keep) {
+    for (const rule of keep) {
+      if (matchesKeepRule(record, rule)) {
+        return true;
+      }
     }
   }
 

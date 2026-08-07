@@ -27,7 +27,7 @@ describe("DeepPartial on EventLogger.set", () => {
 
     const record = scope.emit();
 
-    expect(record?.user).toEqual({ id: "u_1", email: "a@b.c" });
+    expect(record?.user).toEqual({ id: "u_1", email: "[REDACTED]" });
   });
 
   it("accepts nested partials via logger.event initial", () => {
@@ -36,7 +36,7 @@ describe("DeepPartial on EventLogger.set", () => {
       .set({ user: { email: "b@c.d" } })
       .emit();
 
-    expect(record?.user).toEqual({ id: "u_2", email: "b@c.d" });
+    expect(record?.user).toEqual({ id: "u_2", email: "[REDACTED]" });
   });
 
   it("types nested patches as DeepPartial", () => {

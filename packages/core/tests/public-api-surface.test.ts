@@ -39,11 +39,8 @@ describe("public API surface", () => {
 
   it("wide-event instances expose set/error/emit (+ sealed)", () => {
     const scope = createLogger().set({ a: 1 });
-    const own = Object.getOwnPropertyNames(scope).filter(
-      (key) => !key.startsWith("_"),
-    );
-    // Runtime object may include create/event helpers on Logger; EventLogger must be narrow.
-    expect(own).toEqual(expect.arrayContaining(["sealed"]));
+    expect("sealed" in scope).toBe(true);
+    expect(typeof scope.sealed).toBe("boolean");
     expect(typeof scope.set).toBe("function");
     expect(typeof scope.emit).toBe("function");
 

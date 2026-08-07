@@ -1,8 +1,25 @@
-import type { LogcnConfig } from "./types.js";
+import type { LogcnConfig, SamplingConfig } from "./types.js";
 import { logger, type LoggerFacade } from "./logger.js";
+import { resetCompiledRedactForTests, setCompiledRedactFromConfig } from "./redact.js";
 import { resetPendingSinksForTests } from "./sinks.js";
 
 let activeConfig: LogcnConfig | null = null;
+let alwaysSample = true;
+
+const computeAlwaysSample = (sampling?: SamplingConfig): boolean => {
+  if (!sampling) {
+    return true;
+  }
+  const keep = sampling.keep;
+  if ((!keep || keep.length === 0) && (sampling.rate ?? 1) >= 1) {
+    return true;
+  }
+  return false;
+};
+
+export function resolveAlwaysSample(): boolean {
+  return alwaysSample;
+}
 
 export function init(config: LogcnConfig): LoggerFacade {
   const service = config.service?.trim();
@@ -35,6 +52,8 @@ export function init(config: LogcnConfig): LoggerFacade {
     ...(config.redact !== undefined ? { redact: config.redact } : {}),
     ...(config.strict !== undefined ? { strict: config.strict } : {}),
   };
+  setCompiledRedactFromConfig(config.redact);
+  alwaysSample = computeAlwaysSample(config.sampling);
 
   return logger;
 }
@@ -68,5 +87,7 @@ export function resolveConfig(): LogcnConfig {
 
 export function resetConfigForTests(): void {
   activeConfig = null;
+  alwaysSample = true;
+  resetCompiledRedactForTests();
   resetPendingSinksForTests();
 }

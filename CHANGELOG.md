@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+- Redaction: compile config once at `init()` (gated regex prechecks, copy-on-write subtrees); `redact: false` stays zero-cost; nested emit uses an inline leaf walk with safe-string / pattern-scan gates (~166k ops/s on ~1 KB nested payload vs ~1M flat with redaction on).
+- Logger: class instances with shared prototype methods (`InternalLoggerImpl`) — no per-instance closure factories or `defineProperty` sealed getter.
+- Payload ownership: `_ownsData` enables in-place `.set()` and skips emit-time clone when the logger owns its data; single-pass `.set()` and flat-path fast paths in `deepMerge`.
+- Emit: one record build (stamp `service`/`env`/timestamp once, single `resolveConfig()`, skip payload copy when nothing mutates it); `alwaysSample` fast path when sampling cannot drop.
+
 ### Notes
 - P1#9: Hero quick start omits email (uses `user.id` + `signup.method`); `AuthUserSignedUp` schema makes `user.email` optional in registry, CLI template, and example-basic.
 - P1#9: README redaction note no longer demos `[REDACTED]` in the hero JSON; example-basic `/signup` needs no request body.

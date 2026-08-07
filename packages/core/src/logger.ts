@@ -1,4 +1,4 @@
-import { resolveConfig } from "./config.js";
+import { resolveAlwaysSample, resolveConfig } from "./config.js";
 import { createError } from "./error.js";
 import { isDevelopment, isTest } from "./env.js";
 import { getSealedNoopLogger } from "./noop-logger.js";
@@ -6,7 +6,7 @@ import { LogcnValidationError } from "./validation-error.js";
 import { deepMerge } from "./deep-merge.js";
 import { validateShape } from "./schema.js";
 import { shouldSample } from "./sampling.js";
-import { redactRecord } from "./redact.js";
+import { getCompiledRedact, redactRecord } from "./redact.js";
 import { runSinksSync } from "./sinks.js";
 import type {
   DeepPartial,
@@ -14,17 +14,19 @@ import type {
   EventLogger,
   LogRecord,
   Logger,
+  LogcnConfig,
 } from "./types.js";
 
 type SealState = { sealed: boolean };
 
 type InternalLogger = Logger & {
   _data: Record<string, unknown>;
-  readonly _event?: string;
-  readonly _shape?: EventDef["shape"];
-  readonly _skipValidation?: boolean;
-  readonly _startedAt: number;
-  readonly _seal: SealState;
+  _ownsData: boolean;
+  _event?: string;
+  _shape?: EventDef["shape"];
+  _skipValidation?: boolean;
+  _startedAt: number;
+  _seal: SealState;
 };
 
 const warnSealed = (action: "set" | "error" | "emit" | "create" | "event"): void => {
@@ -33,26 +35,44 @@ const warnSealed = (action: "set" | "error" | "emit" | "create" | "event"): void
   }
 };
 
-const buildBaseFields = (): Record<string, unknown> => {
-  const config = resolveConfig();
-  return {
-    service: config.service,
-    env: config.env,
-    timestamp: new Date().toISOString(),
-  };
+let lastTimestampMs = 0;
+let lastTimestampIso = "";
+
+const getTimestampIso = (now: number): string => {
+  if (now === lastTimestampMs) {
+    return lastTimestampIso;
+  }
+  lastTimestampMs = now;
+  lastTimestampIso = new Date(now).toISOString();
+  return lastTimestampIso;
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const ensureOwnership = (logger: InternalLogger): void => {
+  if (!logger._ownsData) {
+    logger._data = { ...logger._data };
+    logger._ownsData = true;
+  }
 };
 
 const finalizeRecord = (
   logger: InternalLogger,
   payload: Record<string, unknown>,
+  config: LogcnConfig,
+  now: number,
 ): LogRecord => {
-  const config = resolveConfig();
-  const record: LogRecord = {
-    ...(buildBaseFields() as LogRecord),
-    ...(payload as LogRecord),
-  };
+  const compiledRedact = getCompiledRedact();
+  const record =
+    compiledRedact === false
+      ? (payload as LogRecord)
+      : redactRecord(payload as LogRecord);
 
-  record.duration_ms = Date.now() - logger._startedAt;
+  record.service = config.service;
+  record.env = config.env;
+  record.timestamp = getTimestampIso(now);
+  record.duration_ms = now - logger._startedAt;
 
   if (record.success === undefined && record.status !== undefined) {
     const status = record.status;
@@ -68,36 +88,51 @@ const finalizeRecord = (
     record.success = true;
   }
 
-  return redactRecord(record, config.redact);
+  return record;
 };
 
 const emitInternal = (logger: InternalLogger): LogRecord => {
   const config = resolveConfig();
+  const enrichers = config.enrichers;
+  let payload: Record<string, unknown>;
+  let ownsPayload = logger._ownsData;
 
-  let payload: Record<string, unknown> = { ...logger._data };
+  if (enrichers && enrichers.length > 0) {
+    if (!ownsPayload) {
+      payload = { ...logger._data };
+      ownsPayload = true;
+    } else {
+      payload = logger._data;
+    }
 
-  for (const enricher of config.enrichers ?? []) {
-    try {
-      const next = enricher(payload as LogRecord);
-      if (next == null || typeof next !== "object" || Array.isArray(next)) {
-        if (isDevelopment()) {
-          console.warn("[logcn] enricher failed: must return a plain object record");
+    for (const enricher of enrichers) {
+      try {
+        const next = enricher(payload as LogRecord);
+        if (next == null || typeof next !== "object" || Array.isArray(next)) {
+          if (isDevelopment()) {
+            console.warn("[logcn] enricher failed: must return a plain object record");
+          }
+          continue;
         }
-        continue;
-      }
-      payload = next as Record<string, unknown>;
-    } catch (error) {
-      if (isDevelopment()) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[logcn] enricher failed: ${message}`);
+        payload = next as Record<string, unknown>;
+      } catch (error) {
+        if (isDevelopment()) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[logcn] enricher failed: ${message}`);
+        }
       }
     }
+  } else {
+    payload = logger._data;
   }
 
   if (!logger._skipValidation && logger._shape) {
+    if (!ownsPayload) {
+      payload = { ...payload };
+      ownsPayload = true;
+    }
     try {
       const validated = validateShape(logger._shape, payload);
-      // Keep enricher-added fields; validated shape fields win on overlap.
       payload = { ...payload, ...validated };
     } catch (error) {
       if (!(error instanceof LogcnValidationError)) {
@@ -125,118 +160,165 @@ const emitInternal = (logger: InternalLogger): LogRecord => {
   }
 
   if (logger._event) {
+    if (!ownsPayload) {
+      payload = { ...payload };
+      ownsPayload = true;
+    }
     payload.event = logger._event;
     payload["@event"] = logger._event;
   }
 
-  const record = finalizeRecord(logger, payload);
+  if (!ownsPayload) {
+    payload = { ...payload };
+  }
 
-  if (shouldSample(record, config.sampling)) {
+  const now = Date.now();
+  const record = finalizeRecord(logger, payload, config, now);
+
+  if (resolveAlwaysSample() || shouldSample(record, config.sampling)) {
     runSinksSync(config.sinks, record);
   }
 
   return record;
 };
 
-const createInternalLogger = (
-  state: Pick<InternalLogger, "_data" | "_startedAt" | "_seal"> &
-    Partial<Pick<InternalLogger, "_event" | "_shape" | "_skipValidation">>,
-): InternalLogger => {
-  const logger = {
-    _data: state._data,
-    _startedAt: state._startedAt,
-    _seal: state._seal,
-    ...(state._event !== undefined ? { _event: state._event } : {}),
-    ...(state._shape !== undefined ? { _shape: state._shape } : {}),
-    ...(state._skipValidation !== undefined ? { _skipValidation: state._skipValidation } : {}),
-    set(partial: Record<string, unknown>): Logger {
-      if (logger._seal.sealed) {
-        warnSealed("set");
-        return logger;
-      }
-      logger._data = deepMerge(logger._data, partial);
-      return logger;
-    },
-    error(err: unknown, ctx?: Record<string, unknown>): Logger {
-      if (logger._seal.sealed) {
-        warnSealed("error");
-        return logger;
-      }
-      const structuredError =
-        err instanceof Error
-          ? createError({ message: err.message, code: err.name })
-          : createError({ message: String(err) });
-      return logger.set({ error: structuredError, success: false, ...ctx });
-    },
-    emit(): LogRecord | null {
-      if (logger._seal.sealed) {
-        warnSealed("emit");
-        return null;
-      }
-      const record = emitInternal(logger as InternalLogger);
-      logger._seal.sealed = true;
-      return record;
-    },
-    create(initial: Record<string, unknown> = {}): Logger {
-      if (logger._seal.sealed) {
-        return getSealedNoopLogger();
-      }
-      return createInternalLogger({
-        _data: deepMerge(logger._data, initial),
-        _startedAt: logger._startedAt,
-        _seal: { sealed: false },
-        ...(logger._event !== undefined ? { _event: logger._event } : {}),
-        ...(logger._shape !== undefined ? { _shape: logger._shape } : {}),
-        ...(logger._skipValidation !== undefined ? { _skipValidation: logger._skipValidation } : {}),
-      });
-    },
-    event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T> {
-      if (logger._seal.sealed) {
-        return getSealedNoopLogger().event(def);
-      }
-      const bound = createInternalLogger({
-        _data: deepMerge(logger._data, {}),
-        _startedAt: logger._startedAt,
-        _seal: logger._seal,
-        _event: def.name,
-        _shape: def.shape,
-        _skipValidation: def.skipValidation,
-      });
+class InternalLoggerImpl implements InternalLogger {
+  _data: Record<string, unknown>;
+  _ownsData: boolean;
+  _startedAt: number;
+  _seal: SealState;
+  _event?: string;
+  _shape?: EventDef["shape"];
+  _skipValidation?: boolean;
 
-      const eventLogger: EventLogger<T> = {
-        get sealed() {
-          return bound.sealed;
-        },
-        set(partial: DeepPartial<T>) {
-          bound.set(partial as Record<string, unknown>);
-          return eventLogger;
-        },
-        error(err: unknown, ctx?: Record<string, unknown>) {
-          bound.error(err, ctx);
-          return eventLogger;
-        },
-        emit() {
-          return bound.emit();
-        },
-      };
+  get sealed(): boolean {
+    return this._seal.sealed;
+  }
 
-      return eventLogger;
-    },
-  } as InternalLogger;
+  constructor(state: {
+    _data: Record<string, unknown>;
+    _ownsData: boolean;
+    _startedAt: number;
+    _seal: SealState;
+    _event?: string;
+    _shape?: EventDef["shape"];
+    _skipValidation?: boolean;
+  }) {
+    this._data = state._data;
+    this._ownsData = state._ownsData;
+    this._startedAt = state._startedAt;
+    this._seal = state._seal;
+    this._event = state._event;
+    this._shape = state._shape;
+    this._skipValidation = state._skipValidation;
+  }
 
-  Object.defineProperty(logger, "sealed", {
-    enumerable: true,
-    get(): boolean {
-      return logger._seal.sealed;
-    },
-  });
+  set(partial: Record<string, unknown>): Logger {
+    if (this._seal.sealed) {
+      warnSealed("set");
+      return this;
+    }
 
-  return logger;
-};
+    for (const key of Object.keys(partial)) {
+      const value = partial[key];
+      if (value === undefined) {
+        continue;
+      }
+      if (isPlainObject(value)) {
+        ensureOwnership(this);
+        this._data = deepMerge(this._data, partial);
+        return this;
+      }
+      if (this._ownsData) {
+        if (!Object.is(this._data[key], value)) {
+          this._data[key] = value;
+        }
+      } else if (!Object.is(this._data[key], value)) {
+        ensureOwnership(this);
+        this._data[key] = value;
+      }
+    }
+
+    return this;
+  }
+
+  error(err: unknown, ctx?: Record<string, unknown>): Logger {
+    if (this._seal.sealed) {
+      warnSealed("error");
+      return this;
+    }
+    const structuredError =
+      err instanceof Error
+        ? createError({ message: err.message, code: err.name })
+        : createError({ message: String(err) });
+    return this.set({ error: structuredError, success: false, ...ctx });
+  }
+
+  emit(): LogRecord | null {
+    if (this._seal.sealed) {
+      warnSealed("emit");
+      return null;
+    }
+    const record = emitInternal(this);
+    this._seal.sealed = true;
+    return record;
+  }
+
+  create(initial: Record<string, unknown> = {}): Logger {
+    if (this._seal.sealed) {
+      return getSealedNoopLogger();
+    }
+    const merged = deepMerge(this._data, initial);
+    return new InternalLoggerImpl({
+      _data: merged,
+      _ownsData: merged !== this._data,
+      _startedAt: this._startedAt,
+      _seal: { sealed: false },
+      _event: this._event,
+      _shape: this._shape,
+      _skipValidation: this._skipValidation,
+    });
+  }
+
+  event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T> {
+    if (this._seal.sealed) {
+      return getSealedNoopLogger().event(def);
+    }
+    const bound = new InternalLoggerImpl({
+      _data: this._data,
+      _ownsData: false,
+      _startedAt: this._startedAt,
+      _seal: this._seal,
+      _event: def.name,
+      _shape: def.shape,
+      _skipValidation: def.skipValidation,
+    });
+
+    const eventLogger: EventLogger<T> = {
+      get sealed() {
+        return bound.sealed;
+      },
+      set(partial: DeepPartial<T>) {
+        bound.set(partial as Record<string, unknown>);
+        return eventLogger;
+      },
+      error(err: unknown, ctx?: Record<string, unknown>) {
+        bound.error(err, ctx);
+        return eventLogger;
+      },
+      emit() {
+        return bound.emit();
+      },
+    };
+
+    return eventLogger;
+  }
+}
 
 export function createLogger(initial: Record<string, unknown> = {}): Logger {
-  return createInternalLogger({
-    _data: deepMerge(buildBaseFields(), initial),
+  return new InternalLoggerImpl({
+    _data: Object.keys(initial).length === 0 ? {} : { ...initial },
+    _ownsData: true,
     _startedAt: Date.now(),
     _seal: { sealed: false },
   });
@@ -249,8 +331,6 @@ export interface LoggerFacade {
     initial?: DeepPartial<T>,
   ): EventLogger<T>;
 }
-
-// Note: Logger.create/event return a sealed no-op logger when the instance is sealed; facade always starts fresh.
 
 export const logger: LoggerFacade = {
   create(initial = {}) {
