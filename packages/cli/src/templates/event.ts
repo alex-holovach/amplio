@@ -30,7 +30,7 @@ export const AuthUserSignedUp = defineEvent(
   z.object({
     user: z.object({
       id: z.string(),
-      email: z.string().email(),
+      email: z.string().email().optional(),
     }),
     signup: z.object({
       method: z.enum(["email", "oauth", "invite"]),

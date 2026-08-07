@@ -69,25 +69,25 @@ telemetry/
 import { defineEvent } from "@logcn/core";
 import { z } from "zod";
 
-export const AuthUserSignedUp = defineEvent({
-  name: "auth.user.signed_up",
-  schema: z.object({
+export const AuthUserSignedUp = defineEvent(
+  "auth.user.signed_up",
+  z.object({
     user: z.object({
       id: z.string(),
-      email: z.string().email(),
+      email: z.string().email().optional(),
     }),
     signup: z.object({
       method: z.enum(["email", "oauth", "invite"]),
       referrer: z.string().optional(),
     }),
   }),
-});
+);
 ```
 
 **Rules:**
 
-- `name` MUST match `/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*){2}$/`.
-- `schema` MUST implement [Standard Schema](https://standardschema.dev) (`~standard.validate`).
+- First argument (name) MUST match `/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*){2}$/`.
+- Second argument (shape) MUST implement [Standard Schema](https://standardschema.dev) (`~standard.validate`).
 - Returns opaque event definition with phantom types for inference.
 
 ### 4.2 `init`
@@ -121,7 +121,7 @@ const run = logger.create({
 });
 
 run.set({ sync: { tables: 4 } });
-await run.emit(); // validates if schema bound; otherwise freeform within init defaults
+run.emit(); // validates if schema bound; otherwise freeform within init defaults
 ```
 
 Standalone wide events for scripts, workers, CLI.
@@ -130,11 +130,11 @@ Standalone wide events for scripts, workers, CLI.
 
 ```typescript
 const ev = logger.event(AuthUserSignedUp, {
-  user: { id: "u_1", email: "a@b.co" },
+  user: { id: "u_1" },
 });
 
 ev.set({ signup: { method: "oauth" } });
-await ev.emit();
+ev.emit();
 ```
 
 - Binds instance to schema; emit runs validation.
@@ -153,14 +153,15 @@ export async function handler(c: Context) {
 ```
 
 - Retrieves current scope from AsyncLocalStorage.
-- Throws (or returns no-op sentinel — **decision: throw in dev**, optional `useLogger({ required: false })` later) if no scope.
+- Returns a no-op logger when no scope is active (does not throw); dev warns on misuse.
 
 ### 4.6 `.set()` / `.emit()`
 
 ```typescript
 interface WideEvent {
   set(partial: DeepPartial<Context>): this;
-  emit(): Promise<EmittedEvent | null>;
+  error(err: unknown, ctx?: Record<string, unknown>): this;
+  emit(): EmittedEvent | null;
 }
 ```
 
@@ -175,10 +176,11 @@ interface WideEvent {
 
 1. If sealed → dev warning, return `null`.
 2. Run enrichers (in registration order).
-3. If schema-bound → validate; on failure throw `LogcnValidationError` with issues.
-4. Attach system fields: `@timestamp`, `@event`, `service`, `env`, `duration_ms`, `level` (derived).
-5. Fan-out to sinks (await all; sink errors logged, do not throw by default).
-6. Seal instance.
+3. If schema-bound → validate; on failure throw `LogcnValidationError` in test or when `init({ strict: true })`, otherwise soft-fail (attach `validation.issues`, set `success: false`, dev warn).
+4. Redact sensitive fields (on by default; `redact: false` to disable).
+5. Attach system fields: `timestamp`, `@event`, `service`, `env`, `duration_ms`, `level` (derived).
+6. Fan-out to sinks synchronously (`flush()` awaits pending async sink deliveries; sink errors logged, do not throw by default).
+7. Seal instance.
 
 **Level derivation (v0):**
 
@@ -229,6 +231,7 @@ CLI `add event billing.invoice.paid` → `telemetry/events/billing/invoice-paid.
 - `--cwd` (default `.`)
 - `--package-manager` (`pnpm` | `npm` | `yarn` | `bun`)
 - `--typescript` (default true)
+- Framework detection from `package.json` (Next.js, Hono, Express, Fastify) via `detect-framework`; `--middleware`, `--event`, `--yes` for non-interactive scaffold
 
 ### 6.3 Registry resolution
 
@@ -268,6 +271,8 @@ Built output published to `registry/` as static JSON for CDN or git raw hosting.
 - Export factory `logcnMiddleware()` and typed `useLogger(c)`.
 
 Auto-emit is middleware responsibility, not `@logcn/core` magic.
+
+Next.js middleware (`registry/middleware/next.ts`): wraps handlers with AsyncLocalStorage via `runWithLogger`, auto-emits on response, and schedules `flush()` via Next.js `after`, optional `waitUntil`, or a fire-and-forget fallback.
 
 ## 9. Sinks & enrichers
 
@@ -319,20 +324,14 @@ class LogcnValidationError extends Error {
 class LogcnSealedError extends Error {} // dev-only throw if strict mode
 ```
 
-Structured errors in payloads:
+Structured errors via `.error()` (does not auto-emit):
 
 ```typescript
-log.set({
-  error: {
-    name: "PaymentError",
-    message: "Card declined",
-    code: "card_declined",
-    retryable: false,
-  },
-});
+log.error(new PaymentError("Card declined"), { billing: { order_id: "ord_1" } });
+log.emit();
 ```
 
-No separate `log.error()` API in v0.
+Or set an `error` object directly with `.set()` when you prefer manual shaping.
 
 ## 13. Type inference
 
@@ -345,7 +344,7 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 ## 14. Security
 
-- Core does not implement redaction in v0; ship `telemetry/enrichers/redact` registry item that strips known secret keys before sinks.
+- Core redacts emails, JWTs, Bearer tokens, credit cards, and sensitive field names on every emit by default; pass `redact: false` to `init()` to disable.
 - Document never logging passwords, tokens, raw cookies.
 
 ## 15. Compatibility
@@ -365,14 +364,14 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 - [x] `@logcn/core` exports a frozen public surface (`defineEvent`, `init`, `logger`/`createLogger`, `useLogger`/`runWithLogger`, errors, types) — verified by tests.
 - [x] `init()` returns `logger` with `.event()` and `.create()`.
-- [x] Wide event instances expose `.set()` and `.emit()` only (no level methods).
+- [x] Wide event instances expose `.set()`, `.error()`, and `.emit()` (no level methods like `.info()`).
 - [x] Public API documented in package README and matches this spec.
 
 ### AC-3 defineEvent & validation
 
 - [x] Invalid event name rejected at definition time (`defineEvent` + CLI).
 - [x] Schema-bound emit validates with Standard Schema adapter.
-- [x] Validation failure throws `LogcnValidationError` with path messages.
+- [x] Validation failure throws `LogcnValidationError` in test or `strict: true`; otherwise soft-fails with `validation.issues` on the record.
 - [x] Successful emit includes `@event` equal to declared name.
 
 ### AC-4 Wide-event lifecycle
@@ -380,8 +379,8 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 - [x] Deep merge for nested objects; arrays replace; `undefined` in patch keeps prior values.
 - [x] Second `.emit()` returns `null` and warns in development.
 - [x] Post-seal `.set()` is ignored with dev warning.
-- [x] Post-seal `.create()` returns `null` with dev warning.
-- [x] Post-seal `.event()` returns `null` with dev warning.
+- [x] Post-seal `.create()` returns sealed no-op logger with dev warning.
+- [x] Post-seal `.event()` returns sealed no-op event logger with dev warning.
 - [x] Enrichers run before validation; sinks run after validation.
 
 ### AC-5 Init & drain
@@ -465,7 +464,6 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 - `logger.fork()` for sub-operations
 - OpenTelemetry trace correlation enricher
 - `logcn add integration ai-sdk`
-- Redaction enricher registry item
 
 ---
 

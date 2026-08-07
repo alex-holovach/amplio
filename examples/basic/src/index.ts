@@ -13,18 +13,16 @@ app.get("/health", (c) => {
   return c.json({ ok: true });
 });
 
-app.post("/signup", async (c) => {
-  const body = await c.req.json<{ email: string }>();
-
+app.post("/signup", (c) => {
   logger
     .event(AuthUserSignedUp)
     .set({
-      user: { id: "user_demo", email: body.email },
+      user: { id: "user_demo" },
       signup: { method: "email" },
     })
     .emit();
 
-  useRequestLogger(c).set({ route: { name: "signup" }, user: { email: body.email } });
+  useRequestLogger(c).set({ route: { name: "signup" } });
   return c.json({ created: true });
 });
 

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Notes
+- P1#9: Hero quick start omits email (uses `user.id` + `signup.method`); `AuthUserSignedUp` schema makes `user.email` optional in registry, CLI template, and example-basic.
+- P1#9: README redaction note no longer demos `[REDACTED]` in the hero JSON; example-basic `/signup` needs no request body.
+- Docs sync: AGENTS.md, SPEC.md, and packages/core/README.md match shipped API (no-op `useLogger` outside ALS, sealed no-op loggers, `.error()`/`flush()`, sync `emit()`, soft-fail validation, default redaction, `defineEvent(name, schema)`, Next middleware flush).
 - P1#7: `flush()` tracks pending async sinks; Next middleware schedules flush via `after` / optional `waitUntil`; dev warns on async sink rejections.
 - P1#8: `logcn init` detects framework from package.json and auto-scaffolds middleware + event (`--middleware`, `--event`, `--yes`).
 - `EventLogger.error(err, ctx?)` delegates to bound logger; noop getters removed from public index.

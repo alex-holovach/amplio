@@ -23,7 +23,7 @@ Try it:
 
 ```bash
 curl http://127.0.0.1:3000/health
-curl -X POST http://127.0.0.1:3000/signup -H 'content-type: application/json' -d '{"email":"you@example.com"}'
+curl -X POST http://127.0.0.1:3000/signup
 ```
 
 Each request prints one JSON wide event to stdout.

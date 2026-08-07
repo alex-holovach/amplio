@@ -32,7 +32,7 @@ import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up.js";
 logger
   .event(AuthUserSignedUp)
   .set({
-    user: { id: "u_123", email: "alex@example.com" },
+    user: { id: "u_123" },
     signup: { method: "email" },
   })
   .emit();
@@ -49,12 +49,12 @@ Example emitted record (fields vary by schema and enrichers):
   "success": true,
   "event": "auth.user.signed_up",
   "@event": "auth.user.signed_up",
-  "user": { "id": "u_123", "email": "[REDACTED]" },
+  "user": { "id": "u_123" },
   "signup": { "method": "email" }
 }
 ```
 
-Default redaction masks emails and other sensitive patterns — include an `email` field and it shows as `[REDACTED]` in sink output.
+Default redaction masks emails and other sensitive patterns when those fields are present.
 
 ## After init
 
@@ -144,7 +144,7 @@ import { z } from "zod";
 export const AuthUserSignedUp = defineEvent(
   "auth.user.signed_up",
   z.object({
-    user: z.object({ id: z.string(), email: z.string().email() }),
+    user: z.object({ id: z.string(), email: z.string().email().optional() }),
     signup: z.object({ method: z.enum(["email", "oauth", "invite"]) }),
   }),
 );
@@ -155,7 +155,7 @@ export const AuthUserSignedUp = defineEvent(
 ```typescript
 import { logger } from "./telemetry/logger.js";
 
-logger.event(AuthUserSignedUp, { user: { id: "u_1", email: "a@b.com" } })
+logger.event(AuthUserSignedUp, { user: { id: "u_1" } })
   .set({ signup: { method: "email" } })
   .emit();
 ```

@@ -44,16 +44,19 @@ Only these symbols are public from `@logcn/core`:
 | `init` | Configure global logger (sinks, enrichers, defaults) — called once from `telemetry/logger.ts` |
 | `logger.event` | Start or bind a wide event by schema |
 | `logger.create` | Create a standalone wide-event scope (jobs, scripts, CLI runs) |
-| `useLogger` | Retrieve request-scoped logger from framework context (via middleware) |
-| `.set()` | Merge nested context into the active wide event |
-| `.emit()` | Finalize and drain the wide event (seals the instance) |
+| `useLogger` | Retrieve request-scoped logger from framework context (via middleware); returns a no-op logger outside ALS (does not throw) |
+| `.set()` | Merge nested context into the active wide event (`DeepPartial` on schema-bound loggers) |
+| `.error(err, ctx?)` | Record a structured error (`success: false`); does not emit — call `.emit()` after |
+| `.emit()` | Finalize, validate, redact, and drain sinks synchronously; seals the instance |
+| `flush()` | Await pending async sink deliveries (use with serverless `waitUntil` / Next.js `after`) |
 
 `.set()` deep-merges: `null` overwrites; `undefined` in a patch is skipped (prior value kept).
 `logger.set()` replaces arrays (does not concatenate); enrichers run in order and each sees fields from previous enrichers.
+Schema validation soft-fails outside `NODE_ENV=test` unless `init({ strict: true })`; failed emits attach `validation.issues` and set `success: false`.
 
-**Soft seal:** after `.emit()`, the instance is sealed. Further `.set()` is a no-op; `.emit()`, `.create()`, and `.event()` return `null`. Ignored calls log a dev warning (`console.warn`).
+**Soft seal:** after `.emit()`, the instance is sealed. Further `.set()` / `.error()` are no-ops; repeat `.emit()` returns `null`. Post-seal `.create()` and `.event()` return sealed no-op loggers (not `null`). Ignored calls log a dev warning (`console.warn`).
 
-**Do not add** `log.info`, `log.warn`, `log.debug`, or free-form string logging to the public API. Errors and levels are expressed through schema fields and `.set()`, not printf-style methods.
+**Do not add** `log.info`, `log.warn`, `log.debug`, or free-form string logging to the public API. Use `.error()` plus schema fields for structured errors — not printf-style methods.
 
 ## User repo layout (after `npx logcn init`)
 
@@ -138,6 +141,8 @@ pnpm registry:serve  # local HTTP server for shadcn registry JSON (127.0.0.1:417
 ```
 
 CLI surface (user-facing): `logcn init`, `logcn list [kind]` (id — title — description; titles when present), `logcn add <kind> <id>` (`--force` overwrites).
+
+`logcn init` detects framework from `package.json` (Next.js, Hono, Express, Fastify via `packages/cli/src/utils/detect-framework.ts`) and can auto-scaffold middleware + a starter event.
 
 Sampling keep rules support `equals` / `matches` / `gte` / `lte` and dotted paths (e.g. `attributes.http.status_code`); `gte`+`lte` on one rule is an inclusive AND range. `shouldSample` with no/undefined config always keeps. On a single keep rule, when `equals` is set, `matches`/`gte`/`lte` on that rule are not evaluated. `equals` uses Object.is (null matches null; 0 matches numeric zero; `""` matches empty string fields; absent fields still miss). `matches` only applies to string field values (non-strings do not match); if `matches` is set but the field is not a string, evaluation falls through to `gte`/`lte`; `gte`/`lte` only apply to number field values (non-numbers do not match) and work on nested dotted paths (e.g. `user.score`). Nested keep paths miss when an intermediate segment is absent or not an object. Keep rules do not match when the target field is absent. Rate `<= 0` drops non-matching events, including negative rates (`keep` rules are OR'd — any match keeps); rate `>= 1` always keeps (including values above 1). On a rate drop, `emit()` still returns the finalized record — only sink delivery is skipped. Enrichers and redaction still run on emit() when sampling skips sinks; only delivery is skipped. On emit, when `success` is unset it defaults to `true`; a numeric `status` in `[200, 400)` derives `success` when unset; an explicit `success` always wins.
 

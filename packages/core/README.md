@@ -45,7 +45,8 @@ createLogger()
 | `defineEvent(name, shape?, options?)` | Typed event schema (Zod 3+ or Standard Schema) |
 | `createLogger(initial?)` | Wide-event builder: `.set()`, `.emit()`, `.create()`, `.event()` |
 | `createRequestLogger({ method, path })` | HTTP helper with `request_id` |
-| `runWithLogger` / `useLogger` | AsyncLocalStorage context |
+| `runWithLogger` / `useLogger` | AsyncLocalStorage context (`useLogger` no-op outside ALS) |
+| `flush()` | Await pending async sink deliveries |
 | `createError({ message, why, fix, code, link })` | Structured errors for events |
 | `deepMerge` | Fast merge used by `.set()` |
 | `LogcnValidationError` | Thrown on schema validation failure; includes `issues` with paths |
@@ -54,9 +55,11 @@ createLogger()
 
 - **Library-first silence:** Use `createLogger()` / `.emit()` without calling `init()` first — emit is a no-op (returns a record, never throws; no sinks run). Wire `init({ service, env, sinks: [...] })` when you want output. `getConfig()` still throws if called before `init()`.
 - **Pipeline:** enrichers → validation → redaction → sampling → sinks.
-- **No level methods** on wide events — only `.set()` / `.emit()` (plus `.create()` / `.event()` on the logger facade).
-- **Mutable `.set()`** deep-merges fields in place (ALS-safe); **`.emit()`** runs validation → redaction → sampling → sinks, then seals the logger.
-- **Soft seal:** after `.emit()`, the instance is sealed. Further `.set()` is a no-op; `.emit()`, `.create()`, and `.event()` return `null`. Ignored calls log a dev warning (`console.warn`).
+- **No level methods** on wide events — use `.set()` / `.error()` / `.emit()` (plus `.create()` / `.event()` on the logger facade).
+- **Mutable `.set()`** deep-merges fields in place (`DeepPartial` on schema-bound loggers; ALS-safe); **`.emit()`** runs enrichers → validation → redaction → sampling → sinks synchronously, then seals the logger. **`flush()`** awaits pending async sink deliveries.
+- **Soft seal:** after `.emit()`, the instance is sealed. Further `.set()` / `.error()` are no-ops; repeat `.emit()` returns `null`. Post-seal `.create()` and `.event()` return sealed no-op loggers (not `null`). Ignored calls log a dev warning (`console.warn`).
+- **`useLogger()`** returns a no-op logger outside AsyncLocalStorage (does not throw).
+- **Validation** soft-fails outside `NODE_ENV=test` unless `init({ strict: true })`; failed emits attach `validation.issues` and set `success: false`.
 - **Auto fields** on emit: `timestamp`, `duration_ms`, `request_id` (when set), `success` (from `status`), `service`, `env`. Schema events also set `event` and `@event`.
 - **Sampling**: `rate` (0–1, fraction of records to emit) plus `keep` rules that always emit matching records. `field` supports dotted paths (e.g. `user.plan`) with `equals`, `matches` (regex), or `gte` (numeric). Example: `{ field: "user.plan", equals: "enterprise" }`.
 - **Redaction**: emails, JWTs, Bearer tokens, credit cards, and sensitive field names (on by default; pass `redact: false` to `init()` to opt out).
