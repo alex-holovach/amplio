@@ -9,7 +9,7 @@ const app = new Hono();
 app.use("*", logcnMiddleware());
 
 app.get("/health", (c) => {
-  useRequestLogger(c)?.set({ route: { name: "health" } });
+  useRequestLogger(c).set({ route: { name: "health" } });
   return c.json({ ok: true });
 });
 
@@ -24,7 +24,7 @@ app.post("/signup", async (c) => {
     })
     .emit();
 
-  useRequestLogger(c)?.set({ route: { name: "signup" }, user: { email: body.email } });
+  useRequestLogger(c).set({ route: { name: "signup" }, user: { email: body.email } });
   return c.json({ created: true });
 });
 

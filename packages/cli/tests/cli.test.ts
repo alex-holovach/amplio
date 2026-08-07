@@ -606,3 +606,44 @@ describe("runAddIntegration", () => {
     await access(integrationPath);
   });
 });
+
+describe("runInit framework detect", () => {
+  it("auto-scaffolds next middleware and auth.user.signed_up with --yes", async () => {
+    const cwd = await makeTempDir("logcn-init-next-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ dependencies: { next: "^15.0.0" } }, null, 2),
+    );
+    await runInit({ cwd, yes: true });
+
+    const middlewarePath = path.join(cwd, "telemetry/middleware/next.ts");
+    const eventPath = path.join(cwd, "telemetry/events/auth/user-signed-up.ts");
+    await access(middlewarePath);
+    await access(eventPath);
+
+    const middlewareSource = await readFile(middlewarePath, "utf8");
+    expect(middlewareSource).toContain("withLogcn");
+    expect(middlewareSource).toContain("flush");
+  });
+
+  it("respects --middleware none --event none", async () => {
+    const cwd = await makeTempDir("logcn-init-skip-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ dependencies: { hono: "^4.0.0" } }, null, 2),
+    );
+    await runInit({ cwd, yes: true, middleware: "none", event: "none" });
+
+    await expect(access(path.join(cwd, "telemetry/middleware/hono.ts"))).rejects.toThrow();
+    await expect(access(path.join(cwd, "telemetry/events/auth/user-signed-up.ts"))).rejects.toThrow();
+  });
+
+  it("explicit --middleware hono scaffolds hono without package.json", async () => {
+    const cwd = await makeTempDir("logcn-init-explicit-mw-");
+    await runInit({ cwd, middleware: "hono", event: "none" });
+
+    const middlewarePath = path.join(cwd, "telemetry/middleware/hono.ts");
+    await access(middlewarePath);
+    await expect(access(path.join(cwd, "telemetry/events/auth/user-signed-up.ts"))).rejects.toThrow();
+  });
+});

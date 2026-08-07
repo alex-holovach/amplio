@@ -1,17 +1,49 @@
-import { createError, createRequestLogger, runWithLogger, type Logger } from "@logcn/core";
+import {
+  createRequestLogger,
+  flush,
+  runWithLogger,
+  useLogger,
+  type Logger,
+} from "@logcn/core";
 import type { NextRequest, NextResponse } from "next/server";
 
-let activeLogger: Logger | undefined;
+export interface WithLogcnOptions {
+  waitUntil?: (promise: Promise<unknown>) => void;
+}
 
-function formatError(error: unknown) {
-  if (error instanceof Error) {
-    return createError({ message: error.message, code: error.name });
+let warnedNoWaitUntil = false;
+
+function scheduleFlush(options?: WithLogcnOptions): void {
+  if (options?.waitUntil) {
+    options.waitUntil(flush());
+    return;
   }
-  return createError({ message: String(error) });
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { after } = require("next/server") as typeof import("next/server");
+    if (typeof after === "function") {
+      after(() => flush());
+      return;
+    }
+  } catch {
+    // next/server not available
+  }
+
+  void flush();
+
+  const env = globalThis.process?.env?.NODE_ENV;
+  if ((env === undefined || env === "development") && !warnedNoWaitUntil) {
+    warnedNoWaitUntil = true;
+    console.warn(
+      "[logcn] async sinks may be cut off without waitUntil/after; pass waitUntil to withLogcn or call flush()",
+    );
+  }
 }
 
 export function withLogcn<T extends (request: NextRequest, ...args: never[]) => Promise<NextResponse>>(
   handler: T,
+  options?: WithLogcnOptions,
 ): T {
   const wrapped = (async (request: NextRequest, ...rest: never[]) => {
     const requestLogger = createRequestLogger({
@@ -26,7 +58,6 @@ export function withLogcn<T extends (request: NextRequest, ...args: never[]) => 
     });
 
     return runWithLogger(requestLogger, async () => {
-      activeLogger = requestLogger;
       try {
         const response = await handler(request, ...rest);
         if (!requestLogger.sealed) {
@@ -35,20 +66,16 @@ export function withLogcn<T extends (request: NextRequest, ...args: never[]) => 
             status: response.status,
           });
           requestLogger.emit();
+          scheduleFlush(options);
         }
         return response;
       } catch (error) {
         if (!requestLogger.sealed) {
-          requestLogger.set({
-            error: formatError(error),
-            status: 500,
-            success: false,
-          });
+          requestLogger.error(error, { status: 500 });
           requestLogger.emit();
+          scheduleFlush(options);
         }
         throw error;
-      } finally {
-        activeLogger = undefined;
       }
     });
   }) as T;
@@ -56,6 +83,6 @@ export function withLogcn<T extends (request: NextRequest, ...args: never[]) => 
   return wrapped;
 }
 
-export function useRequestLogger(): Logger | undefined {
-  return activeLogger;
+export function useRequestLogger(): Logger {
+  return useLogger();
 }

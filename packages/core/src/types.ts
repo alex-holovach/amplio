@@ -1,6 +1,12 @@
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
+export type DeepPartial<T> = T extends (infer U)[]
+  ? DeepPartial<U>[]
+  : T extends object
+    ? { [P in keyof T]?: DeepPartial<T[P]> }
+    : T;
+
 export type LogRecord = Record<string, JsonValue>;
 
 export interface StandardSchemaResult<T> {
@@ -70,6 +76,8 @@ export interface LogcnConfig {
   enrichers?: Enricher[];
   sampling?: SamplingConfig;
   redact?: RedactConfig;
+  /** When true, schema validation failures throw from emit() even outside NODE_ENV=test. */
+  strict?: boolean;
 }
 
 export interface RequestLoggerOptions {
@@ -81,13 +89,15 @@ export interface RequestLoggerOptions {
 export interface Logger {
   readonly sealed: boolean;
   set(partial: Record<string, unknown>): Logger;
+  error(err: unknown, ctx?: Record<string, unknown>): Logger;
   emit(): LogRecord | null;
-  create(initial?: Record<string, unknown>): Logger | null;
-  event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T> | null;
+  create(initial?: Record<string, unknown>): Logger;
+  event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T>;
 }
 
 export interface EventLogger<T extends Record<string, unknown>> {
   readonly sealed: boolean;
-  set(partial: Partial<T>): EventLogger<T>;
+  set(partial: DeepPartial<T>): EventLogger<T>;
+  error(err: unknown, ctx?: Record<string, unknown>): EventLogger<T>;
   emit(): LogRecord | null;
 }

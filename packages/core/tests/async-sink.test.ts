@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createLogger, init, resetConfigForTests, type LogRecord, type Sink } from "../src/index.js";
+import { createLogger, flush, init, resetConfigForTests, type LogRecord, type Sink } from "../src/index.js";
 
 beforeEach(() => {
   resetConfigForTests();
@@ -21,12 +21,13 @@ describe("async sink", () => {
     expect(records[0]?.route).toBe("/health");
   });
 
-  it("async sink that rejects — emit() does not throw; no unhandledRejection", async () => {
+  it("async sink that rejects — emit() does not throw; flush warns in development", async () => {
     const unhandled: unknown[] = [];
     const onUnhandled = (reason: unknown) => {
       unhandled.push(reason);
     };
     process.on("unhandledRejection", onUnhandled);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     try {
       const sink: Sink = async () => {
@@ -35,12 +36,13 @@ describe("async sink", () => {
       init({ service: "api", env: "test", sinks: [sink] });
 
       expect(() => createLogger().emit()).not.toThrow();
+      await flush();
 
-      await vi.waitFor(() => {
-        expect(unhandled).toHaveLength(0);
-      });
+      expect(unhandled).toHaveLength(0);
+      expect(warn).toHaveBeenCalledWith("[logcn] async sink failed: sink failed");
     } finally {
       process.off("unhandledRejection", onUnhandled);
+      warn.mockRestore();
     }
   });
 

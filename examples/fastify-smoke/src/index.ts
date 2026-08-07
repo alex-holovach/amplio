@@ -7,7 +7,7 @@ const app = Fastify();
 await app.register(logcnPlugin);
 
 app.get("/health", async (request) => {
-  useRequestLogger(request)?.set({ route: { name: "health" } });
+  useRequestLogger(request).set({ route: { name: "health" } });
   return { ok: true };
 });
 

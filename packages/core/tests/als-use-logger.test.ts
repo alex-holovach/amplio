@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   createLogger,
   init,
@@ -6,6 +6,7 @@ import {
   runWithLogger,
   useLogger,
 } from "../src/index.js";
+import { getContextNoopLogger } from "../src/noop-logger.js";
 import type { LogRecord, Sink } from "../src/index.js";
 
 const capture = (): { records: LogRecord[]; sink: Sink } => {
@@ -28,16 +29,27 @@ describe("ALS useLogger", () => {
     init({ service: "api", env: "test", sinks: [sink] });
 
     await runWithLogger(createLogger(), async () => {
-      useLogger()?.set({ a: 1 });
-      useLogger()?.emit();
+      useLogger().set({ a: 1 });
+      useLogger().emit();
     });
 
     expect(records).toHaveLength(1);
     expect(records[0]!.a).toBe(1);
   });
 
-  it("useLogger() outside runWithLogger returns undefined", () => {
-    expect(useLogger()).toBeUndefined();
+  it("useLogger() outside runWithLogger returns context no-op logger", () => {
+    const noop = useLogger();
+    expect(noop).toBe(getContextNoopLogger());
+    expect(noop.sealed).toBe(true);
+  });
+
+  it("useLogger() outside runWithLogger warns on set in development/test", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    useLogger().set({ a: 1 });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/useLogger\(\) has no request context.*set\(\)/),
+    );
+    warn.mockRestore();
   });
 
   it("nested runWithLogger restores outer logger after inner exits", () => {
@@ -52,13 +64,13 @@ describe("ALS useLogger", () => {
 
       runWithLogger(inner, () => {
         expect(useLogger()).toBe(inner);
-        useLogger()?.set({ from: "inner" }).emit();
+        useLogger().set({ from: "inner" }).emit();
       });
 
       expect(useLogger()).toBe(outer);
     });
 
-    expect(useLogger()).toBeUndefined();
+    expect(useLogger()).toBe(getContextNoopLogger());
     expect(records).toHaveLength(1);
     expect(records[0]!.scope).toBe("B");
     expect(records[0]!.from).toBe("inner");

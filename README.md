@@ -2,21 +2,19 @@
 
 Schema-first wide-event telemetry that installs as **open code** in your repo — shadcn for observability.
 
-Define typed event schemas, accumulate context with `.set()`, emit once with `.emit()`. No sprawling logger surface. No opaque npm runtime.
+Define typed event schemas, accumulate context with `.set()`, emit once with `.emit()`. Events, middleware, sinks, and integrations live in `telemetry/` — you read, edit, and review them like application code. No sprawling logger surface. No opaque npm runtime.
+
+## Quick start
 
 ```bash
 npx logcn init
-npx logcn list
 npx logcn add event auth.user.signed_up
 npx logcn add middleware hono
-npx logcn add integration better-auth
 ```
 
-Running `logcn` with no args prints usage/help but exits **1**; use `logcn -h` / `--help` for exit 0.
-Unknown options and missing option values also exit **1** with a short `error:` line (no Node stack).
-`add` needs both kind and name (e.g. `add sink console`); bare `add` or kind-only exits **1** with an error.
+`logcn init` detects your framework from `package.json` (Next.js, Hono, Express, Fastify) and can scaffold middleware plus a starter event in one shot (`--yes` or non-interactive).
 
-Or pull registry items directly:
+Or pull registry items directly with shadcn:
 
 ```bash
 npx shadcn@latest add @logcn/event-auth-user-signed-up
@@ -25,74 +23,7 @@ npx shadcn@latest add @logcn/middleware-hono
 
 Registry items are published as shadcn-compatible JSON under `public/r/` (e.g. `event-auth-user-signed-up.json` with `~/events/...` targets → `telemetry/`).
 
-
-## After init
-
-`@logcn/cli` is a scaffolder. Once `telemetry/` exists, you can remove the CLI and keep editing events/middleware/sinks with only `@logcn/core` installed.
-
-## Philosophy
-
-| Principle | What it means |
-|---|---|
-| **Open code** | Events, middleware, sinks, and integrations live in `telemetry/` — you read, edit, and review them like app code |
-| **Schema-first** | Every important event is declared with `defineEvent` before use |
-| **Wide events** | One rich event per unit of work; context accumulates, then drains on `.emit()` |
-| **Less is more** | Tiny runtime (`@logcn/core`); frozen public API |
-| **shadcn-native** | Registry items scaffold typed files into your repo |
-
-## Quick start
-
-**1. Init** — creates `logcn.json` and `telemetry/logger.ts`:
-
-```bash
-npx logcn init
-```
-
-Omitting `--service` defaults the service name to `my-app`; `--service` is trimmed, so empty or whitespace-only values fall back the same way.
-
-`logcn init` accepts `--package-manager <pnpm|npm|yarn|bun>` (default `pnpm`). Values are trimmed and case-insensitive; whitespace-only falls back to the default.
-
-`logcn init --no-typescript` sets `typescript: false` in `logcn.json`.
-
-`--service`, `--package-manager`, and `--no-typescript` are only valid with `init` (rejected on `add` / `list`).
-Whitespace-only `--service` / `--package-manager` on non-init commands are ignored (not rejected).
-
-`init --cwd <path>` creates missing directories (`mkdir -p`).
-`add --cwd <path>` also creates missing directories.
-
-**2. List registry items** (optional filter by kind):
-
-Works without prior `init` — reads the bundled registry.
-
-```bash
-npx logcn list
-npx logcn list sink
-# e.g. sink/console — Console Sink (sink-console)
-```
-
-Each list line includes the human title (e.g. Console Sink).
-
-**3. Add an event** — nested paths and barrel exports included:
-
-```bash
-npx logcn add event auth.user.signed_up
-# → telemetry/events/auth/user-signed-up.ts
-```
-
-Event names must be lowercase dot-separated segments (e.g. `auth.user.signed_up`); no leading/trailing dots or uppercase.
-
-`logcn add event …` can scaffold from the registry without running `init` first — the telemetry tree is created as needed.
-`logcn add middleware|sink|enricher|integration …` works the same way without a prior `init`.
-
-Re-run `logcn add` with `--force` to overwrite existing scaffold files instead of skipping them. `--force` is only valid with `add` (rejected on `init` / `list`).
-
-**4. Wire middleware** (Hono example):
-
-```bash
-npx logcn add middleware hono
-```
-
-**5. Emit from your app:**
+### Emit
 
 ```typescript
 import { logger } from "./telemetry/logger.js";
@@ -107,17 +38,37 @@ logger
   .emit();
 ```
 
-## Try from this repo (no npm publish)
+Example emitted record (fields vary by schema and enrichers):
 
-```bash
-pnpm build
-pnpm --filter @logcn/core pack
-pnpm --filter @logcn/cli pack
-# then in your app:
-pnpm add /absolute/path/to/logcn-core-0.1.0.tgz
-pnpm add -D /absolute/path/to/logcn-cli-0.1.0.tgz
-pnpm exec logcn init --service my-app
+```json
+{
+  "service": "my-app",
+  "env": "development",
+  "timestamp": "2026-08-07T16:30:00.000Z",
+  "duration_ms": 12,
+  "success": true,
+  "event": "auth.user.signed_up",
+  "@event": "auth.user.signed_up",
+  "user": { "id": "u_123", "email": "[REDACTED]" },
+  "signup": { "method": "email" }
+}
 ```
+
+Default redaction masks emails and other sensitive patterns — include an `email` field and it shows as `[REDACTED]` in sink output.
+
+## After init
+
+`@logcn/cli` is a scaffolder. Once `telemetry/` exists, you can remove the CLI and keep editing events/middleware/sinks with only `@logcn/core` installed.
+
+## Philosophy
+
+| Principle | What it means |
+|---|---|
+| **Open code** | Events, middleware, sinks, and integrations live in `telemetry/` — you read, edit, and review them like app code |
+| **Schema-first** | Every important event is declared with `defineEvent` before use |
+| **Wide events** | One rich event per unit of work; context accumulates, then drains on `.emit()` |
+| **Less is more** | Tiny runtime (`@logcn/core`); frozen public API |
+| **shadcn-native** | Registry items scaffold typed files into your repo |
 
 ## Folder structure
 
@@ -138,6 +89,18 @@ telemetry/
 
 Event names use dot-separated segments (`auth.user.signed_up`, `email.sent`). Files nest under the domain segment.
 
+## Try from this repo (no npm publish)
+
+```bash
+pnpm build
+pnpm --filter @logcn/core pack
+pnpm --filter @logcn/cli pack
+# then in your app:
+pnpm add /absolute/path/to/logcn-core-0.1.0.tgz
+pnpm add -D /absolute/path/to/logcn-cli-0.1.0.tgz
+pnpm exec logcn init --service my-app
+```
+
 ## API
 
 Frozen public surface from `@logcn/core`:
@@ -150,7 +113,9 @@ Frozen public surface from `@logcn/core`:
 | `logger.create(initial?)` | Standalone wide-event scope (jobs, scripts, CLI runs) |
 | `useLogger` | Request-scoped logger from middleware context |
 | `.set()` | Merge nested context into the active wide event (mutates in place; returns same instance so `useLogger()` stays valid in middleware ALS) |
+| `.error(err, ctx?)` | Record a structured error (`success: false`); does not emit — call `.emit()` after |
 | `.emit()` | Finalize, validate, drain sinks; seals the instance |
+| `flush()` | Await pending async sink deliveries (use with serverless `waitUntil` / Next.js `after`) |
 
 When `success` is unset it defaults to `true`; if `status` is set, numeric codes in `[200, 400)` and the exact string `"ok"` (case-sensitive; `"OK"` → `false`) derive `success` (explicit `success` wins).
 
@@ -209,7 +174,7 @@ logger.create({ job: "nightly-sync" })
 import { useLogger } from "@logcn/core";
 
 app.get("/health", (c) => {
-  useLogger()?.set({ route: { name: "health" } });
+  useLogger().set({ route: { name: "health" } });
   return c.json({ ok: true });
 });
 ```
@@ -329,6 +294,22 @@ pnpm run ci   # full local CI — not `pnpm ci` (pnpm clean-install)
 CI (`.github/workflows/ci.yml`) runs build, test, typecheck, size, registry build, event Prettier checks, and publish smoke on push/PR.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md); for the first npm publish, follow **First release** (initial commit + version tag before publishing).
+
+
+## CLI reference
+
+- Running `logcn` with no args prints usage/help but exits **1**; use `logcn -h` / `--help` for exit 0.
+- Unknown options and missing option values also exit **1** with a short `error:` line (no Node stack).
+- `add` needs both kind and name (e.g. `add sink console`); bare `add` or kind-only exits **1** with an error.
+- Omitting `--service` on `init` defaults the service name to `my-app`; `--service` is trimmed, so empty or whitespace-only values fall back the same way.
+- `logcn init` accepts `--package-manager <pnpm|npm|yarn|bun>` (default `pnpm`). Values are trimmed and case-insensitive; whitespace-only falls back to the default.
+- `logcn init --no-typescript` sets `typescript: false` in `logcn.json`.
+- `--service`, `--package-manager`, and `--no-typescript` are only valid with `init` (rejected on `add` / `list`). Whitespace-only `--service` / `--package-manager` on non-init commands are ignored (not rejected).
+- `init --cwd <path>` and `add --cwd <path>` create missing directories (`mkdir -p`).
+- Event names must be lowercase dot-separated segments (e.g. `auth.user.signed_up`); no leading/trailing dots or uppercase.
+- `logcn add event …` and other `add` kinds can scaffold from the registry without running `init` first — the telemetry tree is created as needed.
+- Re-run `logcn add` with `--force` to overwrite existing scaffold files instead of skipping them. `--force` is only valid with `add` (rejected on `init` / `list`).
+- `logcn list` works without prior `init` — reads the bundled registry. Optional filter by kind; each line includes the human title (e.g. Console Sink).
 
 ## License
 

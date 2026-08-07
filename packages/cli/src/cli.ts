@@ -31,6 +31,9 @@ Options:
   --service <name>             Service name for logger.ts (init)
   --package-manager <pm>       pnpm | npm | yarn | bun (init)
   --no-typescript              Disable TypeScript defaults in logcn.json (init)
+  --middleware <name|none>     Scaffold middleware on init (auto-detect from package.json)
+  --event <name|none>          Scaffold event on init (default: auth.user.signed_up when auto)
+  --yes                        Non-interactive init: auto-scaffold detected middleware + event
   --force                      Overwrite generated files (add)
   -h, --help                   Show help
   -V, --version                Print version
@@ -47,6 +50,9 @@ function parseCliArgs() {
         service: { type: "string" },
         "package-manager": { type: "string" },
         typescript: { type: "boolean", default: true },
+        middleware: { type: "string" },
+        event: { type: "string" },
+        yes: { type: "boolean", default: false },
         force: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
         version: { type: "boolean", short: "V", default: false },
@@ -102,6 +108,18 @@ async function main(): Promise<void> {
       console.error("error: --no-typescript is only valid with init");
       process.exit(1);
     }
+    if (values.middleware?.trim()) {
+      console.error("error: --middleware is only valid with init");
+      process.exit(1);
+    }
+    if (values.event?.trim()) {
+      console.error("error: --event is only valid with init");
+      process.exit(1);
+    }
+    if (values.yes) {
+      console.error("error: --yes is only valid with init");
+      process.exit(1);
+    }
   }
 
   try {
@@ -118,6 +136,8 @@ async function main(): Promise<void> {
         );
       }
       const service = values.service?.trim();
+      const middleware = values.middleware?.trim();
+      const event = values.event?.trim();
       await runInit({
         cwd,
         ...(service ? { service } : {}),
@@ -125,6 +145,9 @@ async function main(): Promise<void> {
           ? { packageManager: packageManager as PackageManager }
           : {}),
         typescript: values.typescript,
+        ...(middleware ? { middleware } : {}),
+        ...(event ? { event } : {}),
+        ...(values.yes ? { yes: true } : {}),
       });
       return;
     }

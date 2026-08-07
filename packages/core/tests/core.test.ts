@@ -148,7 +148,7 @@ describe("context", () => {
     const seen = runWithLogger(logger, () => useLogger());
 
     expect(seen).toBe(logger);
-    expect(useLogger()).toBeUndefined();
+    expect(useLogger().sealed).toBe(true);
   });
 
   it("runWithLogger + useLogger sees set() mutations", () => {
@@ -161,7 +161,7 @@ describe("context", () => {
       const active = useLogger();
       expect(active).toBe(requestLogger);
 
-      active!.set({ user_id: "u_als" });
+      active.set({ user_id: "u_als" });
       expect(useLogger()).toBe(requestLogger);
     });
 
@@ -183,7 +183,7 @@ describe("context", () => {
       const active = useLogger();
       expect(active).toBe(requestLogger);
 
-      active!.set({ user_id: "u_mw" });
+      active.set({ user_id: "u_mw" });
     });
 
     const record = requestLogger.set({ status: 200 }).emit();

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import { createError, createRequestLogger, runWithLogger, type Logger } from "@logcn/core";
+import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@logcn/core";
+
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -8,12 +9,6 @@ declare module "fastify" {
   }
 }
 
-function formatError(error: unknown) {
-  if (error instanceof Error) {
-    return createError({ message: error.message, code: error.name });
-  }
-  return createError({ message: String(error) });
-}
 
 const plugin: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", (request, _reply, done) => {
@@ -53,17 +48,13 @@ const plugin: FastifyPluginAsync = async (app) => {
       return;
     }
 
-    requestLogger.set({
-      error: formatError(error),
-      status: 500,
-      success: false,
-    });
+    requestLogger.error(error, { status: 500 });
     requestLogger.emit();
   });
 };
 
 export const logcnPlugin = fp(plugin, { name: "logcn" });
 
-export function useRequestLogger(request: FastifyRequest): Logger | undefined {
-  return request.logcn;
+export function useRequestLogger(request: FastifyRequest): Logger {
+  return request.logcn ?? useLogger();
 }

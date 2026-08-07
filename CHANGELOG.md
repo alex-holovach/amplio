@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Notes
+- P1#7: `flush()` tracks pending async sinks; Next middleware schedules flush via `after` / optional `waitUntil`; dev warns on async sink rejections.
+- P1#8: `logcn init` detects framework from package.json and auto-scaffolds middleware + event (`--middleware`, `--event`, `--yes`).
+- `EventLogger.error(err, ctx?)` delegates to bound logger; noop getters removed from public index.
+- P1#5: `DeepPartial<T>` on typed `EventLogger.set()` and `logger.event(def, initial?)` for nested incremental patches.
+- P1#6: `Logger.error(err, ctx?)` records structured errors without auto-emit; middleware uses `error()` instead of local `formatError` helpers.
+- README quick start: problem → setup → emitted JSON sample; CLI exit-code/flag trivia moved to CLI reference section.
+- Sealed create/event and useLogger() outside ALS return no-op loggers (never null/undefined); dev warnings for sealed vs no-context misuse.
+- Next middleware: useRequestLogger() reads ALS (no module-scoped activeLogger race).
+- emit() soft-fails schema validation outside NODE_ENV=test unless init({ strict: true }); attaches validation.issues and success: false.
 - Improvement loop capped at 215 ticks; local wrap-up (no remote push).
 - shouldSample with no/undefined config always keeps.
 - Keep rule: if equals is set, matches/gte/lte on the same rule are not evaluated.

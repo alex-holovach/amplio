@@ -25,6 +25,7 @@ describe("public API surface", () => {
       "useLogger",
       "createError",
       "LogcnValidationError",
+      "flush",
     ] as const;
 
     for (const name of requiredFns) {
@@ -36,7 +37,7 @@ describe("public API surface", () => {
     expect(typeof core.logger.event).toBe("function");
   });
 
-  it("wide-event instances only expose set/emit (+ sealed)", () => {
+  it("wide-event instances expose set/error/emit (+ sealed)", () => {
     const scope = createLogger().set({ a: 1 });
     const own = Object.getOwnPropertyNames(scope).filter(
       (key) => !key.startsWith("_"),
@@ -56,6 +57,8 @@ describe("public API surface", () => {
     expect((eventScope as { create?: unknown }).create).toBeUndefined();
     expect((eventScope as { info?: unknown }).info).toBeUndefined();
     expect((eventScope as { debug?: unknown }).debug).toBeUndefined();
-    expect((eventScope as { error?: unknown }).error).toBeUndefined();
+    expect(typeof eventScope.error).toBe("function");
+    expect((core as { getSealedNoopLogger?: unknown }).getSealedNoopLogger).toBeUndefined();
+    expect((core as { getContextNoopLogger?: unknown }).getContextNoopLogger).toBeUndefined();
   });
 });

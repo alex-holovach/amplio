@@ -1,11 +1,15 @@
 import { resolveConfig } from "./config.js";
-import { isDevelopment } from "./env.js";
+import { createError } from "./error.js";
+import { isDevelopment, isTest } from "./env.js";
+import { getSealedNoopLogger } from "./noop-logger.js";
+import { LogcnValidationError } from "./validation-error.js";
 import { deepMerge } from "./deep-merge.js";
 import { validateShape } from "./schema.js";
 import { shouldSample } from "./sampling.js";
 import { redactRecord } from "./redact.js";
 import { runSinksSync } from "./sinks.js";
 import type {
+  DeepPartial,
   EventDef,
   EventLogger,
   LogRecord,
@@ -23,7 +27,7 @@ type InternalLogger = Logger & {
   readonly _seal: SealState;
 };
 
-const warnSealed = (action: "set" | "emit" | "create" | "event"): void => {
+const warnSealed = (action: "set" | "error" | "emit" | "create" | "event"): void => {
   if (isDevelopment()) {
     console.warn(`[logcn] logger.${action}() ignored: logger is sealed after emit()`);
   }
@@ -91,9 +95,33 @@ const emitInternal = (logger: InternalLogger): LogRecord => {
   }
 
   if (!logger._skipValidation && logger._shape) {
-    const validated = validateShape(logger._shape, payload);
-    // Keep enricher-added fields; validated shape fields win on overlap.
-    payload = { ...payload, ...validated };
+    try {
+      const validated = validateShape(logger._shape, payload);
+      // Keep enricher-added fields; validated shape fields win on overlap.
+      payload = { ...payload, ...validated };
+    } catch (error) {
+      if (!(error instanceof LogcnValidationError)) {
+        throw error;
+      }
+      const throwOnFailure = isTest() || config.strict === true;
+      if (throwOnFailure) {
+        throw error;
+      }
+      payload = {
+        ...payload,
+        validation: {
+          ok: false,
+          issues: error.issues.map((issue) => ({
+            message: issue.message,
+            path: issue.path.map(String),
+          })),
+        },
+        success: false,
+      };
+      if (isDevelopment()) {
+        console.warn(`[logcn] emit() schema validation failed (soft): ${error.message}`);
+      }
+    }
   }
 
   if (logger._event) {
@@ -129,6 +157,17 @@ const createInternalLogger = (
       logger._data = deepMerge(logger._data, partial);
       return logger;
     },
+    error(err: unknown, ctx?: Record<string, unknown>): Logger {
+      if (logger._seal.sealed) {
+        warnSealed("error");
+        return logger;
+      }
+      const structuredError =
+        err instanceof Error
+          ? createError({ message: err.message, code: err.name })
+          : createError({ message: String(err) });
+      return logger.set({ error: structuredError, success: false, ...ctx });
+    },
     emit(): LogRecord | null {
       if (logger._seal.sealed) {
         warnSealed("emit");
@@ -138,10 +177,9 @@ const createInternalLogger = (
       logger._seal.sealed = true;
       return record;
     },
-    create(initial: Record<string, unknown> = {}): Logger | null {
+    create(initial: Record<string, unknown> = {}): Logger {
       if (logger._seal.sealed) {
-        warnSealed("create");
-        return null;
+        return getSealedNoopLogger();
       }
       return createInternalLogger({
         _data: deepMerge(logger._data, initial),
@@ -152,10 +190,9 @@ const createInternalLogger = (
         ...(logger._skipValidation !== undefined ? { _skipValidation: logger._skipValidation } : {}),
       });
     },
-    event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T> | null {
+    event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T> {
       if (logger._seal.sealed) {
-        warnSealed("event");
-        return null;
+        return getSealedNoopLogger().event(def);
       }
       const bound = createInternalLogger({
         _data: deepMerge(logger._data, {}),
@@ -170,8 +207,12 @@ const createInternalLogger = (
         get sealed() {
           return bound.sealed;
         },
-        set(partial: Partial<T>) {
+        set(partial: DeepPartial<T>) {
           bound.set(partial as Record<string, unknown>);
+          return eventLogger;
+        },
+        error(err: unknown, ctx?: Record<string, unknown>) {
+          bound.error(err, ctx);
           return eventLogger;
         },
         emit() {
@@ -205,19 +246,18 @@ export interface LoggerFacade {
   create(initial?: Record<string, unknown>): Logger;
   event<T extends Record<string, unknown>>(
     def: EventDef<T>,
-    initial?: Partial<T>,
+    initial?: DeepPartial<T>,
   ): EventLogger<T>;
 }
 
-// Note: Logger.create/event soft-seal to null when the instance is sealed; facade always starts fresh.
+// Note: Logger.create/event return a sealed no-op logger when the instance is sealed; facade always starts fresh.
 
 export const logger: LoggerFacade = {
   create(initial = {}) {
     return createLogger(initial);
   },
   event(def, initial) {
-    // Fresh logger is never sealed; non-null assertion keeps facade return type stable.
-    const bound = createLogger().event(def)!;
+    const bound = createLogger().event(def);
     return initial ? bound.set(initial) : bound;
   },
 };

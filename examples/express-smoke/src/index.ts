@@ -7,7 +7,7 @@ const app = express();
 app.use(logcnMiddleware());
 
 app.get("/health", (req, res) => {
-  useRequestLogger(req)?.set({ route: { name: "health" } });
+  useRequestLogger(req).set({ route: { name: "health" } });
   res.json({ ok: true });
 });
 

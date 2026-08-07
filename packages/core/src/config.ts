@@ -1,5 +1,6 @@
 import type { LogcnConfig } from "./types.js";
 import { logger, type LoggerFacade } from "./logger.js";
+import { resetPendingSinksForTests } from "./sinks.js";
 
 let activeConfig: LogcnConfig | null = null;
 
@@ -32,6 +33,7 @@ export function init(config: LogcnConfig): LoggerFacade {
         }
       : {}),
     ...(config.redact !== undefined ? { redact: config.redact } : {}),
+    ...(config.strict !== undefined ? { strict: config.strict } : {}),
   };
 
   return logger;
@@ -66,4 +68,5 @@ export function resolveConfig(): LogcnConfig {
 
 export function resetConfigForTests(): void {
   activeConfig = null;
+  resetPendingSinksForTests();
 }

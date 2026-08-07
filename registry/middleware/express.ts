@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { createError, createRequestLogger, runWithLogger, type Logger } from "@logcn/core";
+import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@logcn/core";
+
 
 declare global {
   namespace Express {
@@ -9,12 +10,6 @@ declare global {
   }
 }
 
-function formatError(error: unknown) {
-  if (error instanceof Error) {
-    return createError({ message: error.message, code: error.name });
-  }
-  return createError({ message: String(error) });
-}
 
 export function logcnMiddleware() {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -50,6 +45,6 @@ export function logcnMiddleware() {
   };
 }
 
-export function useRequestLogger(req: Request): Logger | undefined {
-  return req.logcn;
+export function useRequestLogger(req: Request): Logger {
+  return req.logcn ?? useLogger();
 }

@@ -8,13 +8,14 @@ export { createError } from "./error.js";
 export { deepMerge } from "./deep-merge.js";
 export { redactRecord } from "./redact.js";
 export { shouldSample } from "./sampling.js";
-export { runSinks, runSinksSync } from "./sinks.js";
+export { flush, runSinks, runSinksSync } from "./sinks.js";
 export { validateShape } from "./schema.js";
 export { LogcnValidationError } from "./validation-error.js";
 export type { LogcnValidationIssue } from "./validation-error.js";
 export { createRequestId } from "./request-id.js";
 
 export type {
+  DeepPartial,
   DefineEventOptions,
   Enricher,
   EventDef,

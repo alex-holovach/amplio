@@ -1,14 +1,8 @@
 import type { Context, MiddlewareHandler, Next } from "hono";
-import { createError, createRequestLogger, runWithLogger, useLogger, type Logger } from "@logcn/core";
+import { createRequestLogger, runWithLogger, useLogger, type Logger } from "@logcn/core";
 
 const LOGCN_KEY = "logcn";
 
-function formatError(error: unknown) {
-  if (error instanceof Error) {
-    return createError({ message: error.message, code: error.name });
-  }
-  return createError({ message: String(error) });
-}
 
 export function logcnMiddleware(): MiddlewareHandler {
   return async (c: Context, next: Next) => {
@@ -37,11 +31,7 @@ export function logcnMiddleware(): MiddlewareHandler {
         }
       } catch (error) {
         if (!requestLogger.sealed) {
-          requestLogger.set({
-            error: formatError(error),
-            status: 500,
-            success: false,
-          });
+          requestLogger.error(error, { status: 500 });
           requestLogger.emit();
         }
         throw error;
@@ -50,6 +40,6 @@ export function logcnMiddleware(): MiddlewareHandler {
   };
 }
 
-export function useRequestLogger(c: Context): Logger | undefined {
+export function useRequestLogger(c: Context): Logger {
   return (c.get(LOGCN_KEY) as Logger | undefined) ?? useLogger();
 }

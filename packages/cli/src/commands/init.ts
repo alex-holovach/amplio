@@ -1,5 +1,7 @@
 import path from "node:path";
+import { runAddEvent, runAddMiddleware } from "./add.js";
 import { renderLogcnConfig, renderLoggerTemplate } from "../templates/init.js";
+import { detectFramework, shouldAutoScaffold } from "../utils/detect-framework.js";
 import { ensureDir, writeFileIfMissing } from "../utils/fs.js";
 import { resolveRegistryPath } from "../utils/config.js";
 import { resolveProjectPaths } from "../utils/paths.js";
@@ -10,6 +12,43 @@ export interface InitOptions {
   service?: string;
   packageManager?: "pnpm" | "npm" | "yarn" | "bun";
   typescript?: boolean;
+  middleware?: string;
+  event?: string;
+  yes?: boolean;
+}
+
+function resolveMiddlewareName(
+  explicit: string | undefined,
+  detected: Awaited<ReturnType<typeof detectFramework>>,
+  auto: boolean,
+): string | null {
+  if (explicit === "none") {
+    return null;
+  }
+  if (explicit?.trim()) {
+    return explicit.trim();
+  }
+  if (detected && auto) {
+    return detected;
+  }
+  return null;
+}
+
+function resolveEventName(
+  explicit: string | undefined,
+  middlewareName: string | null,
+  auto: boolean,
+): string | null {
+  if (explicit === "none") {
+    return null;
+  }
+  if (explicit?.trim()) {
+    return explicit.trim();
+  }
+  if (middlewareName && auto) {
+    return "auth.user.signed_up";
+  }
+  return null;
 }
 
 export async function runInit(options: InitOptions): Promise<void> {
@@ -67,7 +106,30 @@ export async function runInit(options: InitOptions): Promise<void> {
     console.log("\nExisting files were left unchanged.");
   }
 
-  console.log("\nNext:");
-  console.log("  logcn add event auth.user.signed_up");
-  console.log("  logcn add middleware hono");
+  const detected = await detectFramework(options.cwd);
+  const auto = shouldAutoScaffold(options.yes);
+  const middlewareName = resolveMiddlewareName(options.middleware, detected, auto);
+  const eventName = resolveEventName(options.event, middlewareName, auto);
+
+  if (detected && !middlewareName && !auto && options.middleware === undefined) {
+    console.log(`\nDetected ${detected} in package.json.`);
+  }
+
+  if (middlewareName) {
+    await runAddMiddleware(middlewareName, { cwd: options.cwd });
+  }
+
+  if (eventName) {
+    await runAddEvent(eventName, { cwd: options.cwd });
+  }
+
+  if (!middlewareName && !eventName) {
+    console.log("\nNext:");
+    if (detected) {
+      console.log(`  logcn add middleware ${detected}`);
+    } else {
+      console.log("  logcn add middleware hono");
+    }
+    console.log("  logcn add event auth.user.signed_up");
+  }
 }

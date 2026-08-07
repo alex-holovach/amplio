@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createLogger, init, resetConfigForTests } from "../src/index.js";
+import {
+  createLogger,
+  init,
+  resetConfigForTests,
+} from "../src/index.js";
+import { getSealedNoopLogger } from "../src/noop-logger.js";
 
 beforeEach(() => {
   resetConfigForTests();
@@ -40,22 +45,23 @@ describe("soft seal", () => {
     expect(scope.set({ x: 1 })).toBe(scope);
     expect(scope.set({ y: 2 })).toBe(scope);
   });
-});
 
-  it("create() after seal returns null and warns", () => {
+  it("create() after seal returns sealed no-op logger and warns on use", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const scope = createLogger().set({ ok: true });
     scope.emit();
     const child = scope.create({ child: true });
 
-    expect(child).toBeNull();
+    expect(child).toBe(getSealedNoopLogger());
+    expect(child.sealed).toBe(true);
+    child.set({ x: 1 });
     expect(warn).toHaveBeenCalledWith(
-      expect.stringMatching(/create\(\) ignored.*sealed/),
+      expect.stringMatching(/set\(\) ignored.*sealed/),
     );
     warn.mockRestore();
   });
 
-  it("event() after seal returns null and warns", async () => {
+  it("event() after seal returns sealed no-op event logger and warns on use", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { defineEvent } = await import("../src/index.js");
     const def = defineEvent("ops.tick.fired");
@@ -63,10 +69,11 @@ describe("soft seal", () => {
     scope.emit();
     const bound = scope.event(def);
 
-    expect(bound).toBeNull();
+    expect(bound.sealed).toBe(true);
+    bound.set({ tick: 1 });
     expect(warn).toHaveBeenCalledWith(
-      expect.stringMatching(/event\(\) ignored.*sealed/),
+      expect.stringMatching(/set\(\) ignored.*sealed/),
     );
     warn.mockRestore();
   });
-
+});
