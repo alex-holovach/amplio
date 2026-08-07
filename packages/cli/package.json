@@ -1,0 +1,53 @@
+{
+  "name": "@logcn/cli",
+  "version": "0.1.0",
+  "description": "Init and add commands for logcn telemetry scaffolding",
+  "type": "module",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/logcn/logcn.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/logcn/logcn#readme",
+  "bugs": {
+    "url": "https://github.com/logcn/logcn/issues"
+  },
+  "keywords": [
+    "telemetry",
+    "observability",
+    "wide-events",
+    "shadcn",
+    "logging",
+    "cli",
+    "scaffolding"
+  ],
+  "bin": {
+    "logcn": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "registry",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup && node scripts/copy-registry.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pretest": "node scripts/copy-registry.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@logcn/core": "workspace:*",
+    "@types/node": "^22.13.10",
+    "prettier": "3",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  }
+}

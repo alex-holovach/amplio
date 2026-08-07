@@ -1,0 +1,199 @@
+{
+  "name": "logcn",
+  "homepage": "https://github.com/logcn/logcn",
+  "items": [
+    {
+      "name": "event-auth-user-signed-up",
+      "description": "Wide event when a user completes sign-up.",
+      "source": "events/auth/user-signed-up.ts",
+      "target": "telemetry/events/auth/user-signed-up.ts",
+      "dependencies": [
+        "zod",
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "event-auth-user-signed-in",
+      "description": "Wide event when a user signs in.",
+      "source": "events/auth/user-signed-in.ts",
+      "target": "telemetry/events/auth/user-signed-in.ts",
+      "dependencies": [
+        "zod",
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "event-email-sent",
+      "description": "Wide event when an email is sent.",
+      "source": "events/email/email-sent.ts",
+      "target": "telemetry/events/email/email-sent.ts",
+      "dependencies": [
+        "zod",
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "event-payment-order-paid",
+      "description": "Wide event when a payment order is paid.",
+      "source": "events/payment/order-paid.ts",
+      "target": "telemetry/events/payment/order-paid.ts",
+      "dependencies": [
+        "zod",
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "middleware-hono",
+      "description": "Hono middleware that attaches request-scoped logcn context.",
+      "source": "middleware/hono.ts",
+      "target": "telemetry/middleware/hono.ts",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "devDependencies": [
+        "hono"
+      ]
+    },
+    {
+      "name": "middleware-express",
+      "description": "Express middleware that attaches request-scoped logcn context.",
+      "source": "middleware/express.ts",
+      "target": "telemetry/middleware/express.ts",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "devDependencies": [
+        "@types/express",
+        "express"
+      ]
+    },
+    {
+      "name": "middleware-next",
+      "description": "Next.js middleware that attaches request-scoped logcn context.",
+      "source": "middleware/next.ts",
+      "target": "telemetry/middleware/next.ts",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "devDependencies": [
+        "next"
+      ]
+    },
+    {
+      "name": "middleware-fastify",
+      "description": "Fastify plugin that attaches request-scoped logcn context.",
+      "source": "middleware/fastify.ts",
+      "target": "telemetry/middleware/fastify.ts",
+      "dependencies": [
+        "@logcn/core",
+        "fastify-plugin"
+      ],
+      "devDependencies": [
+        "fastify"
+      ]
+    },
+    {
+      "name": "sink-console",
+      "description": "Console sink that prints wide events as JSON.",
+      "source": "sinks/console.ts",
+      "target": "telemetry/sinks/console.ts",
+      "dependencies": [
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "sink-json",
+      "description": "JSON sink that serializes wide events for streaming or files.",
+      "source": "sinks/json.ts",
+      "target": "telemetry/sinks/json.ts",
+      "dependencies": [
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "sink-otlp",
+      "description": "OTLP sink that exports wide events over OpenTelemetry.",
+      "source": "sinks/otlp.ts",
+      "target": "telemetry/sinks/otlp.ts",
+      "dependencies": [
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "enricher-service-metadata",
+      "description": "Enricher that adds service name / environment metadata.",
+      "source": "enrichers/service-metadata.ts",
+      "target": "telemetry/enrichers/service-metadata.ts",
+      "dependencies": [
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "enricher-request-metadata",
+      "description": "Enricher that adds request id / HTTP metadata.",
+      "source": "enrichers/request-metadata.ts",
+      "target": "telemetry/enrichers/request-metadata.ts",
+      "dependencies": [
+        "@logcn/core"
+      ]
+    },
+    {
+      "name": "integration-better-auth",
+      "description": "Better Auth helpers that emit logcn auth events.",
+      "source": "integrations/better-auth.ts",
+      "target": "telemetry/integrations/better-auth.ts",
+      "dependencies": [
+        "zod",
+        "@logcn/core",
+        "better-auth"
+      ],
+      "registryDependencies": [
+        "event-auth-user-signed-up",
+        "event-auth-user-signed-in"
+      ]
+    },
+    {
+      "name": "integration-clerk",
+      "description": "Clerk helpers that emit logcn auth events.",
+      "source": "integrations/clerk.ts",
+      "target": "telemetry/integrations/clerk.ts",
+      "dependencies": [
+        "zod",
+        "@logcn/core",
+        "@clerk/backend"
+      ],
+      "registryDependencies": [
+        "event-auth-user-signed-up",
+        "event-auth-user-signed-in"
+      ]
+    },
+    {
+      "name": "integration-resend",
+      "description": "Resend email helpers that emit logcn events.",
+      "source": "integrations/resend.ts",
+      "target": "telemetry/integrations/resend.ts",
+      "dependencies": [
+        "zod",
+        "@logcn/core",
+        "resend"
+      ],
+      "registryDependencies": [
+        "event-email-sent"
+      ]
+    },
+    {
+      "name": "integration-polar",
+      "description": "Polar payment helpers that emit logcn order-paid events.",
+      "source": "integrations/polar.ts",
+      "target": "telemetry/integrations/polar.ts",
+      "dependencies": [
+        "zod",
+        "@logcn/core",
+        "@polar-sh/sdk"
+      ],
+      "registryDependencies": [
+        "event-payment-order-paid"
+      ]
+    }
+  ]
+}

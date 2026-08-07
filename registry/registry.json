@@ -1,0 +1,353 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "logcn",
+  "homepage": "https://github.com/logcn/logcn",
+  "items": [
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "event-auth-user-signed-up",
+      "title": "Auth User Signed Up",
+      "description": "Wide event when a user completes sign-up.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/events/auth/user-signed-up.ts",
+          "target": "~/events/auth/user-signed-up.ts",
+          "type": "registry:lib",
+          "content": "import { defineEvent } from \"@logcn/core\";\nimport { z } from \"zod\";\n\nexport const AuthUserSignedUp = defineEvent(\n  \"auth.user.signed_up\",\n  z.object({\n    user: z.object({\n      id: z.string(),\n      email: z.string().email(),\n    }),\n    signup: z.object({\n      method: z.enum([\"email\", \"oauth\", \"invite\"]),\n      referrer: z.string().optional(),\n    }),\n  }),\n);\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "event-auth-user-signed-in",
+      "title": "Auth User Signed In",
+      "description": "Wide event when a user signs in.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/events/auth/user-signed-in.ts",
+          "target": "~/events/auth/user-signed-in.ts",
+          "type": "registry:lib",
+          "content": "import { defineEvent } from \"@logcn/core\";\nimport { z } from \"zod\";\n\nexport const AuthUserSignedIn = defineEvent(\n  \"auth.user.signed_in\",\n  z.object({\n    user: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    session: z.object({\n      id: z.string(),\n      method: z.enum([\"password\", \"oauth\", \"magic_link\", \"sso\"]),\n      mfa: z.boolean().optional(),\n    }),\n  }),\n);\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "event-email-sent",
+      "title": "Email Sent",
+      "description": "Wide event when an email is sent.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/events/email/email-sent.ts",
+          "target": "~/events/email/email-sent.ts",
+          "type": "registry:lib",
+          "content": "import { defineEvent } from \"@logcn/core\";\nimport { z } from \"zod\";\n\nexport const EmailSent = defineEvent(\n  \"email.sent\",\n  z.object({\n    email: z.object({\n      id: z.string(),\n      template: z.string(),\n      to: z.string().email(),\n      subject: z.string(),\n    }),\n    delivery: z.object({\n      provider: z.enum([\"resend\", \"sendgrid\", \"ses\", \"postmark\", \"other\"]),\n      status: z.enum([\"queued\", \"sent\", \"failed\"]),\n    }),\n  }),\n);\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "event-payment-order-paid",
+      "title": "Payment Order Paid",
+      "description": "Wide event when a payment order is paid.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/events/payment/order-paid.ts",
+          "target": "~/events/payment/order-paid.ts",
+          "type": "registry:lib",
+          "content": "import { defineEvent } from \"@logcn/core\";\nimport { z } from \"zod\";\n\nexport const PaymentOrderPaid = defineEvent(\n  \"payment.order.paid\",\n  z.object({\n    order: z.object({\n      id: z.string(),\n      currency: z.string().length(3),\n      amount_cents: z.number().int().nonnegative(),\n    }),\n    customer: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    payment: z.object({\n      provider: z.enum([\"stripe\", \"polar\", \"paddle\", \"other\"]),\n      method: z.enum([\"card\", \"bank\", \"wallet\", \"other\"]).optional(),\n    }),\n  }),\n);\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "middleware-hono",
+      "title": "Hono Middleware",
+      "description": "Hono middleware that attaches request-scoped logcn context.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "devDependencies": [
+        "hono"
+      ],
+      "files": [
+        {
+          "path": "registry/middleware/hono.ts",
+          "target": "~/middleware/hono.ts",
+          "type": "registry:lib",
+          "content": "import type { Context, MiddlewareHandler, Next } from \"hono\";\nimport { createError, createRequestLogger, runWithLogger, useLogger, type Logger } from \"@logcn/core\";\n\nconst LOGCN_KEY = \"logcn\";\n\nfunction formatError(error: unknown) {\n  if (error instanceof Error) {\n    return createError({ message: error.message, code: error.name });\n  }\n  return createError({ message: String(error) });\n}\n\nexport function logcnMiddleware(): MiddlewareHandler {\n  return async (c: Context, next: Next) => {\n    const requestLogger = createRequestLogger({\n      method: c.req.method,\n      path: c.req.path,\n    }).set({\n      http: {\n        method: c.req.method,\n        path: c.req.path,\n        route: c.req.routePath,\n      },\n    });\n\n    c.set(LOGCN_KEY, requestLogger);\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        await next();\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: c.res.status },\n            status: c.res.status,\n          });\n          requestLogger.emit();\n        }\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            error: formatError(error),\n            status: 500,\n            success: false,\n          });\n          requestLogger.emit();\n        }\n        throw error;\n      }\n    });\n  };\n}\n\nexport function useRequestLogger(c: Context): Logger | undefined {\n  return (c.get(LOGCN_KEY) as Logger | undefined) ?? useLogger();\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "middleware-express",
+      "title": "Express Middleware",
+      "description": "Express middleware that attaches request-scoped logcn context.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "devDependencies": [
+        "@types/express",
+        "express"
+      ],
+      "files": [
+        {
+          "path": "registry/middleware/express.ts",
+          "target": "~/middleware/express.ts",
+          "type": "registry:lib",
+          "content": "import type { NextFunction, Request, Response } from \"express\";\nimport { createError, createRequestLogger, runWithLogger, type Logger } from \"@logcn/core\";\n\ndeclare global {\n  namespace Express {\n    interface Request {\n      logcn?: Logger;\n    }\n  }\n}\n\nfunction formatError(error: unknown) {\n  if (error instanceof Error) {\n    return createError({ message: error.message, code: error.name });\n  }\n  return createError({ message: String(error) });\n}\n\nexport function logcnMiddleware() {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const requestLogger = createRequestLogger({\n      method: req.method,\n      path: req.path,\n    }).set({\n      http: {\n        method: req.method,\n        path: req.path,\n        route: req.route?.path,\n        ip: req.ip,\n        user_agent: req.get(\"user-agent\") ?? undefined,\n      },\n    });\n\n    req.logcn = requestLogger;\n\n    runWithLogger(requestLogger, () => {\n      res.on(\"finish\", () => {\n        if (requestLogger.sealed) {\n          return;\n        }\n        requestLogger.set({\n          http: { status: res.statusCode },\n          status: res.statusCode,\n        });\n        requestLogger.emit();\n      });\n\n      next();\n    });\n  };\n}\n\nexport function useRequestLogger(req: Request): Logger | undefined {\n  return req.logcn;\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "middleware-next",
+      "title": "Next.js Middleware",
+      "description": "Next.js middleware that attaches request-scoped logcn context.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "devDependencies": [
+        "next"
+      ],
+      "files": [
+        {
+          "path": "registry/middleware/next.ts",
+          "target": "~/middleware/next.ts",
+          "type": "registry:lib",
+          "content": "import { createError, createRequestLogger, runWithLogger, type Logger } from \"@logcn/core\";\nimport type { NextRequest, NextResponse } from \"next/server\";\n\nlet activeLogger: Logger | undefined;\n\nfunction formatError(error: unknown) {\n  if (error instanceof Error) {\n    return createError({ message: error.message, code: error.name });\n  }\n  return createError({ message: String(error) });\n}\n\nexport function withLogcn<T extends (request: NextRequest, ...args: never[]) => Promise<NextResponse>>(\n  handler: T,\n): T {\n  const wrapped = (async (request: NextRequest, ...rest: never[]) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.nextUrl.pathname,\n    }).set({\n      http: {\n        method: request.method,\n        path: request.nextUrl.pathname,\n        search: request.nextUrl.search || undefined,\n      },\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      activeLogger = requestLogger;\n      try {\n        const response = await handler(request, ...rest);\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: response.status },\n            status: response.status,\n          });\n          requestLogger.emit();\n        }\n        return response;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            error: formatError(error),\n            status: 500,\n            success: false,\n          });\n          requestLogger.emit();\n        }\n        throw error;\n      } finally {\n        activeLogger = undefined;\n      }\n    });\n  }) as T;\n\n  return wrapped;\n}\n\nexport function useRequestLogger(): Logger | undefined {\n  return activeLogger;\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "middleware-fastify",
+      "title": "Fastify Middleware",
+      "description": "Fastify plugin that attaches request-scoped logcn context.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core",
+        "fastify-plugin"
+      ],
+      "devDependencies": [
+        "fastify"
+      ],
+      "files": [
+        {
+          "path": "registry/middleware/fastify.ts",
+          "target": "~/middleware/fastify.ts",
+          "type": "registry:lib",
+          "content": "import type { FastifyPluginAsync, FastifyRequest } from \"fastify\";\nimport fp from \"fastify-plugin\";\nimport { createError, createRequestLogger, runWithLogger, type Logger } from \"@logcn/core\";\n\ndeclare module \"fastify\" {\n  interface FastifyRequest {\n    logcn?: Logger;\n  }\n}\n\nfunction formatError(error: unknown) {\n  if (error instanceof Error) {\n    return createError({ message: error.message, code: error.name });\n  }\n  return createError({ message: String(error) });\n}\n\nconst plugin: FastifyPluginAsync = async (app) => {\n  app.addHook(\"onRequest\", (request, _reply, done) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.url,\n    }).set({\n      http: {\n        method: request.method,\n        path: request.url,\n        route: request.routeOptions?.url,\n        ip: request.ip,\n        user_agent: request.headers[\"user-agent\"],\n      },\n    });\n\n    request.logcn = requestLogger;\n    runWithLogger(requestLogger, () => done());\n  });\n\n  app.addHook(\"onResponse\", async (request, reply) => {\n    const requestLogger = request.logcn;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.set({\n      http: { status: reply.statusCode },\n      status: reply.statusCode,\n    });\n    requestLogger.emit();\n  });\n\n  app.addHook(\"onError\", async (request, _reply, error) => {\n    const requestLogger = request.logcn;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.set({\n      error: formatError(error),\n      status: 500,\n      success: false,\n    });\n    requestLogger.emit();\n  });\n};\n\nexport const logcnPlugin = fp(plugin, { name: \"logcn\" });\n\nexport function useRequestLogger(request: FastifyRequest): Logger | undefined {\n  return request.logcn;\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "sink-console",
+      "title": "Console Sink",
+      "description": "Console sink that prints wide events as JSON.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/sinks/console.ts",
+          "target": "~/sinks/console.ts",
+          "type": "registry:lib",
+          "content": "import type { LogRecord, Sink } from \"@logcn/core\";\n\nexport const consoleSink: Sink = (record: LogRecord) => {\n  console.log(JSON.stringify(record));\n};\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "sink-json",
+      "title": "JSON Sink",
+      "description": "JSON sink that serializes wide events for streaming or files.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/sinks/json.ts",
+          "target": "~/sinks/json.ts",
+          "type": "registry:lib",
+          "content": "import fs from \"node:fs\";\nimport path from \"node:path\";\nimport type { LogRecord, Sink } from \"@logcn/core\";\n\nexport interface JsonFileSinkOptions {\n  path?: string;\n}\n\nexport function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {\n  const filePath =\n    options.path ?? (process.env.LOGCN_JSON_SINK_PATH?.trim() || undefined) ?? \"logcn.jsonl\";\n\n  return (record: LogRecord) => {\n    const dir = path.dirname(filePath);\n    if (dir && dir !== \".\") {\n      fs.mkdirSync(dir, { recursive: true });\n    }\n    fs.appendFileSync(filePath, `${JSON.stringify(record)}\\n`, \"utf8\");\n  };\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "sink-otlp",
+      "title": "OTLP Sink",
+      "description": "OTLP sink that exports wide events over OpenTelemetry.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/sinks/otlp.ts",
+          "target": "~/sinks/otlp.ts",
+          "type": "registry:lib",
+          "content": "import type { JsonValue, LogRecord, Sink } from \"@logcn/core\";\n\nexport interface OtlpSinkOptions {\n  endpoint?: string;\n  headers?: Record<string, string>;\n  throwOnError?: boolean;\n}\n\nconst ATTRIBUTE_FIELDS = [\n  \"service\",\n  \"event\",\n  \"status\",\n  \"duration_ms\",\n  \"request_id\",\n  \"success\",\n] as const;\n\ntype OtlpAttributeValue =\n  | { stringValue: string }\n  | { boolValue: boolean }\n  | { intValue: number }\n  | { doubleValue: number };\n\ninterface OtlpAttribute {\n  key: string;\n  value: OtlpAttributeValue;\n}\n\nconst parseOtlpHeaders = (raw: string | undefined): Record<string, string> => {\n  if (!raw) {\n    return {};\n  }\n\n  const headers: Record<string, string> = {};\n  for (const pair of raw.split(\",\")) {\n    const trimmed = pair.trim();\n    if (!trimmed) {\n      continue;\n    }\n\n    const eq = trimmed.indexOf(\"=\");\n    if (eq === -1) {\n      continue;\n    }\n\n    const key = trimmed.slice(0, eq).trim();\n    const value = trimmed.slice(eq + 1).trim();\n    if (key) {\n      headers[key] = value;\n    }\n  }\n\n  return headers;\n};\n\nconst toOtlpAttribute = (key: string, value: JsonValue): OtlpAttribute | undefined => {\n  if (value === null || value === undefined) {\n    return undefined;\n  }\n\n  if (typeof value === \"string\") {\n    return { key, value: { stringValue: value } };\n  }\n\n  if (typeof value === \"boolean\") {\n    return { key, value: { boolValue: value } };\n  }\n\n  if (typeof value === \"number\") {\n    if (Number.isInteger(value)) {\n      return { key, value: { intValue: value } };\n    }\n    return { key, value: { doubleValue: value } };\n  }\n\n  return undefined;\n};\n\n\nconst toTimeUnixNano = (timestamp: JsonValue | undefined): string => {\n  let ms: number;\n\n  if (typeof timestamp === \"number\" && Number.isFinite(timestamp)) {\n    ms = timestamp;\n  } else if (typeof timestamp === \"string\" && timestamp.length > 0) {\n    const parsed = Date.parse(timestamp);\n    ms = Number.isNaN(parsed) ? Date.now() : parsed;\n  } else {\n    ms = Date.now();\n  }\n\n  return `${Math.trunc(ms)}000000`;\n};\n\nconst buildAttributes = (record: LogRecord): OtlpAttribute[] => {\n  const attributes: OtlpAttribute[] = [];\n\n  for (const field of ATTRIBUTE_FIELDS) {\n    const attr = toOtlpAttribute(field, record[field]);\n    if (attr) {\n      attributes.push(attr);\n    }\n  }\n\n  return attributes;\n};\n\nexport function otlpSink(options: OtlpSinkOptions = {}): Sink {\n  const endpoint = options.endpoint ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;\n  const throwOnError = options.throwOnError ?? true;\n  const headers = {\n    \"content-type\": \"application/json\",\n    ...parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS),\n    ...(options.headers ?? {}),\n  };\n\n  if (!endpoint) {\n    let warned = false;\n    return async () => {\n      if (!warned) {\n        warned = true;\n        console.warn(\n          \"otlpSink: OTEL_EXPORTER_OTLP_ENDPOINT is not set; OTLP export is disabled\",\n        );\n      }\n    };\n  }\n\n  const base = endpoint.replace(/\\/$/, \"\");\n  const url = base.endsWith(\"/v1/logs\") ? base : `${base}/v1/logs`;\n\n  return async (record: LogRecord) => {\n    const attributes = buildAttributes(record);\n    const serviceName =\n      typeof record.service === \"string\" && record.service.length > 0\n        ? record.service\n        : undefined;\n    const deploymentEnvironment =\n      typeof record.env === \"string\" && record.env.length > 0\n        ? record.env\n        : undefined;\n\n    const resourceAttributes: OtlpAttribute[] = [];\n    if (serviceName) {\n      resourceAttributes.push({\n        key: \"service.name\",\n        value: { stringValue: serviceName },\n      });\n    }\n    if (deploymentEnvironment) {\n      resourceAttributes.push({\n        key: \"deployment.environment\",\n        value: { stringValue: deploymentEnvironment },\n      });\n    }\n\n    let response: Response;\n    try {\n      response = await fetch(url, {\n        method: \"POST\",\n        headers,\n        body: JSON.stringify({\n          resourceLogs: [\n            {\n              ...(resourceAttributes.length > 0\n                ? {\n                    resource: {\n                      attributes: resourceAttributes,\n                    },\n                  }\n                : {}),\n              scopeLogs: [\n                {\n                  logRecords: [\n                    {\n                      timeUnixNano: toTimeUnixNano(record.timestamp),\n                      body: { stringValue: JSON.stringify(record) },\n                      ...(attributes.length > 0 ? { attributes } : {}),\n                    },\n                  ],\n                },\n              ],\n            },\n          ],\n        }),\n      });\n    } catch (error) {\n      if (throwOnError) {\n        throw error;\n      }\n      return;\n    }\n\n    if (!response.ok) {\n      if (throwOnError) {\n        throw new Error(`OTLP export failed with status ${response.status}`);\n      }\n      return;\n    }\n  };\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "enricher-service-metadata",
+      "title": "Service Metadata Enricher",
+      "description": "Enricher that adds service name / environment metadata.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/enrichers/service-metadata.ts",
+          "target": "~/enrichers/service-metadata.ts",
+          "type": "registry:lib",
+          "content": "import type { LogRecord } from \"@logcn/core\";\n\nfunction envOrUndefined(key: string): string | undefined {\n  const value = process.env[key];\n  if (value === undefined || value === \"\") {\n    return undefined;\n  }\n  return value;\n}\n\nexport function serviceMetadata(record: LogRecord): LogRecord {\n  const service: Record<string, unknown> = {\n    name: envOrUndefined(\"LOGCN_SERVICE\") ?? record.service,\n  };\n\n  const version = envOrUndefined(\"LOGCN_SERVICE_VERSION\");\n  if (version !== undefined) {\n    service.version = version;\n  }\n\n  const region = envOrUndefined(\"LOGCN_REGION\");\n  if (region !== undefined) {\n    service.region = region;\n  }\n\n  return {\n    ...record,\n    service,\n  };\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "enricher-request-metadata",
+      "title": "Request Metadata Enricher",
+      "description": "Enricher that adds request id / HTTP metadata.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@logcn/core"
+      ],
+      "files": [
+        {
+          "path": "registry/enrichers/request-metadata.ts",
+          "target": "~/enrichers/request-metadata.ts",
+          "type": "registry:lib",
+          "content": "import type { LogRecord } from \"@logcn/core\";\n\nexport interface RequestContext {\n  method: string;\n  path: string;\n  route?: string;\n  status?: number;\n  ip?: string;\n  userAgent?: string;\n  requestId?: string;\n}\n\nfunction nonEmpty(value: string | undefined): string | undefined {\n  return value !== undefined && value !== \"\" ? value : undefined;\n}\n\nexport function requestMetadata(context: RequestContext) {\n  return (record: LogRecord): LogRecord => {\n    const route = nonEmpty(context.route);\n    const ip = nonEmpty(context.ip);\n    const userAgent = nonEmpty(context.userAgent);\n    const requestId = nonEmpty(context.requestId) ?? record.request_id;\n\n    return {\n      ...record,\n      request_id: requestId,\n      http: {\n        method: context.method,\n        path: context.path,\n        ...(route !== undefined ? { route } : {}),\n        ...(context.status !== undefined ? { status: context.status } : {}),\n        ...(ip !== undefined ? { ip } : {}),\n        ...(userAgent !== undefined ? { user_agent: userAgent } : {}),\n      },\n    };\n  };\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "integration-better-auth",
+      "title": "Better Auth Integration",
+      "description": "Better Auth helpers that emit logcn auth events.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@logcn/core",
+        "better-auth"
+      ],
+      "registryDependencies": [
+        "event-auth-user-signed-up",
+        "event-auth-user-signed-in"
+      ],
+      "files": [
+        {
+          "path": "registry/integrations/better-auth.ts",
+          "target": "~/integrations/better-auth.ts",
+          "type": "registry:lib",
+          "content": "import type { BetterAuthPlugin } from \"better-auth\";\nimport { createAuthMiddleware } from \"better-auth/api\";\nimport { getAccountCookie } from \"better-auth/cookies\";\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\ntype AuthHookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];\n\nexport function trackBetterAuthSignUp(input: {\n  user: { id: string; email: string };\n  method: \"email\" | \"oauth\" | \"invite\";\n  referrer?: string;\n}) {\n  return logger\n    .event(AuthUserSignedUp)\n    .set({\n      user: input.user,\n      signup: {\n        method: input.method,\n        ...(input.referrer ? { referrer: input.referrer } : {}),\n      },\n    })\n    .emit();\n}\n\nexport function trackBetterAuthSignIn(input: {\n  user: { id: string; email: string };\n  session: { id: string; method: \"password\" | \"oauth\" | \"magic_link\" | \"sso\"; mfa?: boolean };\n}) {\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user: input.user,\n      session: input.session,\n    })\n    .emit();\n}\n\nfunction readBody(ctx: AuthHookContext): Record<string, unknown> {\n  const body = ctx.body;\n  return body && typeof body === \"object\" ? (body as Record<string, unknown>) : {};\n}\n\nfunction readUser(ctx: AuthHookContext): { id: string; email: string } | null {\n  const user = ctx.context.newSession?.user;\n  if (!user?.id || !user.email) {\n    return null;\n  }\n  return { id: user.id, email: user.email };\n}\n\nfunction readReferrer(ctx: AuthHookContext): string | undefined {\n  const body = readBody(ctx);\n  const referrer = typeof body.referrer === \"string\" ? body.referrer : undefined;\n  const callbackURL = typeof body.callbackURL === \"string\" ? body.callbackURL : undefined;\n  return referrer ?? callbackURL;\n}\n\nfunction hasInvitationId(ctx: AuthHookContext): boolean {\n  const body = readBody(ctx);\n  return typeof body.invitationId === \"string\" && body.invitationId.length > 0;\n}\n\nfunction isSocialRegistration(ctx: AuthHookContext): boolean {\n  const returned = ctx.context.returned;\n  if (returned && typeof returned === \"object\" && \"isRegister\" in returned) {\n    return Boolean((returned as { isRegister?: boolean }).isRegister);\n  }\n  return false;\n}\n\nfunction readMfa(ctx: AuthHookContext): boolean | undefined {\n  const body = readBody(ctx);\n  if (typeof body.mfa === \"boolean\") {\n    return body.mfa;\n  }\n  const session = ctx.context.newSession?.session as { mfa?: boolean } | undefined;\n  return session?.mfa;\n}\n\nasync function readOAuthProvider(ctx: AuthHookContext): Promise<string | undefined> {\n  const params = ctx.params as { id?: string } | undefined;\n  if (typeof params?.id === \"string\") {\n    return params.id;\n  }\n  try {\n    const account = await getAccountCookie(ctx);\n    return account?.providerId;\n  } catch {\n    return undefined;\n  }\n}\n\nfunction trackSignUpFromContext(ctx: AuthHookContext, method: \"email\" | \"oauth\" | \"invite\") {\n  const user = readUser(ctx);\n  if (!user) {\n    return;\n  }\n  trackBetterAuthSignUp({\n    user,\n    method,\n    referrer: readReferrer(ctx),\n  });\n}\n\nfunction trackSignInFromContext(\n  ctx: AuthHookContext,\n  method: \"password\" | \"oauth\" | \"magic_link\" | \"sso\",\n) {\n  const user = readUser(ctx);\n  const session = ctx.context.newSession?.session;\n  if (!user || !session?.id) {\n    return;\n  }\n  const mfa = readMfa(ctx);\n  trackBetterAuthSignIn({\n    user,\n    session: {\n      id: session.id,\n      method,\n      ...(mfa !== undefined ? { mfa } : {}),\n    },\n  });\n}\n\nexport function createBetterAuthLogcnPlugin(): BetterAuthPlugin {\n  return {\n    id: \"logcn\",\n    hooks: {\n      after: [\n        {\n          matcher: (ctx) => ctx.path === \"/sign-up/email\" && !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignUpFromContext(ctx, hasInvitationId(ctx) ? \"invite\" : \"email\");\n          }),\n        },\n        {\n          matcher: (ctx) =>\n            (ctx.path === \"/organization/signup-with-invitation\" ||\n              ctx.path.endsWith(\"/signup-with-invitation\")) &&\n            !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignUpFromContext(ctx, \"invite\");\n          }),\n        },\n        {\n          matcher: (ctx) =>\n            ctx.path.startsWith(\"/callback/\") &&\n            !!ctx.context.newSession?.user &&\n            isSocialRegistration(ctx),\n          handler: createAuthMiddleware(async (ctx) => {\n            await readOAuthProvider(ctx);\n            trackSignUpFromContext(ctx, hasInvitationId(ctx) ? \"invite\" : \"oauth\");\n          }),\n        },\n        {\n          matcher: (ctx) => ctx.path === \"/sign-in/email\" && !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignInFromContext(ctx, \"password\");\n          }),\n        },\n        {\n          matcher: (ctx) =>\n            ctx.path.startsWith(\"/callback/\") &&\n            !!ctx.context.newSession?.user &&\n            !isSocialRegistration(ctx),\n          handler: createAuthMiddleware(async (ctx) => {\n            await readOAuthProvider(ctx);\n            trackSignInFromContext(ctx, \"oauth\");\n          }),\n        },\n        {\n          matcher: (ctx) => ctx.path === \"/magic-link/verify\" && !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignInFromContext(ctx, \"magic_link\");\n          }),\n        },\n        {\n          matcher: (ctx) =>\n            (ctx.path === \"/sign-in/sso\" ||\n              ctx.path.startsWith(\"/sso/callback\") ||\n              ctx.path.startsWith(\"/sso/saml2/\")) &&\n            !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignInFromContext(ctx, \"sso\");\n          }),\n        },\n      ],\n    },\n  };\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "integration-clerk",
+      "title": "Clerk Integration",
+      "description": "Clerk helpers that emit logcn auth events.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@logcn/core",
+        "@clerk/backend"
+      ],
+      "registryDependencies": [
+        "event-auth-user-signed-up",
+        "event-auth-user-signed-in"
+      ],
+      "files": [
+        {
+          "path": "registry/integrations/clerk.ts",
+          "target": "~/integrations/clerk.ts",
+          "type": "registry:lib",
+          "content": "import type { WebhookEvent } from \"@clerk/backend/webhooks\";\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\nexport type ClerkWebhookEvent = WebhookEvent;\n\ntype ClerkUserPayload = {\n  id: string;\n  primary_email_address_id?: string | null;\n  email_addresses?: Array<{ id: string; email_address: string }>;\n  external_accounts?: Array<{ provider: string }>;\n  enterprise_accounts?: Array<{ provider: string }>;\n  password_enabled?: boolean;\n  two_factor_enabled?: boolean;\n  public_metadata?: Record<string, unknown> | null;\n  unsafe_metadata?: Record<string, unknown> | null;\n  private_metadata?: Record<string, unknown> | null;\n};\n\ntype ClerkSessionPayload = {\n  id: string;\n  user_id: string;\n  user: ClerkUserPayload | null;\n};\n\nexport function trackClerkUserCreated(input: {\n  user: { id: string; email: string };\n  method: \"email\" | \"oauth\" | \"invite\";\n  referrer?: string;\n}) {\n  return logger\n    .event(AuthUserSignedUp)\n    .set({\n      user: input.user,\n      signup: {\n        method: input.method,\n        ...(input.referrer ? { referrer: input.referrer } : {}),\n      },\n    })\n    .emit();\n}\n\nexport function trackClerkSessionCreated(input: {\n  user: { id: string; email?: string };\n  session: { id: string; method: \"password\" | \"oauth\" | \"magic_link\" | \"sso\"; mfa?: boolean };\n}) {\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user: input.user,\n      session: input.session,\n    })\n    .emit();\n}\n\nfunction clerkPrimaryEmail(user: ClerkUserPayload): string | undefined {\n  const addresses = user.email_addresses ?? [];\n  if (addresses.length === 0) {\n    return undefined;\n  }\n  const primary = user.primary_email_address_id\n    ? addresses.find((address) => address.id === user.primary_email_address_id)\n    : addresses[0];\n  return primary?.email_address;\n}\n\nfunction metadataReferrer(user: ClerkUserPayload): string | undefined {\n  for (const metadata of [user.public_metadata, user.unsafe_metadata, user.private_metadata]) {\n    if (!metadata || typeof metadata !== \"object\") {\n      continue;\n    }\n    const referrer = metadata.referrer ?? metadata.referral;\n    if (typeof referrer === \"string\" && referrer.length > 0) {\n      return referrer;\n    }\n  }\n  return undefined;\n}\n\nfunction metadataIndicatesInvite(user: ClerkUserPayload): boolean {\n  for (const metadata of [user.public_metadata, user.unsafe_metadata, user.private_metadata]) {\n    if (!metadata || typeof metadata !== \"object\") {\n      continue;\n    }\n    if (\"invitation_id\" in metadata || \"invite\" in metadata || \"invitationId\" in metadata) {\n      return true;\n    }\n  }\n  return false;\n}\n\nfunction inferClerkSignUpMethod(user: ClerkUserPayload): \"email\" | \"oauth\" | \"invite\" {\n  if (metadataIndicatesInvite(user)) {\n    return \"invite\";\n  }\n  if ((user.external_accounts?.length ?? 0) > 0) {\n    return \"oauth\";\n  }\n  return \"email\";\n}\n\nfunction inferClerkSignInMethod(user: ClerkUserPayload): \"password\" | \"oauth\" | \"magic_link\" | \"sso\" {\n  if ((user.enterprise_accounts?.length ?? 0) > 0) {\n    return \"sso\";\n  }\n  if ((user.external_accounts?.length ?? 0) > 0) {\n    return \"oauth\";\n  }\n  if (user.password_enabled === false) {\n    return \"magic_link\";\n  }\n  return \"password\";\n}\n\nfunction mapClerkUserCreated(data: ClerkUserPayload) {\n  const email = clerkPrimaryEmail(data);\n  if (!email) {\n    return undefined;\n  }\n  const referrer = metadataReferrer(data);\n  return trackClerkUserCreated({\n    user: { id: data.id, email },\n    method: inferClerkSignUpMethod(data),\n    ...(referrer ? { referrer } : {}),\n  });\n}\n\nfunction mapClerkSessionCreated(data: ClerkSessionPayload) {\n  const user = data.user;\n  const userId = user?.id ?? data.user_id;\n  if (!userId) {\n    return undefined;\n  }\n  const email = user ? clerkPrimaryEmail(user) : undefined;\n  const signInMethod = user ? inferClerkSignInMethod(user) : \"password\";\n  return trackClerkSessionCreated({\n    user: {\n      id: userId,\n      ...(email ? { email } : {}),\n    },\n    session: {\n      id: data.id,\n      method: signInMethod,\n      ...(user?.two_factor_enabled ? { mfa: true } : {}),\n    },\n  });\n}\n\nexport function handleClerkWebhook(event: ClerkWebhookEvent) {\n  switch (event.type) {\n    case \"user.created\":\n      return mapClerkUserCreated(event.data);\n    case \"session.created\":\n      return mapClerkSessionCreated(event.data);\n    default:\n      return undefined;\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "integration-resend",
+      "title": "Resend Integration",
+      "description": "Resend email helpers that emit logcn events.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@logcn/core",
+        "resend"
+      ],
+      "registryDependencies": [
+        "event-email-sent"
+      ],
+      "files": [
+        {
+          "path": "registry/integrations/resend.ts",
+          "target": "~/integrations/resend.ts",
+          "type": "registry:lib",
+          "content": "import { logger } from \"../logger\";\nimport { EmailSent } from \"../events/email/email-sent\";\n\ntype ResendEmailEventData = {\n  email_id: string;\n  to: string[];\n  subject: string;\n  tags?: Record<string, string> | Array<{ name: string; value: string }>;\n  template_id?: string;\n};\n\nexport type ResendWebhookEvent = {\n  type: \"email.sent\" | \"email.delivered\" | \"email.bounced\" | \"email.complained\";\n  created_at?: string;\n  data: ResendEmailEventData;\n};\n\nexport function trackResendEmail(input: {\n  message: { id: string; to: string; subject: string };\n  template: string;\n  status: \"queued\" | \"sent\" | \"failed\";\n}) {\n  return logger\n    .event(EmailSent)\n    .set({\n      email: {\n        id: input.message.id,\n        template: input.template,\n        to: input.message.to,\n        subject: input.message.subject,\n      },\n      delivery: {\n        provider: \"resend\",\n        status: input.status,\n      },\n    })\n    .emit();\n}\n\nfunction tagValue(\n  tags: ResendEmailEventData[\"tags\"],\n  name: string,\n): string | undefined {\n  if (!tags) {\n    return undefined;\n  }\n  if (Array.isArray(tags)) {\n    return tags.find((entry) => entry.name === name)?.value;\n  }\n  return tags[name];\n}\n\nfunction templateFromTags(\n  tags: ResendEmailEventData[\"tags\"],\n  templateId?: string,\n): string {\n  const tagged =\n    tagValue(tags, \"template\") ??\n    tagValue(tags, \"category\") ??\n    tagValue(tags, \"template_id\") ??\n    tagValue(tags, \"templateId\");\n  if (tagged) {\n    return tagged;\n  }\n  return templateId ?? \"unknown\";\n}\n\nfunction resendDeliveryStatus(\n  type: ResendWebhookEvent[\"type\"],\n): \"queued\" | \"sent\" | \"failed\" {\n  switch (type) {\n    case \"email.sent\":\n    case \"email.delivered\":\n      return \"sent\";\n    case \"email.bounced\":\n    case \"email.complained\":\n      return \"failed\";\n    default:\n      return \"queued\";\n  }\n}\n\nexport function handleResendWebhook(event: ResendWebhookEvent) {\n  switch (event.type) {\n    case \"email.sent\":\n    case \"email.delivered\":\n    case \"email.bounced\":\n    case \"email.complained\": {\n      const to = event.data.to[0];\n      if (!to) {\n        return undefined;\n      }\n      return trackResendEmail({\n        message: {\n          id: event.data.email_id,\n          to,\n          subject: event.data.subject,\n        },\n        template: templateFromTags(event.data.tags, event.data.template_id),\n        status: resendDeliveryStatus(event.type),\n      });\n    }\n    default:\n      return undefined;\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "integration-polar",
+      "title": "Polar Integration",
+      "description": "Polar payment helpers that emit logcn order-paid events.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@logcn/core",
+        "@polar-sh/sdk"
+      ],
+      "registryDependencies": [
+        "event-payment-order-paid"
+      ],
+      "files": [
+        {
+          "path": "registry/integrations/polar.ts",
+          "target": "~/integrations/polar.ts",
+          "type": "registry:lib",
+          "content": "import { logger } from \"../logger\";\nimport { PaymentOrderPaid } from \"../events/payment/order-paid\";\n\ntype PolarOrderData = {\n  id: string;\n  checkout_id?: string | null;\n  checkoutId?: string | null;\n  total_amount?: number;\n  totalAmount?: number;\n  currency: string;\n  customer?: {\n    id: string;\n    email?: string | null;\n  };\n  customer_id?: string;\n  customerId?: string;\n};\n\ntype PolarCheckoutData = {\n  id: string;\n  status: string;\n  total_amount?: number;\n  totalAmount?: number;\n  currency: string;\n  customer_id?: string | null;\n  customerId?: string | null;\n  customer_email?: string | null;\n  customerEmail?: string | null;\n};\n\nexport type PolarWebhookEvent =\n  | { type: \"order.paid\"; data: PolarOrderData }\n  | { type: \"checkout.updated\"; data: PolarCheckoutData };\n\nexport function trackPolarOrderPaid(input: {\n  checkout: { id: string; amount: number; currency: string };\n  customer: { id: string; email?: string };\n  method?: \"card\" | \"bank\" | \"wallet\" | \"other\";\n}) {\n  return logger\n    .event(PaymentOrderPaid)\n    .set({\n      order: {\n        id: input.checkout.id,\n        currency: input.checkout.currency.toUpperCase(),\n        amount_cents: input.checkout.amount,\n      },\n      customer: {\n        id: input.customer.id,\n        ...(input.customer.email ? { email: input.customer.email } : {}),\n      },\n      payment: {\n        provider: \"polar\",\n        ...(input.method ? { method: input.method } : {}),\n      },\n    })\n    .emit();\n}\n\nfunction readAmount(data: { total_amount?: number; totalAmount?: number }): number {\n  return data.totalAmount ?? data.total_amount ?? 0;\n}\n\nfunction mapPolarOrderPaid(data: PolarOrderData) {\n  const customerId = data.customer?.id ?? data.customerId ?? data.customer_id;\n  if (!customerId) {\n    return undefined;\n  }\n  const checkoutId = data.checkoutId ?? data.checkout_id ?? data.id;\n  return trackPolarOrderPaid({\n    checkout: {\n      id: checkoutId,\n      amount: readAmount(data),\n      currency: data.currency,\n    },\n    customer: {\n      id: customerId,\n      ...(data.customer?.email ? { email: data.customer.email } : {}),\n    },\n  });\n}\n\nfunction mapPolarCheckoutPaid(data: PolarCheckoutData) {\n  const customerId = data.customerId ?? data.customer_id;\n  if (!customerId) {\n    return undefined;\n  }\n  const customerEmail = data.customerEmail ?? data.customer_email;\n  return trackPolarOrderPaid({\n    checkout: {\n      id: data.id,\n      amount: readAmount(data),\n      currency: data.currency,\n    },\n    customer: {\n      id: customerId,\n      ...(customerEmail ? { email: customerEmail } : {}),\n    },\n  });\n}\n\nexport function handlePolarWebhook(event: PolarWebhookEvent) {\n  switch (event.type) {\n    case \"order.paid\":\n      return mapPolarOrderPaid(event.data);\n    case \"checkout.updated\":\n      if (event.data.status !== \"paid\") {\n        return undefined;\n      }\n      return mapPolarCheckoutPaid(event.data);\n    default:\n      return undefined;\n  }\n}\n"
+        }
+      ]
+    }
+  ]
+}

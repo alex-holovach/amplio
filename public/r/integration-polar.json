@@ -1,0 +1,23 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "integration-polar",
+  "title": "Polar Integration",
+  "description": "Polar payment helpers that emit logcn order-paid events.",
+  "type": "registry:lib",
+  "dependencies": [
+    "zod",
+    "@logcn/core",
+    "@polar-sh/sdk"
+  ],
+  "registryDependencies": [
+    "event-payment-order-paid"
+  ],
+  "files": [
+    {
+      "path": "registry/integrations/polar.ts",
+      "target": "~/integrations/polar.ts",
+      "type": "registry:lib",
+      "content": "import { logger } from \"../logger\";\nimport { PaymentOrderPaid } from \"../events/payment/order-paid\";\n\ntype PolarOrderData = {\n  id: string;\n  checkout_id?: string | null;\n  checkoutId?: string | null;\n  total_amount?: number;\n  totalAmount?: number;\n  currency: string;\n  customer?: {\n    id: string;\n    email?: string | null;\n  };\n  customer_id?: string;\n  customerId?: string;\n};\n\ntype PolarCheckoutData = {\n  id: string;\n  status: string;\n  total_amount?: number;\n  totalAmount?: number;\n  currency: string;\n  customer_id?: string | null;\n  customerId?: string | null;\n  customer_email?: string | null;\n  customerEmail?: string | null;\n};\n\nexport type PolarWebhookEvent =\n  | { type: \"order.paid\"; data: PolarOrderData }\n  | { type: \"checkout.updated\"; data: PolarCheckoutData };\n\nexport function trackPolarOrderPaid(input: {\n  checkout: { id: string; amount: number; currency: string };\n  customer: { id: string; email?: string };\n  method?: \"card\" | \"bank\" | \"wallet\" | \"other\";\n}) {\n  return logger\n    .event(PaymentOrderPaid)\n    .set({\n      order: {\n        id: input.checkout.id,\n        currency: input.checkout.currency.toUpperCase(),\n        amount_cents: input.checkout.amount,\n      },\n      customer: {\n        id: input.customer.id,\n        ...(input.customer.email ? { email: input.customer.email } : {}),\n      },\n      payment: {\n        provider: \"polar\",\n        ...(input.method ? { method: input.method } : {}),\n      },\n    })\n    .emit();\n}\n\nfunction readAmount(data: { total_amount?: number; totalAmount?: number }): number {\n  return data.totalAmount ?? data.total_amount ?? 0;\n}\n\nfunction mapPolarOrderPaid(data: PolarOrderData) {\n  const customerId = data.customer?.id ?? data.customerId ?? data.customer_id;\n  if (!customerId) {\n    return undefined;\n  }\n  const checkoutId = data.checkoutId ?? data.checkout_id ?? data.id;\n  return trackPolarOrderPaid({\n    checkout: {\n      id: checkoutId,\n      amount: readAmount(data),\n      currency: data.currency,\n    },\n    customer: {\n      id: customerId,\n      ...(data.customer?.email ? { email: data.customer.email } : {}),\n    },\n  });\n}\n\nfunction mapPolarCheckoutPaid(data: PolarCheckoutData) {\n  const customerId = data.customerId ?? data.customer_id;\n  if (!customerId) {\n    return undefined;\n  }\n  const customerEmail = data.customerEmail ?? data.customer_email;\n  return trackPolarOrderPaid({\n    checkout: {\n      id: data.id,\n      amount: readAmount(data),\n      currency: data.currency,\n    },\n    customer: {\n      id: customerId,\n      ...(customerEmail ? { email: customerEmail } : {}),\n    },\n  });\n}\n\nexport function handlePolarWebhook(event: PolarWebhookEvent) {\n  switch (event.type) {\n    case \"order.paid\":\n      return mapPolarOrderPaid(event.data);\n    case \"checkout.updated\":\n      if (event.data.status !== \"paid\") {\n        return undefined;\n      }\n      return mapPolarCheckoutPaid(event.data);\n    default:\n      return undefined;\n  }\n}\n"
+    }
+  ]
+}

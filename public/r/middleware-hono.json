@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "middleware-hono",
+  "title": "Hono Middleware",
+  "description": "Hono middleware that attaches request-scoped logcn context.",
+  "type": "registry:lib",
+  "dependencies": [
+    "@logcn/core"
+  ],
+  "devDependencies": [
+    "hono"
+  ],
+  "files": [
+    {
+      "path": "registry/middleware/hono.ts",
+      "target": "~/middleware/hono.ts",
+      "type": "registry:lib",
+      "content": "import type { Context, MiddlewareHandler, Next } from \"hono\";\nimport { createError, createRequestLogger, runWithLogger, useLogger, type Logger } from \"@logcn/core\";\n\nconst LOGCN_KEY = \"logcn\";\n\nfunction formatError(error: unknown) {\n  if (error instanceof Error) {\n    return createError({ message: error.message, code: error.name });\n  }\n  return createError({ message: String(error) });\n}\n\nexport function logcnMiddleware(): MiddlewareHandler {\n  return async (c: Context, next: Next) => {\n    const requestLogger = createRequestLogger({\n      method: c.req.method,\n      path: c.req.path,\n    }).set({\n      http: {\n        method: c.req.method,\n        path: c.req.path,\n        route: c.req.routePath,\n      },\n    });\n\n    c.set(LOGCN_KEY, requestLogger);\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        await next();\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: c.res.status },\n            status: c.res.status,\n          });\n          requestLogger.emit();\n        }\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            error: formatError(error),\n            status: 500,\n            success: false,\n          });\n          requestLogger.emit();\n        }\n        throw error;\n      }\n    });\n  };\n}\n\nexport function useRequestLogger(c: Context): Logger | undefined {\n  return (c.get(LOGCN_KEY) as Logger | undefined) ?? useLogger();\n}\n"
+    }
+  ]
+}

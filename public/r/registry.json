@@ -1,0 +1,109 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "logcn",
+  "homepage": "https://github.com/logcn/logcn",
+  "items": [
+    {
+      "name": "event-auth-user-signed-up",
+      "type": "registry:lib",
+      "title": "Auth User Signed Up",
+      "description": "Wide event when a user completes sign-up."
+    },
+    {
+      "name": "event-auth-user-signed-in",
+      "type": "registry:lib",
+      "title": "Auth User Signed In",
+      "description": "Wide event when a user signs in."
+    },
+    {
+      "name": "event-email-sent",
+      "type": "registry:lib",
+      "title": "Email Sent",
+      "description": "Wide event when an email is sent."
+    },
+    {
+      "name": "event-payment-order-paid",
+      "type": "registry:lib",
+      "title": "Payment Order Paid",
+      "description": "Wide event when a payment order is paid."
+    },
+    {
+      "name": "middleware-hono",
+      "type": "registry:lib",
+      "title": "Hono Middleware",
+      "description": "Hono middleware that attaches request-scoped logcn context."
+    },
+    {
+      "name": "middleware-express",
+      "type": "registry:lib",
+      "title": "Express Middleware",
+      "description": "Express middleware that attaches request-scoped logcn context."
+    },
+    {
+      "name": "middleware-next",
+      "type": "registry:lib",
+      "title": "Next.js Middleware",
+      "description": "Next.js middleware that attaches request-scoped logcn context."
+    },
+    {
+      "name": "middleware-fastify",
+      "type": "registry:lib",
+      "title": "Fastify Middleware",
+      "description": "Fastify plugin that attaches request-scoped logcn context."
+    },
+    {
+      "name": "sink-console",
+      "type": "registry:lib",
+      "title": "Console Sink",
+      "description": "Console sink that prints wide events as JSON."
+    },
+    {
+      "name": "sink-json",
+      "type": "registry:lib",
+      "title": "JSON Sink",
+      "description": "JSON sink that serializes wide events for streaming or files."
+    },
+    {
+      "name": "sink-otlp",
+      "type": "registry:lib",
+      "title": "OTLP Sink",
+      "description": "OTLP sink that exports wide events over OpenTelemetry."
+    },
+    {
+      "name": "enricher-service-metadata",
+      "type": "registry:lib",
+      "title": "Service Metadata Enricher",
+      "description": "Enricher that adds service name / environment metadata."
+    },
+    {
+      "name": "enricher-request-metadata",
+      "type": "registry:lib",
+      "title": "Request Metadata Enricher",
+      "description": "Enricher that adds request id / HTTP metadata."
+    },
+    {
+      "name": "integration-better-auth",
+      "type": "registry:lib",
+      "title": "Better Auth Integration",
+      "description": "Better Auth helpers that emit logcn auth events."
+    },
+    {
+      "name": "integration-clerk",
+      "type": "registry:lib",
+      "title": "Clerk Integration",
+      "description": "Clerk helpers that emit logcn auth events."
+    },
+    {
+      "name": "integration-resend",
+      "type": "registry:lib",
+      "title": "Resend Integration",
+      "description": "Resend email helpers that emit logcn events."
+    },
+    {
+      "name": "integration-polar",
+      "type": "registry:lib",
+      "title": "Polar Integration",
+      "description": "Polar payment helpers that emit logcn order-paid events."
+    }
+  ]
+}

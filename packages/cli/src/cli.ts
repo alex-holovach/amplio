@@ -1,0 +1,193 @@
+import { createRequire } from "node:module";
+import { parseArgs } from "node:util";
+import { runInit } from "./commands/init.js";
+
+const { version } = createRequire(import.meta.url)("../package.json") as {
+  version: string;
+};
+import {
+  runAddEnricher,
+  runAddEvent,
+  runAddIntegration,
+  runAddMiddleware,
+  runAddSink,
+} from "./commands/add.js";
+import { runList } from "./commands/list.js";
+
+function printHelp(): void {
+  console.log(`logcn — schema-first wide-event telemetry scaffolding
+
+Usage:
+  logcn init [options]
+  logcn list [kind]   List registry items (id, title, description)
+  logcn add event <domain.entity.action>
+  logcn add middleware <hono|express|next|fastify>
+  logcn add sink <console|otlp|json>
+  logcn add enricher <service-metadata|request|request-metadata>
+  logcn add integration <better-auth|clerk|resend|polar>
+
+Options:
+  --cwd <path>                 Project directory (default: .)
+  --service <name>             Service name for logger.ts (init)
+  --package-manager <pm>       pnpm | npm | yarn | bun (init)
+  --no-typescript              Disable TypeScript defaults in logcn.json (init)
+  --force                      Overwrite generated files (add)
+  -h, --help                   Show help
+  -V, --version                Print version
+`);
+}
+
+function parseCliArgs() {
+  try {
+    return parseArgs({
+      allowPositionals: true,
+      allowNegative: true,
+      options: {
+        cwd: { type: "string", default: "." },
+        service: { type: "string" },
+        "package-manager": { type: "string" },
+        typescript: { type: "boolean", default: true },
+        force: { type: "boolean", default: false },
+        help: { type: "boolean", short: "h", default: false },
+        version: { type: "boolean", short: "V", default: false },
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && "code" in error) {
+      if (error.code === "ERR_PARSE_ARGS_UNKNOWN_OPTION") {
+        const match = /Unknown option '([^']+)'/.exec(error.message);
+        const option = match?.[1] ?? "unknown";
+        console.error(`error: Unknown option '${option}'`);
+        process.exit(1);
+      }
+      if (error.code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE") {
+        console.error(`error: ${error.message}`);
+        process.exit(1);
+      }
+    }
+    throw error;
+  }
+}
+
+async function main(): Promise<void> {
+  const { values, positionals } = parseCliArgs();
+
+  if (values.version) {
+    console.log(version);
+    process.exit(0);
+  }
+
+  const command = positionals[0]?.trim();
+  if (values.help || !command) {
+    printHelp();
+    process.exit(values.help ? 0 : 1);
+  }
+  const cwd = (values.cwd ?? ".").trim() || ".";
+
+  if (values.force && command !== "add") {
+    console.error("error: --force is only valid with add");
+    process.exit(1);
+  }
+
+  if (command !== "init") {
+    if (values.service?.trim()) {
+      console.error("error: --service is only valid with init");
+      process.exit(1);
+    }
+    if (values["package-manager"]?.trim()) {
+      console.error("error: --package-manager is only valid with init");
+      process.exit(1);
+    }
+    if (values.typescript === false) {
+      console.error("error: --no-typescript is only valid with init");
+      process.exit(1);
+    }
+  }
+
+  try {
+    if (command === "init") {
+      const allowedPackageManagers = ["pnpm", "npm", "yarn", "bun"] as const;
+      type PackageManager = (typeof allowedPackageManagers)[number];
+      const packageManager = values["package-manager"]?.trim().toLowerCase();
+      if (
+        packageManager &&
+        !(allowedPackageManagers as readonly string[]).includes(packageManager)
+      ) {
+        throw new Error(
+          `Unknown package manager "${packageManager}". Use: pnpm, npm, yarn, bun`,
+        );
+      }
+      const service = values.service?.trim();
+      await runInit({
+        cwd,
+        ...(service ? { service } : {}),
+        ...(packageManager
+          ? { packageManager: packageManager as PackageManager }
+          : {}),
+        typescript: values.typescript,
+      });
+      return;
+    }
+
+    if (command === "list") {
+      const kind = positionals[1]?.trim();
+      await runList({
+        cwd,
+        ...(kind ? { kind } : {}),
+      });
+      return;
+    }
+
+    if (command === "add") {
+      const kind = positionals[1]?.trim();
+      const id = positionals[2]?.trim();
+
+      if (!kind) {
+        throw new Error("Missing add target. Example: logcn add event auth.user.signed_up");
+      }
+
+      if (!id) {
+        const examples: Record<string, string> = {
+          event: "logcn add event auth.user.signed_up",
+          middleware: "logcn add middleware hono",
+          sink: "logcn add sink console",
+          enricher: "logcn add enricher service-metadata",
+          integration: "logcn add integration better-auth",
+        };
+        const example =
+          examples[kind] ?? "logcn add event auth.user.signed_up";
+        throw new Error(`Missing add name. Example: ${example}`);
+      }
+
+      const options = { cwd, force: values.force ?? false };
+
+      switch (kind) {
+        case "event":
+          await runAddEvent(id, options);
+          return;
+        case "middleware":
+          await runAddMiddleware(id, options);
+          return;
+        case "sink":
+          await runAddSink(id, options);
+          return;
+        case "enricher":
+          await runAddEnricher(id, options);
+          return;
+        case "integration":
+          await runAddIntegration(id, options);
+          return;
+        default:
+          throw new Error(`Unknown add kind "${kind}".`);
+      }
+    }
+
+    throw new Error(`Unknown command "${command}".`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`error: ${message}`);
+    process.exit(1);
+  }
+}
+
+main();
