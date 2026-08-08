@@ -1,6 +1,6 @@
 export function renderLoggerTemplate(service = "my-app"): string {
-  return `import { init, logger } from "@logcn/core";
-import type { LogRecord, Sink } from "@logcn/core";
+  return `import { init, logger } from "@amplio/core";
+import type { LogRecord, Sink } from "@amplio/core";
 
 const consoleJsonSink: Sink = (record: LogRecord) => {
   console.log(JSON.stringify(record));
@@ -17,7 +17,7 @@ export { logger };
 `;
 }
 
-export function renderLogcnConfig(options: {
+export function renderAmplioConfig(options: {
   registry?: string;
   packageManager?: string;
   typescript?: boolean;

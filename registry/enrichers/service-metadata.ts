@@ -1,4 +1,4 @@
-import type { LogRecord } from "@logcn/core";
+import type { LogRecord } from "@amplio/core";
 
 function envOrUndefined(key: string): string | undefined {
   const value = process.env[key];
@@ -10,15 +10,15 @@ function envOrUndefined(key: string): string | undefined {
 
 export function serviceMetadata(record: LogRecord): LogRecord {
   const service: Record<string, unknown> = {
-    name: envOrUndefined("LOGCN_SERVICE") ?? record.service,
+    name: envOrUndefined("AMPLIO_SERVICE") ?? record.service,
   };
 
-  const version = envOrUndefined("LOGCN_SERVICE_VERSION");
+  const version = envOrUndefined("AMPLIO_SERVICE_VERSION");
   if (version !== undefined) {
     service.version = version;
   }
 
-  const region = envOrUndefined("LOGCN_REGION");
+  const region = envOrUndefined("AMPLIO_REGION");
   if (region !== undefined) {
     service.region = region;
   }

@@ -1,6 +1,6 @@
 {
-  "name": "logcn",
-  "homepage": "https://github.com/logcn/logcn",
+  "name": "amplio",
+  "homepage": "https://github.com/alex-holovach/amplio",
   "items": [
     {
       "name": "event-auth-user-signed-up",
@@ -9,7 +9,7 @@
       "target": "telemetry/events/auth/user-signed-up.ts",
       "dependencies": [
         "zod",
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
@@ -19,7 +19,7 @@
       "target": "telemetry/events/auth/user-signed-in.ts",
       "dependencies": [
         "zod",
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
@@ -29,7 +29,7 @@
       "target": "telemetry/events/email/email-sent.ts",
       "dependencies": [
         "zod",
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
@@ -39,16 +39,16 @@
       "target": "telemetry/events/payment/order-paid.ts",
       "dependencies": [
         "zod",
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
       "name": "middleware-hono",
-      "description": "Hono middleware that attaches request-scoped logcn context.",
+      "description": "Hono middleware that attaches request-scoped amplio context.",
       "source": "middleware/hono.ts",
       "target": "telemetry/middleware/hono.ts",
       "dependencies": [
-        "@logcn/core"
+        "@amplio/core"
       ],
       "devDependencies": [
         "hono"
@@ -56,11 +56,11 @@
     },
     {
       "name": "middleware-express",
-      "description": "Express middleware that attaches request-scoped logcn context.",
+      "description": "Express middleware that attaches request-scoped amplio context.",
       "source": "middleware/express.ts",
       "target": "telemetry/middleware/express.ts",
       "dependencies": [
-        "@logcn/core"
+        "@amplio/core"
       ],
       "devDependencies": [
         "@types/express",
@@ -69,11 +69,11 @@
     },
     {
       "name": "middleware-next",
-      "description": "Next.js middleware that attaches request-scoped logcn context.",
+      "description": "Next.js middleware that attaches request-scoped amplio context.",
       "source": "middleware/next.ts",
       "target": "telemetry/middleware/next.ts",
       "dependencies": [
-        "@logcn/core"
+        "@amplio/core"
       ],
       "devDependencies": [
         "next"
@@ -81,11 +81,11 @@
     },
     {
       "name": "middleware-fastify",
-      "description": "Fastify plugin that attaches request-scoped logcn context.",
+      "description": "Fastify plugin that attaches request-scoped amplio context.",
       "source": "middleware/fastify.ts",
       "target": "telemetry/middleware/fastify.ts",
       "dependencies": [
-        "@logcn/core",
+        "@amplio/core",
         "fastify-plugin"
       ],
       "devDependencies": [
@@ -98,7 +98,7 @@
       "source": "sinks/console.ts",
       "target": "telemetry/sinks/console.ts",
       "dependencies": [
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
@@ -107,7 +107,7 @@
       "source": "sinks/json.ts",
       "target": "telemetry/sinks/json.ts",
       "dependencies": [
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
@@ -116,7 +116,7 @@
       "source": "sinks/otlp.ts",
       "target": "telemetry/sinks/otlp.ts",
       "dependencies": [
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
@@ -125,7 +125,7 @@
       "source": "enrichers/service-metadata.ts",
       "target": "telemetry/enrichers/service-metadata.ts",
       "dependencies": [
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
@@ -134,17 +134,17 @@
       "source": "enrichers/request-metadata.ts",
       "target": "telemetry/enrichers/request-metadata.ts",
       "dependencies": [
-        "@logcn/core"
+        "@amplio/core"
       ]
     },
     {
       "name": "integration-better-auth",
-      "description": "Better Auth helpers that emit logcn auth events.",
+      "description": "Better Auth helpers that emit amplio auth events.",
       "source": "integrations/better-auth.ts",
       "target": "telemetry/integrations/better-auth.ts",
       "dependencies": [
         "zod",
-        "@logcn/core",
+        "@amplio/core",
         "better-auth"
       ],
       "registryDependencies": [
@@ -154,12 +154,12 @@
     },
     {
       "name": "integration-clerk",
-      "description": "Clerk helpers that emit logcn auth events.",
+      "description": "Clerk helpers that emit amplio auth events.",
       "source": "integrations/clerk.ts",
       "target": "telemetry/integrations/clerk.ts",
       "dependencies": [
         "zod",
-        "@logcn/core",
+        "@amplio/core",
         "@clerk/backend"
       ],
       "registryDependencies": [
@@ -169,12 +169,12 @@
     },
     {
       "name": "integration-resend",
-      "description": "Resend email helpers that emit logcn events.",
+      "description": "Resend email helpers that emit amplio events.",
       "source": "integrations/resend.ts",
       "target": "telemetry/integrations/resend.ts",
       "dependencies": [
         "zod",
-        "@logcn/core",
+        "@amplio/core",
         "resend"
       ],
       "registryDependencies": [
@@ -183,12 +183,12 @@
     },
     {
       "name": "integration-polar",
-      "description": "Polar payment helpers that emit logcn order-paid events.",
+      "description": "Polar payment helpers that emit amplio order-paid events.",
       "source": "integrations/polar.ts",
       "target": "telemetry/integrations/polar.ts",
       "dependencies": [
         "zod",
-        "@logcn/core",
+        "@amplio/core",
         "@polar-sh/sdk"
       ],
       "registryDependencies": [

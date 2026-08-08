@@ -60,9 +60,9 @@ async function buildItem(item) {
     $schema: "https://ui.shadcn.com/schema/registry-item.json",
     name: item.name,
     title: item.title ?? titleFromName(item.name),
-    description: item.description ?? `logcn registry item: ${item.name}`,
+    description: item.description ?? `amplio registry item: ${item.name}`,
     type: "registry:lib",
-    dependencies: item.dependencies ?? ["@logcn/core"],
+    dependencies: item.dependencies ?? ["@amplio/core"],
     ...(item.devDependencies ? { devDependencies: item.devDependencies } : {}),
     ...(item.registryDependencies ? { registryDependencies: item.registryDependencies } : {}),
     files: [

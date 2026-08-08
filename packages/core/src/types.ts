@@ -69,7 +69,7 @@ export interface SamplingConfig {
 
 export type RedactConfig = { fields?: string[]; patterns?: RegExp[] } | false;
 
-export interface LogcnConfig {
+export interface AmplioConfig {
   service: string;
   env: string;
   sinks: Sink[];

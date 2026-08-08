@@ -39,7 +39,7 @@ describe("async sink", () => {
       await flush();
 
       expect(unhandled).toHaveLength(0);
-      expect(warn).toHaveBeenCalledWith("[logcn] async sink failed: sink failed");
+      expect(warn).toHaveBeenCalledWith("[amplio] async sink failed: sink failed");
     } finally {
       process.off("unhandledRejection", onUnhandled);
       warn.mockRestore();

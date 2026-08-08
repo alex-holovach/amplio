@@ -1,8 +1,8 @@
-import type { LogRecord } from "@logcn/core";
+import type { LogRecord } from "@amplio/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { serviceMetadata } from "../../../registry/enrichers/service-metadata.ts";
 
-const ENV_KEYS = ["LOGCN_SERVICE", "LOGCN_SERVICE_VERSION", "LOGCN_REGION"] as const;
+const ENV_KEYS = ["AMPLIO_SERVICE", "AMPLIO_SERVICE_VERSION", "AMPLIO_REGION"] as const;
 
 describe("serviceMetadata", () => {
   const previous = new Map<string, string | undefined>();
@@ -35,11 +35,11 @@ describe("serviceMetadata", () => {
     }
   }
 
-  it("writes service.name/version/region from LOGCN_* env and preserves other fields", () => {
+  it("writes service.name/version/region from AMPLIO_* env and preserves other fields", () => {
     setEnv({
-      LOGCN_SERVICE: "billing-api",
-      LOGCN_SERVICE_VERSION: "2.4.1",
-      LOGCN_REGION: "us-west-2",
+      AMPLIO_SERVICE: "billing-api",
+      AMPLIO_SERVICE_VERSION: "2.4.1",
+      AMPLIO_REGION: "us-west-2",
     });
 
     const record: LogRecord = {
@@ -62,11 +62,11 @@ describe("serviceMetadata", () => {
       region: "us-west-2",
     });
   });
-  it("uses record.service as service.name when LOGCN_SERVICE is unset", () => {
+  it("uses record.service as service.name when AMPLIO_SERVICE is unset", () => {
     setEnv({
-      LOGCN_SERVICE: undefined,
-      LOGCN_SERVICE_VERSION: "1.0.0",
-      LOGCN_REGION: "eu-west-1",
+      AMPLIO_SERVICE: undefined,
+      AMPLIO_SERVICE_VERSION: "1.0.0",
+      AMPLIO_REGION: "eu-west-1",
     });
 
     const record: LogRecord = {
@@ -83,11 +83,11 @@ describe("serviceMetadata", () => {
     });
   });
 
-  it("omits version/region keys when LOGCN_SERVICE_VERSION and LOGCN_REGION are unset", () => {
+  it("omits version/region keys when AMPLIO_SERVICE_VERSION and AMPLIO_REGION are unset", () => {
     setEnv({
-      LOGCN_SERVICE: "api",
-      LOGCN_SERVICE_VERSION: undefined,
-      LOGCN_REGION: undefined,
+      AMPLIO_SERVICE: "api",
+      AMPLIO_SERVICE_VERSION: undefined,
+      AMPLIO_REGION: undefined,
     });
 
     const record: LogRecord = {
@@ -104,11 +104,11 @@ describe("serviceMetadata", () => {
     expect("region" in service).toBe(false);
   });
 
-  it("uses record.service as service.name when LOGCN_SERVICE is empty string", () => {
+  it("uses record.service as service.name when AMPLIO_SERVICE is empty string", () => {
     setEnv({
-      LOGCN_SERVICE: "",
-      LOGCN_SERVICE_VERSION: "1.0.0",
-      LOGCN_REGION: "eu-west-1",
+      AMPLIO_SERVICE: "",
+      AMPLIO_SERVICE_VERSION: "1.0.0",
+      AMPLIO_REGION: "eu-west-1",
     });
 
     const record: LogRecord = {
@@ -125,11 +125,11 @@ describe("serviceMetadata", () => {
     });
   });
 
-  it("omits version/region keys when LOGCN_SERVICE_VERSION and LOGCN_REGION are empty strings", () => {
+  it("omits version/region keys when AMPLIO_SERVICE_VERSION and AMPLIO_REGION are empty strings", () => {
     setEnv({
-      LOGCN_SERVICE: "api",
-      LOGCN_SERVICE_VERSION: "",
-      LOGCN_REGION: "",
+      AMPLIO_SERVICE: "api",
+      AMPLIO_SERVICE_VERSION: "",
+      AMPLIO_REGION: "",
     });
 
     const record: LogRecord = {

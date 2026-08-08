@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { LogRecord, Sink } from "@logcn/core";
+import type { LogRecord, Sink } from "@amplio/core";
 
 export interface JsonFileSinkOptions {
   path?: string;
@@ -8,7 +8,7 @@ export interface JsonFileSinkOptions {
 
 export function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {
   const filePath =
-    options.path ?? (process.env.LOGCN_JSON_SINK_PATH?.trim() || undefined) ?? "logcn.jsonl";
+    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined) ?? "amplio.jsonl";
 
   return (record: LogRecord) => {
     const dir = path.dirname(filePath);

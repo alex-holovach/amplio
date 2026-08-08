@@ -4,16 +4,16 @@ import {
   runWithLogger,
   useLogger,
   type Logger,
-} from "@logcn/core";
+} from "@amplio/core";
 import type { NextRequest, NextResponse } from "next/server";
 
-export interface WithLogcnOptions {
+export interface WithAmplioOptions {
   waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 let warnedNoWaitUntil = false;
 
-function scheduleFlush(options?: WithLogcnOptions): void {
+function scheduleFlush(options?: WithAmplioOptions): void {
   if (options?.waitUntil) {
     options.waitUntil(flush());
     return;
@@ -36,14 +36,14 @@ function scheduleFlush(options?: WithLogcnOptions): void {
   if ((env === undefined || env === "development") && !warnedNoWaitUntil) {
     warnedNoWaitUntil = true;
     console.warn(
-      "[logcn] async sinks may be cut off without waitUntil/after; pass waitUntil to withLogcn or call flush()",
+      "[amplio] async sinks may be cut off without waitUntil/after; pass waitUntil to withAmplio or call flush()",
     );
   }
 }
 
-export function withLogcn<T extends (request: NextRequest, ...args: never[]) => Promise<NextResponse>>(
+export function withAmplio<T extends (request: NextRequest, ...args: never[]) => Promise<NextResponse>>(
   handler: T,
-  options?: WithLogcnOptions,
+  options?: WithAmplioOptions,
 ): T {
   const wrapped = (async (request: NextRequest, ...rest: never[]) => {
     const requestLogger = createRequestLogger({

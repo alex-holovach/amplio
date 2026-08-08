@@ -1,6 +1,6 @@
 import path from "node:path";
 import { runAddEvent, runAddMiddleware } from "./add.js";
-import { renderLogcnConfig, renderLoggerTemplate } from "../templates/init.js";
+import { renderAmplioConfig, renderLoggerTemplate } from "../templates/init.js";
 import { detectFramework, shouldAutoScaffold } from "../utils/detect-framework.js";
 import { ensureDir, writeFileIfMissing } from "../utils/fs.js";
 import { resolveRegistryPath } from "../utils/config.js";
@@ -70,7 +70,7 @@ export async function runInit(options: InitOptions): Promise<void> {
 
   const configResult = await writeFileIfMissing(
     paths.config,
-    renderLogcnConfig({
+    renderAmplioConfig({
       ...(registry ? { registry } : {}),
       packageManager: options.packageManager ?? "pnpm",
       typescript: options.typescript ?? true,
@@ -88,7 +88,7 @@ export async function runInit(options: InitOptions): Promise<void> {
     "export {};\n",
   );
 
-  console.log("logcn init");
+  console.log("amplio init");
   console.log(`  ${configResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, paths.config)}`);
   console.log(`  ${loggerResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, paths.logger)}`);
   for (const dir of scaffoldDirs) {
@@ -126,10 +126,10 @@ export async function runInit(options: InitOptions): Promise<void> {
   if (!middlewareName && !eventName) {
     console.log("\nNext:");
     if (detected) {
-      console.log(`  logcn add middleware ${detected}`);
+      console.log(`  amplio add middleware ${detected}`);
     } else {
-      console.log("  logcn add middleware hono");
+      console.log("  amplio add middleware hono");
     }
-    console.log("  logcn add event auth.user.signed_up");
+    console.log("  amplio add event auth.user.signed_up");
   }
 }

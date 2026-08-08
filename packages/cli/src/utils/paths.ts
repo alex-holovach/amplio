@@ -37,6 +37,6 @@ export function resolveProjectPaths(cwd: string, telemetryDir = "telemetry") {
     enrichers: path.join(telemetry, "enrichers"),
     integrations: path.join(telemetry, "integrations"),
     logger: path.join(telemetry, "logger.ts"),
-    config: path.join(root, "logcn.json"),
+    config: path.join(root, "amplio.json"),
   };
 }

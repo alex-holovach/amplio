@@ -24,7 +24,7 @@ describe("public API surface", () => {
       "runWithLogger",
       "useLogger",
       "createError",
-      "LogcnValidationError",
+      "AmplioValidationError",
       "flush",
     ] as const;
 

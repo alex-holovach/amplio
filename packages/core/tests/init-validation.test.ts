@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { init, resetConfigForTests, type LogcnConfig } from "../src/index.js";
+import { init, resetConfigForTests, type AmplioConfig } from "../src/index.js";
 
 beforeEach(() => {
   resetConfigForTests();
@@ -7,13 +7,13 @@ beforeEach(() => {
 
 describe("init validation", () => {
   it("throws when service is missing", () => {
-    expect(() => init({ env: "test", sinks: [() => {}] } as LogcnConfig)).toThrow(
+    expect(() => init({ env: "test", sinks: [() => {}] } as AmplioConfig)).toThrow(
       /service is required/,
     );
   });
 
   it("throws when env is missing", () => {
-    expect(() => init({ service: "api", sinks: [() => {}] } as LogcnConfig)).toThrow(
+    expect(() => init({ service: "api", sinks: [() => {}] } as AmplioConfig)).toThrow(
       /env is required/,
     );
   });
@@ -62,11 +62,11 @@ describe("init validation", () => {
   });
 
   it("throws when sinks is omitted or undefined", () => {
-    expect(() => init({ service: "api", env: "test" } as LogcnConfig)).toThrow(
+    expect(() => init({ service: "api", env: "test" } as AmplioConfig)).toThrow(
       /at least one sink/,
     );
     expect(() =>
-      init({ service: "api", env: "test", sinks: undefined } as unknown as LogcnConfig),
+      init({ service: "api", env: "test", sinks: undefined } as unknown as AmplioConfig),
     ).toThrow(/at least one sink/);
   });
 });

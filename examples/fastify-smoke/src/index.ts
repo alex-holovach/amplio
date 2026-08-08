@@ -1,10 +1,10 @@
 import Fastify from "fastify";
-import { logcnPlugin, useRequestLogger } from "../telemetry/middleware/fastify";
+import { amplioPlugin, useRequestLogger } from "../telemetry/middleware/fastify";
 import "../telemetry/logger.js";
 
 const app = Fastify();
 
-await app.register(logcnPlugin);
+await app.register(amplioPlugin);
 
 app.get("/health", async (request) => {
   useRequestLogger(request).set({ route: { name: "health" } });

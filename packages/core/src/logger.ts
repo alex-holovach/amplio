@@ -2,7 +2,7 @@ import { resolveAlwaysSample, resolveConfig } from "./config.js";
 import { createError } from "./error.js";
 import { isDevelopment, isTest } from "./env.js";
 import { getSealedNoopLogger } from "./noop-logger.js";
-import { LogcnValidationError } from "./validation-error.js";
+import { AmplioValidationError } from "./validation-error.js";
 import { deepMerge } from "./deep-merge.js";
 import { validateShape } from "./schema.js";
 import { shouldSample } from "./sampling.js";
@@ -14,7 +14,7 @@ import type {
   EventLogger,
   LogRecord,
   Logger,
-  LogcnConfig,
+  AmplioConfig,
 } from "./types.js";
 
 type SealState = { sealed: boolean };
@@ -31,7 +31,7 @@ type InternalLogger = Logger & {
 
 const warnSealed = (action: "set" | "error" | "emit" | "create" | "event"): void => {
   if (isDevelopment()) {
-    console.warn(`[logcn] logger.${action}() ignored: logger is sealed after emit()`);
+    console.warn(`[amplio] logger.${action}() ignored: logger is sealed after emit()`);
   }
 };
 
@@ -60,7 +60,7 @@ const ensureOwnership = (logger: InternalLogger): void => {
 const finalizeRecord = (
   logger: InternalLogger,
   payload: Record<string, unknown>,
-  config: LogcnConfig,
+  config: AmplioConfig,
   now: number,
 ): LogRecord => {
   const compiledRedact = getCompiledRedact();
@@ -110,7 +110,7 @@ const emitInternal = (logger: InternalLogger): LogRecord => {
         const next = enricher(payload as LogRecord);
         if (next == null || typeof next !== "object" || Array.isArray(next)) {
           if (isDevelopment()) {
-            console.warn("[logcn] enricher failed: must return a plain object record");
+            console.warn("[amplio] enricher failed: must return a plain object record");
           }
           continue;
         }
@@ -118,7 +118,7 @@ const emitInternal = (logger: InternalLogger): LogRecord => {
       } catch (error) {
         if (isDevelopment()) {
           const message = error instanceof Error ? error.message : String(error);
-          console.warn(`[logcn] enricher failed: ${message}`);
+          console.warn(`[amplio] enricher failed: ${message}`);
         }
       }
     }
@@ -135,7 +135,7 @@ const emitInternal = (logger: InternalLogger): LogRecord => {
       const validated = validateShape(logger._shape, payload);
       payload = { ...payload, ...validated };
     } catch (error) {
-      if (!(error instanceof LogcnValidationError)) {
+      if (!(error instanceof AmplioValidationError)) {
         throw error;
       }
       const throwOnFailure = isTest() || config.strict === true;
@@ -154,7 +154,7 @@ const emitInternal = (logger: InternalLogger): LogRecord => {
         success: false,
       };
       if (isDevelopment()) {
-        console.warn(`[logcn] emit() schema validation failed (soft): ${error.message}`);
+        console.warn(`[amplio] emit() schema validation failed (soft): ${error.message}`);
       }
     }
   }

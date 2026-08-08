@@ -1,6 +1,6 @@
-# Contributing to logcn
+# Contributing to amplio
 
-Thanks for helping improve logcn. The project is a small monorepo — keep changes focused.
+Thanks for helping improve amplio. The project is a small monorepo — keep changes focused.
 
 ## Setup
 
@@ -28,7 +28,7 @@ pnpm size
 4. For registry items, run `pnpm registry:build` and commit generated `public/r/` output.
 5. If you touch examples or middleware, run `pnpm smoke` (headless example checks).
 
-`logcn init` supports `--service`, `--package-manager`, and `--no-typescript` (see README Quick start).
+`amplio init` supports `--service`, `--package-manager`, and `--no-typescript` (see README Quick start).
 
 ## Try in another project
 
@@ -38,15 +38,15 @@ To use a local build outside this monorepo, pack core + CLI tarballs and install
 
 | Command | Purpose |
 |---|---|
-| `pnpm build` | Build `@logcn/core` + `@logcn/cli` |
+| `pnpm build` | Build `@amplio/core` + `@amplio/cli` |
 | `pnpm test` | Unit tests |
 | `pnpm typecheck` | TypeScript check across packages (CI) |
-| `pnpm size` | `@logcn/core` gzip budget (< 8 KB) |
+| `pnpm size` | `@amplio/core` gzip budget (< 8 KB) |
 | `pnpm registry:build` | Regenerate `public/r/` |
 | `pnpm registry:serve` | Local HTTP server for `public/r/` JSON |
 | `pnpm format:check:events` | Generated events match Prettier defaults; root `.prettierrc` pins the config |
 | `pnpm smoke` | Example smoke scripts (basic/express/fastify/standalone/next) |
-| `pnpm publish:smoke` | Pack CLI + core, install outside monorepo, run `logcn init` |
+| `pnpm publish:smoke` | Pack CLI + core, install outside monorepo, run `amplio init` |
 | `pnpm run ci` | Full local CI bundle (includes `publish:smoke`; matches GitHub Actions) — **must** use `run`; plain `pnpm ci` is pnpm's clean-install builtin |
 
 `pnpm registry:serve` rejects invalid `--port` / `PORT` values immediately (`Invalid --port` / `Invalid PORT`); `PORT=0` / `--port 0` is fine (ephemeral bind).
@@ -58,7 +58,7 @@ CI (`.github/workflows/ci.yml`) runs build, test, typecheck, size, registry buil
 - Event names: `domain.entity.action` (or shorter forms like `email.sent`).
 - Relative imports under `telemetry/` are **extensionless** (Next-safe): `./sinks/json` not `./sinks/json.js`.
 - Generated telemetry code lives in user repos under `telemetry/` — keep it readable and diff-friendly.
-- Do not expand the public `@logcn/core` API beyond the frozen surface in `AGENTS.md`.
+- Do not expand the public `@amplio/core` API beyond the frozen surface in `AGENTS.md`.
 
 ## Pull requests
 

@@ -53,8 +53,8 @@ describe("generated event prettier defaults", () => {
     }
   });
 
-  it("logcn add event output matches Prettier defaults", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-prettier-"));
+  it("amplio add event output matches Prettier defaults", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-prettier-"));
     await runInit({ cwd, service: "prettier-app" });
     await runAddEvent("ops.deploy.started", { cwd });
 

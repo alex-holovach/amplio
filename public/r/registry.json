@@ -1,7 +1,7 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry.json",
-  "name": "logcn",
-  "homepage": "https://github.com/logcn/logcn",
+  "name": "amplio",
+  "homepage": "https://github.com/alex-holovach/amplio",
   "items": [
     {
       "name": "event-auth-user-signed-up",
@@ -31,25 +31,25 @@
       "name": "middleware-hono",
       "type": "registry:lib",
       "title": "Hono Middleware",
-      "description": "Hono middleware that attaches request-scoped logcn context."
+      "description": "Hono middleware that attaches request-scoped amplio context."
     },
     {
       "name": "middleware-express",
       "type": "registry:lib",
       "title": "Express Middleware",
-      "description": "Express middleware that attaches request-scoped logcn context."
+      "description": "Express middleware that attaches request-scoped amplio context."
     },
     {
       "name": "middleware-next",
       "type": "registry:lib",
       "title": "Next.js Middleware",
-      "description": "Next.js middleware that attaches request-scoped logcn context."
+      "description": "Next.js middleware that attaches request-scoped amplio context."
     },
     {
       "name": "middleware-fastify",
       "type": "registry:lib",
       "title": "Fastify Middleware",
-      "description": "Fastify plugin that attaches request-scoped logcn context."
+      "description": "Fastify plugin that attaches request-scoped amplio context."
     },
     {
       "name": "sink-console",
@@ -85,25 +85,25 @@
       "name": "integration-better-auth",
       "type": "registry:lib",
       "title": "Better Auth Integration",
-      "description": "Better Auth helpers that emit logcn auth events."
+      "description": "Better Auth helpers that emit amplio auth events."
     },
     {
       "name": "integration-clerk",
       "type": "registry:lib",
       "title": "Clerk Integration",
-      "description": "Clerk helpers that emit logcn auth events."
+      "description": "Clerk helpers that emit amplio auth events."
     },
     {
       "name": "integration-resend",
       "type": "registry:lib",
       "title": "Resend Integration",
-      "description": "Resend email helpers that emit logcn events."
+      "description": "Resend email helpers that emit amplio events."
     },
     {
       "name": "integration-polar",
       "type": "registry:lib",
       "title": "Polar Integration",
-      "description": "Polar payment helpers that emit logcn order-paid events."
+      "description": "Polar payment helpers that emit amplio order-paid events."
     }
   ]
 }

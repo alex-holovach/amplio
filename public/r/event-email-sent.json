@@ -6,14 +6,14 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@logcn/core"
+    "@amplio/core"
   ],
   "files": [
     {
       "path": "registry/events/email/email-sent.ts",
       "target": "~/events/email/email-sent.ts",
       "type": "registry:lib",
-      "content": "import { defineEvent } from \"@logcn/core\";\nimport { z } from \"zod\";\n\nexport const EmailSent = defineEvent(\n  \"email.sent\",\n  z.object({\n    email: z.object({\n      id: z.string(),\n      template: z.string(),\n      to: z.string().email(),\n      subject: z.string(),\n    }),\n    delivery: z.object({\n      provider: z.enum([\"resend\", \"sendgrid\", \"ses\", \"postmark\", \"other\"]),\n      status: z.enum([\"queued\", \"sent\", \"failed\"]),\n    }),\n  }),\n);\n"
+      "content": "import { defineEvent } from \"@amplio/core\";\nimport { z } from \"zod\";\n\nexport const EmailSent = defineEvent(\n  \"email.sent\",\n  z.object({\n    email: z.object({\n      id: z.string(),\n      template: z.string(),\n      to: z.string().email(),\n      subject: z.string(),\n    }),\n    delivery: z.object({\n      provider: z.enum([\"resend\", \"sendgrid\", \"ses\", \"postmark\", \"other\"]),\n      status: z.enum([\"queued\", \"sent\", \"failed\"]),\n    }),\n  }),\n);\n"
     }
   ]
 }

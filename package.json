@@ -1,5 +1,5 @@
 {
-  "name": "logcn",
+  "name": "amplio",
   "private": true,
   "version": "0.1.0",
   "description": "Schema-first wide-event telemetry that lives in your repo — shadcn for observability",
@@ -10,11 +10,11 @@
     "build": "pnpm -r --filter './packages/*' run build",
     "test": "pnpm -r --filter './packages/*' run test",
     "bench": "node benchmarks/bench.mjs",
-    "size": "pnpm --filter @logcn/core run size",
+    "size": "pnpm --filter @amplio/core run size",
     "typecheck": "pnpm -r --filter './packages/*' run typecheck",
     "registry:build": "node scripts/build-registry.mjs",
-    "format:check:events": "pnpm --filter @logcn/cli exec vitest run tests/prettier-events.test.ts",
-    "smoke": "pnpm --filter @logcn/example-basic smoke && pnpm --filter @logcn/example-express-smoke smoke && pnpm --filter @logcn/example-fastify-smoke smoke && pnpm --filter @logcn/example-standalone smoke && pnpm --filter @logcn/example-next-smoke smoke",
+    "format:check:events": "pnpm --filter @amplio/cli exec vitest run tests/prettier-events.test.ts",
+    "smoke": "pnpm --filter @amplio/example-basic smoke && pnpm --filter @amplio/example-express-smoke smoke && pnpm --filter @amplio/example-fastify-smoke smoke && pnpm --filter @amplio/example-standalone smoke && pnpm --filter @amplio/example-next-smoke smoke",
     "publish:smoke": "node scripts/publish-smoke.mjs",
     "registry:serve": "node scripts/serve-registry.mjs",
     "ci": "pnpm build && pnpm test && pnpm typecheck && pnpm size && pnpm registry:build && pnpm format:check:events && pnpm publish:smoke"

@@ -58,7 +58,7 @@ describe("flush", () => {
     createLogger().emit();
     await flush();
 
-    expect(warn).toHaveBeenCalledWith("[logcn] async sink failed: sink failed");
+    expect(warn).toHaveBeenCalledWith("[amplio] async sink failed: sink failed");
     warn.mockRestore();
   });
 });

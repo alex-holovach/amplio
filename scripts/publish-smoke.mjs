@@ -22,15 +22,15 @@ function fail(msg) {
 }
 
 // Ensure builds + bundled registry
-run("pnpm", ["--filter", "@logcn/core", "build"], { cwd: repoRoot, stdio: "inherit" });
-run("pnpm", ["--filter", "@logcn/cli", "build"], { cwd: repoRoot, stdio: "inherit" });
+run("pnpm", ["--filter", "@amplio/core", "build"], { cwd: repoRoot, stdio: "inherit" });
+run("pnpm", ["--filter", "@amplio/cli", "build"], { cwd: repoRoot, stdio: "inherit" });
 
 if (!existsSync(path.join(cliPkg, "registry/registry.json"))) {
   fail("packages/cli/registry/registry.json missing after build");
 }
 
-const staging = mkdtempSync(path.join(tmpdir(), "logcn-pack-"));
-const project = mkdtempSync(path.join(tmpdir(), "logcn-app-"));
+const staging = mkdtempSync(path.join(tmpdir(), "amplio-pack-"));
+const project = mkdtempSync(path.join(tmpdir(), "amplio-app-"));
 let coreTgz;
 let cliTgz;
 
@@ -42,29 +42,29 @@ try {
 
   writeFileSync(
     path.join(project, "package.json"),
-    JSON.stringify({ name: "logcn-publish-smoke", private: true, type: "module" }, null, 2),
+    JSON.stringify({ name: "amplio-publish-smoke", private: true, type: "module" }, null, 2),
   );
 
   run("npm", ["install", corePath, cliPath], { cwd: project, stdio: "inherit" });
 
-  const logcn = path.join(project, "node_modules/.bin/logcn");
-  if (!existsSync(logcn)) fail("logcn bin missing after install");
+  const amplio = path.join(project, "node_modules/.bin/amplio");
+  if (!existsSync(amplio)) fail("amplio bin missing after install");
 
-  const initOut = run(logcn, ["init", "--service", "publish-smoke"], { cwd: project });
+  const initOut = run(amplio, ["init", "--service", "publish-smoke"], { cwd: project });
   if (!existsSync(path.join(project, "telemetry/logger.ts"))) fail("init did not create telemetry/logger.ts");
-  if (!existsSync(path.join(project, "logcn.json"))) fail("init did not create logcn.json");
+  if (!existsSync(path.join(project, "amplio.json"))) fail("init did not create amplio.json");
 
-  const listOut = run(logcn, ["list"], { cwd: project });
+  const listOut = run(amplio, ["list"], { cwd: project });
   if (!listOut.includes("middleware-hono") && !listOut.includes("hono")) {
     fail(`list missing hono item:\n${listOut}`);
   }
 
-  run(logcn, ["add", "middleware", "hono"], { cwd: project, stdio: "inherit" });
+  run(amplio, ["add", "middleware", "hono"], { cwd: project, stdio: "inherit" });
   if (!existsSync(path.join(project, "telemetry/middleware/hono.ts"))) {
     fail("add middleware hono did not create telemetry/middleware/hono.ts");
   }
 
-  run(logcn, ["add", "event", "auth.user.signed_up"], { cwd: project, stdio: "inherit" });
+  run(amplio, ["add", "event", "auth.user.signed_up"], { cwd: project, stdio: "inherit" });
   if (!existsSync(path.join(project, "telemetry/events/auth/user-signed-up.ts"))) {
     fail("add event did not create user-signed-up.ts");
   }

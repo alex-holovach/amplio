@@ -1,4 +1,4 @@
-import type { LogRecord } from "@logcn/core";
+import type { LogRecord } from "@amplio/core";
 import { describe, expect, it } from "vitest";
 import { requestMetadata } from "../../../registry/enrichers/request-metadata.ts";
 
@@ -7,7 +7,7 @@ describe("requestMetadata", () => {
     const enrich = requestMetadata({
       method: "POST",
       path: "/api/users",
-      userAgent: "logcn-test/1.0",
+      userAgent: "amplio-test/1.0",
       requestId: "req-abc-123",
     });
 
@@ -31,7 +31,7 @@ describe("requestMetadata", () => {
     expect(out.http).toEqual({
       method: "POST",
       path: "/api/users",
-      user_agent: "logcn-test/1.0",
+      user_agent: "amplio-test/1.0",
     });
   });
 
@@ -98,10 +98,10 @@ describe("requestMetadata", () => {
     const withUa = requestMetadata({
       method: "GET",
       path: "/api",
-      userAgent: "logcn-cli/2.0",
+      userAgent: "amplio-cli/2.0",
     })({ event: "http.request" });
     expect((withUa.http as Record<string, unknown>).user_agent).toBe(
-      "logcn-cli/2.0",
+      "amplio-cli/2.0",
     );
 
     const withoutUa = requestMetadata({

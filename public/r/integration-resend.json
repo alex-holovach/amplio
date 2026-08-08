@@ -2,11 +2,11 @@
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "integration-resend",
   "title": "Resend Integration",
-  "description": "Resend email helpers that emit logcn events.",
+  "description": "Resend email helpers that emit amplio events.",
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@logcn/core",
+    "@amplio/core",
     "resend"
   ],
   "registryDependencies": [

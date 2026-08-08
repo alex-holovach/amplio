@@ -1,10 +1,10 @@
 import type { Context, MiddlewareHandler, Next } from "hono";
-import { createRequestLogger, runWithLogger, useLogger, type Logger } from "@logcn/core";
+import { createRequestLogger, runWithLogger, useLogger, type Logger } from "@amplio/core";
 
-const LOGCN_KEY = "logcn";
+const AMPLIO_KEY = "amplio";
 
 
-export function logcnMiddleware(): MiddlewareHandler {
+export function amplioMiddleware(): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     const requestLogger = createRequestLogger({
       method: c.req.method,
@@ -17,7 +17,7 @@ export function logcnMiddleware(): MiddlewareHandler {
       },
     });
 
-    c.set(LOGCN_KEY, requestLogger);
+    c.set(AMPLIO_KEY, requestLogger);
 
     return runWithLogger(requestLogger, async () => {
       try {
@@ -41,5 +41,5 @@ export function logcnMiddleware(): MiddlewareHandler {
 }
 
 export function useRequestLogger(c: Context): Logger {
-  return (c.get(LOGCN_KEY) as Logger | undefined) ?? useLogger();
+  return (c.get(AMPLIO_KEY) as Logger | undefined) ?? useLogger();
 }

@@ -6,14 +6,14 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@logcn/core"
+    "@amplio/core"
   ],
   "files": [
     {
       "path": "registry/events/auth/user-signed-in.ts",
       "target": "~/events/auth/user-signed-in.ts",
       "type": "registry:lib",
-      "content": "import { defineEvent } from \"@logcn/core\";\nimport { z } from \"zod\";\n\nexport const AuthUserSignedIn = defineEvent(\n  \"auth.user.signed_in\",\n  z.object({\n    user: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    session: z.object({\n      id: z.string(),\n      method: z.enum([\"password\", \"oauth\", \"magic_link\", \"sso\"]),\n      mfa: z.boolean().optional(),\n    }),\n  }),\n);\n"
+      "content": "import { defineEvent } from \"@amplio/core\";\nimport { z } from \"zod\";\n\nexport const AuthUserSignedIn = defineEvent(\n  \"auth.user.signed_in\",\n  z.object({\n    user: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    session: z.object({\n      id: z.string(),\n      method: z.enum([\"password\", \"oauth\", \"magic_link\", \"sso\"]),\n      mfa: z.boolean().optional(),\n    }),\n  }),\n);\n"
     }
   ]
 }

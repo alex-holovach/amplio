@@ -1,12 +1,12 @@
-export interface LogcnValidationIssue {
+export interface AmplioValidationIssue {
   message: string;
   path: PropertyKey[];
 }
 
-export class LogcnValidationError extends Error {
-  readonly issues: LogcnValidationIssue[];
+export class AmplioValidationError extends Error {
+  readonly issues: AmplioValidationIssue[];
 
-  constructor(issues: LogcnValidationIssue[]) {
+  constructor(issues: AmplioValidationIssue[]) {
     const detail =
       issues.length === 0
         ? "Event validation failed"
@@ -18,12 +18,12 @@ export class LogcnValidationError extends Error {
             )
             .join("; ");
     super(`Event validation failed: ${detail}`);
-    this.name = "LogcnValidationError";
+    this.name = "AmplioValidationError";
     this.issues = issues;
   }
 }
 
-export function issuesFromUnknown(error: unknown): LogcnValidationIssue[] {
+export function issuesFromUnknown(error: unknown): AmplioValidationIssue[] {
   if (
     error &&
     typeof error === "object" &&

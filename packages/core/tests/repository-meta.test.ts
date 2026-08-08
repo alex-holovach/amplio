@@ -22,19 +22,19 @@ function readPackageJson(relativePath: string): PackageJson {
 function expectPublishMeta(pkg: PackageJson, name: string, directory: string): void {
   expect(pkg.name).toBe(name);
   expect(pkg.license).toBe("MIT");
-  expect(pkg.homepage).toBe("https://github.com/logcn/logcn#readme");
-  expect(pkg.bugs?.url).toBe("https://github.com/logcn/logcn/issues");
-  expect(pkg.repository?.url).toBe("https://github.com/logcn/logcn.git");
+  expect(pkg.homepage).toBe("https://github.com/alex-holovach/amplio#readme");
+  expect(pkg.bugs?.url).toBe("https://github.com/alex-holovach/amplio/issues");
+  expect(pkg.repository?.url).toBe("https://github.com/alex-holovach/amplio.git");
   expect(pkg.repository?.directory).toBe(directory);
 }
 
 describe("repository metadata", () => {
-  it("@logcn/core has repository, license, homepage, and bugs.url", () => {
-    expectPublishMeta(readPackageJson("packages/core/package.json"), "@logcn/core", "packages/core");
+  it("@amplio/core has repository, license, homepage, and bugs.url", () => {
+    expectPublishMeta(readPackageJson("packages/core/package.json"), "@amplio/core", "packages/core");
   });
 
-  it("@logcn/cli has repository, license, homepage, and bugs.url", () => {
-    expectPublishMeta(readPackageJson("packages/cli/package.json"), "@logcn/cli", "packages/cli");
+  it("@amplio/cli has repository, license, homepage, and bugs.url", () => {
+    expectPublishMeta(readPackageJson("packages/cli/package.json"), "@amplio/cli", "packages/cli");
   });
 
   it("root package.json declares MIT license and LICENSE file matches", () => {

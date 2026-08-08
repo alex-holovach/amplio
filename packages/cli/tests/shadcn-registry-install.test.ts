@@ -56,7 +56,7 @@ describe("shadcn-compatible registry install", () => {
     });
   });
 
-  it("installs @logcn/event-auth-user-signed-up into telemetry/ only", async () => {
+  it("installs @amplio/event-auth-user-signed-up into telemetry/ only", async () => {
     const itemPath = path.join(repoRoot, "public/r/event-auth-user-signed-up.json");
     const item = JSON.parse(await readFile(itemPath, "utf8")) as RegistryItem;
 
@@ -64,7 +64,7 @@ describe("shadcn-compatible registry install", () => {
     expect(item.type).toBe("registry:lib");
     expect(item.files.length).toBeGreaterThan(0);
 
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-shadcn-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-shadcn-"));
     const written = await installShadcnItem(cwd, item);
 
     expect(written).toEqual(["telemetry/events/auth/user-signed-up.ts"]);

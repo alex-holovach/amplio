@@ -129,5 +129,5 @@ export async function assertRegistryExists(registryPath: string): Promise<void> 
     return;
   }
 
-  throw new Error(`Registry not found at ${registryPath}. Run logcn init first.`);
+  throw new Error(`Registry not found at ${registryPath}. Run amplio init first.`);
 }

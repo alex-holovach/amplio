@@ -1,9 +1,9 @@
-import type { LogcnConfig, SamplingConfig } from "./types.js";
+import type { AmplioConfig, SamplingConfig } from "./types.js";
 import { logger, type LoggerFacade } from "./logger.js";
 import { resetCompiledRedactForTests, setCompiledRedactFromConfig } from "./redact.js";
 import { resetPendingSinksForTests } from "./sinks.js";
 
-let activeConfig: LogcnConfig | null = null;
+let activeConfig: AmplioConfig | null = null;
 let alwaysSample = true;
 
 const computeAlwaysSample = (sampling?: SamplingConfig): boolean => {
@@ -21,7 +21,7 @@ export function resolveAlwaysSample(): boolean {
   return alwaysSample;
 }
 
-export function init(config: LogcnConfig): LoggerFacade {
+export function init(config: AmplioConfig): LoggerFacade {
   const service = config.service?.trim();
   const env = config.env?.trim();
   if (!service) {
@@ -58,9 +58,9 @@ export function init(config: LogcnConfig): LoggerFacade {
   return logger;
 }
 
-export function getConfig(): LogcnConfig {
+export function getConfig(): AmplioConfig {
   if (!activeConfig) {
-    throw new Error("logcn is not initialized — call init() first");
+    throw new Error("amplio is not initialized — call init() first");
   }
   return {
     ...activeConfig,
@@ -81,7 +81,7 @@ export function getConfig(): LogcnConfig {
   };
 }
 
-export function resolveConfig(): LogcnConfig {
+export function resolveConfig(): AmplioConfig {
   return activeConfig ?? { service: "", env: "", sinks: [], enrichers: [] };
 }
 

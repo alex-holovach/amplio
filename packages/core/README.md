@@ -1,11 +1,11 @@
-# @logcn/core
+# @amplio/core
 
 Tiny schema-first wide-event telemetry runtime. Zero runtime dependencies (`zod` optional peer).
 
 ## Install
 
 ```bash
-pnpm add @logcn/core
+pnpm add @amplio/core
 # optional validation
 pnpm add zod
 ```
@@ -13,7 +13,7 @@ pnpm add zod
 ## Quick start
 
 ```ts
-import { init, defineEvent, createLogger } from "@logcn/core";
+import { init, defineEvent, createLogger } from "@amplio/core";
 import { z } from "zod";
 
 const signedUp = defineEvent("auth.user.signed_up", z.object({ user_id: z.string() }));
@@ -49,7 +49,7 @@ createLogger()
 | `flush()` | Await pending async sink deliveries |
 | `createError({ message, why, fix, code, link })` | Structured errors for events |
 | `deepMerge` | Fast merge used by `.set()` |
-| `LogcnValidationError` | Thrown on schema validation failure; includes `issues` with paths |
+| `AmplioValidationError` | Thrown on schema validation failure; includes `issues` with paths |
 
 ## Behavior
 

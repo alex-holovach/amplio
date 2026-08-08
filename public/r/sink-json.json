@@ -5,14 +5,14 @@
   "description": "JSON sink that serializes wide events for streaming or files.",
   "type": "registry:lib",
   "dependencies": [
-    "@logcn/core"
+    "@amplio/core"
   ],
   "files": [
     {
       "path": "registry/sinks/json.ts",
       "target": "~/sinks/json.ts",
       "type": "registry:lib",
-      "content": "import fs from \"node:fs\";\nimport path from \"node:path\";\nimport type { LogRecord, Sink } from \"@logcn/core\";\n\nexport interface JsonFileSinkOptions {\n  path?: string;\n}\n\nexport function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {\n  const filePath =\n    options.path ?? (process.env.LOGCN_JSON_SINK_PATH?.trim() || undefined) ?? \"logcn.jsonl\";\n\n  return (record: LogRecord) => {\n    const dir = path.dirname(filePath);\n    if (dir && dir !== \".\") {\n      fs.mkdirSync(dir, { recursive: true });\n    }\n    fs.appendFileSync(filePath, `${JSON.stringify(record)}\\n`, \"utf8\");\n  };\n}\n"
+      "content": "import fs from \"node:fs\";\nimport path from \"node:path\";\nimport type { LogRecord, Sink } from \"@amplio/core\";\n\nexport interface JsonFileSinkOptions {\n  path?: string;\n}\n\nexport function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {\n  const filePath =\n    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined) ?? \"amplio.jsonl\";\n\n  return (record: LogRecord) => {\n    const dir = path.dirname(filePath);\n    if (dir && dir !== \".\") {\n      fs.mkdirSync(dir, { recursive: true });\n    }\n    fs.appendFileSync(filePath, `${JSON.stringify(record)}\\n`, \"utf8\");\n  };\n}\n"
     }
   ]
 }

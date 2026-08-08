@@ -10,7 +10,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 describe("package files", () => {
   it("ships dist + bundled registry for published installs", async () => {
     expect(pkg.type).toBe("module");
-    expect(pkg.bin.logcn).toBe("./dist/cli.js");
+    expect(pkg.bin.amplio).toBe("./dist/cli.js");
     expect(pkg.files).toEqual(["dist", "registry", "LICENSE"]);
 
     for (const entry of pkg.files) {

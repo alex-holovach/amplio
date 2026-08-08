@@ -105,7 +105,7 @@ async function main() {
   server.listen(port, "127.0.0.1", () => {
     const bound = server.address();
     const actualPort = typeof bound === "object" && bound ? bound.port : port;
-    console.log(`logcn registry listening on http://127.0.0.1:${actualPort}`);
+    console.log(`amplio registry listening on http://127.0.0.1:${actualPort}`);
   });
 }
 

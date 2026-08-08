@@ -11,11 +11,11 @@ const warnNoop = (
     return;
   }
   if (reason === "sealed") {
-    console.warn(`[logcn] logger.${action}() ignored: logger is sealed after emit()`);
+    console.warn(`[amplio] logger.${action}() ignored: logger is sealed after emit()`);
     return;
   }
   console.warn(
-    `[logcn] useLogger() has no request context; logger.${action}() is a no-op (wire middleware / runWithLogger)`,
+    `[amplio] useLogger() has no request context; logger.${action}() is a no-op (wire middleware / runWithLogger)`,
   );
 };
 

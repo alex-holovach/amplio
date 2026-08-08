@@ -2,11 +2,11 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { AuthUserSignedUp } from "../telemetry/events/auth/user-signed-up";
 import { logger } from "../telemetry/logger";
-import { logcnMiddleware, useRequestLogger } from "../telemetry/middleware/hono";
+import { amplioMiddleware, useRequestLogger } from "../telemetry/middleware/hono";
 
 const app = new Hono();
 
-app.use("*", logcnMiddleware());
+app.use("*", amplioMiddleware());
 
 app.get("/health", (c) => {
   useRequestLogger(c).set({ route: { name: "health" } });

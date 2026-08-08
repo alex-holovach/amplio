@@ -16,17 +16,17 @@ function readPackageJson(relativePath: string): PackageJson {
 }
 
 describe("keywords metadata", () => {
-  it("@logcn/core keywords include telemetry and length >= 3", () => {
+  it("@amplio/core keywords include telemetry and length >= 3", () => {
     const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@logcn/core");
+    expect(pkg.name).toBe("@amplio/core");
     expect(pkg.keywords).toBeDefined();
     expect(pkg.keywords).toContain("telemetry");
     expect(pkg.keywords!.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("@logcn/cli keywords include telemetry and length >= 3", () => {
+  it("@amplio/cli keywords include telemetry and length >= 3", () => {
     const pkg = readPackageJson("packages/cli/package.json");
-    expect(pkg.name).toBe("@logcn/cli");
+    expect(pkg.name).toBe("@amplio/cli");
     expect(pkg.keywords).toBeDefined();
     expect(pkg.keywords).toContain("telemetry");
     expect(pkg.keywords!.length).toBeGreaterThanOrEqual(3);

@@ -67,7 +67,7 @@ async function initWithRegistry(cwd: string, service?: string): Promise<void> {
   ]);
   expect(init.status).toBe(0);
 
-  const configPath = path.join(cwd, "logcn.json");
+  const configPath = path.join(cwd, "amplio.json");
   const config = JSON.parse(await readFile(configPath, "utf8"));
   config.registry = monorepoRegistry;
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}
@@ -201,7 +201,7 @@ describe("cli init-only flags", () => {
   });
 
   it("ignores whitespace-only --package-manager on add sink console", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-only-pm-ws-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-only-pm-ws-"));
     const result = runCli([
       "add",
       "sink",
@@ -219,7 +219,7 @@ describe("cli init-only flags", () => {
   });
 
   it("ignores whitespace-only --service on add sink console", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-only-svc-ws-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-only-svc-ws-"));
     const result = runCli([
       "add",
       "sink",
@@ -264,7 +264,7 @@ describe("cli missing option value", () => {
 
 describe("cli list", () => {
   it("lists registry items", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-"));
     await initWithRegistry(cwd);
     const result = runCli(["list", "--cwd", cwd]);
     expect(result.status).toBe(0);
@@ -274,7 +274,7 @@ describe("cli list", () => {
   });
 
   it("trims padded command and runs list successfully", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-padded-cmd-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-padded-cmd-"));
     await initWithRegistry(cwd);
     const result = runCli([" list", "--cwd", cwd]);
     expect(result.status).toBe(0);
@@ -283,7 +283,7 @@ describe("cli list", () => {
   });
 
   it("lists registry items without prior init", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-no-init-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-no-init-"));
     const result = runCli(["list", "--cwd", cwd]);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("events:");
@@ -292,7 +292,7 @@ describe("cli list", () => {
   });
 
   it("filters by kind", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-kind-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-kind-"));
     await initWithRegistry(cwd);
     const result = runCli(["list", "sink", "--cwd", cwd]);
     expect(result.status).toBe(0);
@@ -301,7 +301,7 @@ describe("cli list", () => {
   });
 
   it("list trims padded kind", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-padded-kind-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-padded-kind-"));
     await initWithRegistry(cwd);
     const result = runCli(["list", "  event  ", "--cwd", cwd]);
     expect(result.status).toBe(0);
@@ -310,7 +310,7 @@ describe("cli list", () => {
   });
 
   it("list whitespace-only kind lists all (same as bare list)", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-ws-kind-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-ws-kind-"));
     await initWithRegistry(cwd);
     const bare = runCli(["list", "--cwd", cwd]);
     const result = runCli(["list", "   ", "--cwd", cwd]);
@@ -322,7 +322,7 @@ describe("cli list", () => {
   });
 
   it("list enricher only shows enrichers", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-enricher-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-enricher-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -344,7 +344,7 @@ describe("cli list", () => {
   });
 
   it("list sink only shows sinks", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-sink-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-sink-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -365,7 +365,7 @@ describe("cli list", () => {
   });
 
   it("list event only shows events", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-event-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-event-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -394,7 +394,7 @@ describe("cli list", () => {
   });
 
   it("list events (plural) works like list event", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-events-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-events-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -417,7 +417,7 @@ describe("cli list", () => {
 
 
   it("list sinks (plural) works like list sink", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-sinks-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-sinks-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -437,7 +437,7 @@ describe("cli list", () => {
   });
 
   it("list enrichers (plural) works like list enricher", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-enrichers-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-enrichers-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -459,7 +459,7 @@ describe("cli list", () => {
   });
 
   it("list middlewares (plural) works like list middleware", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-middlewares-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-middlewares-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -479,7 +479,7 @@ describe("cli list", () => {
   });
 
   it("list integrations (plural) works like list integration", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-integrations-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-integrations-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -501,7 +501,7 @@ describe("cli list", () => {
   });
 
   it("list integration only shows integrations", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-integration-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-integration-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -524,7 +524,7 @@ describe("cli list", () => {
   });
 
   it("list middleware only shows middlewares", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-middleware-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-middleware-"));
     await initWithRegistry(cwd);
 
     const registry = JSON.parse(await readFile(monorepoRegistry, "utf8")) as {
@@ -545,7 +545,7 @@ describe("cli list", () => {
   });
 
   it("fails clearly for unknown kind", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-list-unknown-kind-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-unknown-kind-"));
     await initWithRegistry(cwd);
     const result = runCli(["list", "boguskind", "--cwd", cwd]);
     expect(result.status).not.toBe(0);
@@ -557,7 +557,7 @@ describe("cli list", () => {
 
 describe("cli init --service", () => {
   it("writes telemetry/logger.ts with the given service name", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-service-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-service-"));
 
     const result = runCli(["init", "--cwd", cwd, "--service", "my-svc"]);
     expectCliStatus(result, 0, "init --service my-svc");
@@ -569,30 +569,30 @@ describe("cli init --service", () => {
     expect(loggerSource).toContain("my-svc");
   });
 
-  it("init --cwd nonexistent nested path exits 0 and creates logcn.json (mkdir -p)", async () => {
-    const parent = await mkdtemp(path.join(tmpdir(), "logcn-init-mkdirp-"));
+  it("init --cwd nonexistent nested path exits 0 and creates amplio.json (mkdir -p)", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "amplio-init-mkdirp-"));
     const cwd = path.join(parent, "nested", "deep", "project");
     expect(existsSync(cwd)).toBe(false);
 
     const result = runCli(["init", "--cwd", cwd, "--service", "x"]);
     expectCliStatus(result, 0, "init --cwd nonexistent nested path --service x");
 
-    expect(existsSync(path.join(cwd, "logcn.json"))).toBe(true);
+    expect(existsSync(path.join(cwd, "amplio.json"))).toBe(true);
   });
 
-  it("init with padded --cwd writes logcn.json to the trimmed path", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-padded-cwd-"));
+  it("init with padded --cwd writes amplio.json to the trimmed path", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-padded-cwd-"));
     const paddedCwd = `  ${cwd}  `;
 
     const result = runCli(["init", "--cwd", paddedCwd, "--service", "x"]);
     expectCliStatus(result, 0, "init with padded --cwd");
 
-    expect(existsSync(path.join(cwd, "logcn.json"))).toBe(true);
-    expect(existsSync(path.join(paddedCwd, "logcn.json"))).toBe(false);
+    expect(existsSync(path.join(cwd, "amplio.json"))).toBe(true);
+    expect(existsSync(path.join(paddedCwd, "amplio.json"))).toBe(false);
   });
 
   it("writes telemetry/logger.ts with default service my-app when --service omitted", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-default-service-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-default-service-"));
 
     const result = runCli(["init", "--cwd", cwd]);
     expectCliStatus(result, 0, "init without --service");
@@ -605,7 +605,7 @@ describe("cli init --service", () => {
   });
 
   it("writes telemetry/logger.ts with default service my-app when --service is empty", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-empty-service-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-empty-service-"));
 
     const result = runCli(["init", "--cwd", cwd, "--service", ""]);
     expectCliStatus(result, 0, 'init --service ""');
@@ -618,7 +618,7 @@ describe("cli init --service", () => {
   });
 
   it("trims padded --service and writes my-svc", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-padded-service-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-padded-service-"));
 
     const result = runCli(["init", "--cwd", cwd, "--service", "  my-svc  "]);
     expectCliStatus(result, 0, "init --service '  my-svc  '");
@@ -633,7 +633,7 @@ describe("cli init --service", () => {
 
   it("writes telemetry/logger.ts with default service my-app when --service is whitespace-only", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-init-ws-service-"),
+      path.join(tmpdir(), "amplio-init-ws-service-"),
     );
 
     const result = runCli(["init", "--cwd", cwd, "--service", "   "]);
@@ -650,8 +650,8 @@ describe("cli init --service", () => {
 
 
 describe("cli init --package-manager", () => {
-  it("writes logcn.json with packageManager npm", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-pm-npm-"));
+  it("writes amplio.json with packageManager npm", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-pm-npm-"));
 
     const result = runCli([
       "init",
@@ -663,13 +663,13 @@ describe("cli init --package-manager", () => {
     expectCliStatus(result, 0, "init --package-manager npm");
 
     const config = JSON.parse(
-      await readFile(path.join(cwd, "logcn.json"), "utf8"),
+      await readFile(path.join(cwd, "amplio.json"), "utf8"),
     );
     expect(config.packageManager).toBe("npm");
   });
 
   it("rejects unknown package manager", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-pm-bogus-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-pm-bogus-"));
 
     const result = runCli([
       "init",
@@ -683,7 +683,7 @@ describe("cli init --package-manager", () => {
   });
 
   it("accepts padded package manager", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-pm-padded-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-pm-padded-"));
 
     const result = runCli([
       "init",
@@ -695,13 +695,13 @@ describe("cli init --package-manager", () => {
     expectCliStatus(result, 0, "init --package-manager padded pnpm");
 
     const config = JSON.parse(
-      await readFile(path.join(cwd, "logcn.json"), "utf8"),
+      await readFile(path.join(cwd, "amplio.json"), "utf8"),
     );
     expect(config.packageManager).toBe("pnpm");
   });
 
   it("accepts uppercase package manager", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-pm-upper-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-pm-upper-"));
 
     const result = runCli([
       "init",
@@ -713,13 +713,13 @@ describe("cli init --package-manager", () => {
     expectCliStatus(result, 0, "init --package-manager PNPM");
 
     const config = JSON.parse(
-      await readFile(path.join(cwd, "logcn.json"), "utf8"),
+      await readFile(path.join(cwd, "amplio.json"), "utf8"),
     );
     expect(config.packageManager).toBe("pnpm");
   });
 
   it("defaults when package manager is whitespace-only", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-pm-blank-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-pm-blank-"));
 
     const result = runCli([
       "init",
@@ -731,7 +731,7 @@ describe("cli init --package-manager", () => {
     expectCliStatus(result, 0, "init --package-manager whitespace-only");
 
     const config = JSON.parse(
-      await readFile(path.join(cwd, "logcn.json"), "utf8"),
+      await readFile(path.join(cwd, "amplio.json"), "utf8"),
     );
     expect(config.packageManager).toBe("pnpm");
   });
@@ -739,14 +739,14 @@ describe("cli init --package-manager", () => {
 
 
 describe("cli init --no-typescript", () => {
-  it("writes logcn.json with typescript false", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-no-ts-"));
+  it("writes amplio.json with typescript false", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-no-ts-"));
 
     const result = runCli(["init", "--cwd", cwd, "--no-typescript"]);
     expectCliStatus(result, 0, "init --no-typescript");
 
     const config = JSON.parse(
-      await readFile(path.join(cwd, "logcn.json"), "utf8"),
+      await readFile(path.join(cwd, "amplio.json"), "utf8"),
     );
     expect(config.typescript).toBe(false);
   });
@@ -754,7 +754,7 @@ describe("cli init --no-typescript", () => {
 
 describe("cli init idempotency", () => {
   it("second init exits 0 and preserves events from add event", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-init-idempotent-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-idempotent-"));
 
     const first = runCli(["init", "--cwd", cwd, "--service", "test-app"]);
     expect(first.status).toBe(0);
@@ -781,7 +781,7 @@ describe("cli init idempotency", () => {
 
 describe("cli add event idempotency", () => {
   it("second add auth.user.signed_up exits 0 and preserves file (registry)", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-idempotent-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-idempotent-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "event", "auth.user.signed_up", "--cwd", cwd]);
@@ -805,7 +805,7 @@ describe("cli add event invalid name", () => {
   it.each(["BadName", "Checkout", "auth..user", ".auth.user", "auth.user.", "auth.User.signed_up", "auth", "1auth.user", "auth_user.signed_up", "auth.user-signed"])(
     "rejects invalid event name %s after init",
     async (eventName) => {
-      const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-invalid-event-"));
+      const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-invalid-event-"));
       await initWithRegistry(cwd);
       const result = runCli(["add", "event", eventName, "--cwd", cwd]);
       expect(result.status).not.toBe(0);
@@ -816,13 +816,13 @@ describe("cli add event invalid name", () => {
 
 describe("cli add event not in registry", () => {
   it("scaffolds template for valid dotted name missing from registry", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-event-unknown-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-event-unknown-"));
     await initWithRegistry(cwd);
 
     const eventName = "foo.bar.baz";
     const result = runCli(["add", "event", eventName, "--cwd", cwd]);
     expectCliStatus(result, 0, `add event ${eventName}`);
-    expect(result.stdout).toContain(`logcn add event ${eventName}`);
+    expect(result.stdout).toContain(`amplio add event ${eventName}`);
     expect(result.stdout).toContain("telemetry/events/foo/bar-baz.ts");
 
     const eventSource = await readFile(
@@ -836,7 +836,7 @@ describe("cli add event not in registry", () => {
 
 describe("cli add missing name", () => {
   it("bare add exits non-zero with Missing add target", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-bare-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-bare-"));
     await initWithRegistry(cwd);
     const result = runCli(["add", "--cwd", cwd]);
     expectCliStatus(result, 1, "bare add");
@@ -844,77 +844,77 @@ describe("cli add missing name", () => {
   });
 
   it("add event without name exits non-zero with Missing add name", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-event-no-name-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-event-no-name-"));
     await initWithRegistry(cwd);
     const result = runCli(["add", "event", "--cwd", cwd]);
     expectCliStatus(result, 1, "add event without name");
     expect(`${result.stderr}${result.stdout}`).toContain(
-      "Missing add name. Example: logcn add event auth.user.signed_up",
+      "Missing add name. Example: amplio add event auth.user.signed_up",
     );
   });
 
   it("add sink without name exits non-zero with Missing add name", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-sink-no-name-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-sink-no-name-"));
     await initWithRegistry(cwd);
     const result = runCli(["add", "sink", "--cwd", cwd]);
     expectCliStatus(result, 1, "add sink without name");
     expect(`${result.stderr}${result.stdout}`).toContain(
-      "Missing add name. Example: logcn add sink console",
+      "Missing add name. Example: amplio add sink console",
     );
   });
 
   it("add middleware without name exits non-zero with Missing add name", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-add-middleware-no-name-"),
+      path.join(tmpdir(), "amplio-add-middleware-no-name-"),
     );
     await initWithRegistry(cwd);
     const result = runCli(["add", "middleware", "--cwd", cwd]);
     expectCliStatus(result, 1, "add middleware without name");
     expect(`${result.stderr}${result.stdout}`).toContain(
-      "Missing add name. Example: logcn add middleware hono",
+      "Missing add name. Example: amplio add middleware hono",
     );
   });
 
   it("add enricher without name exits non-zero with Missing add name", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-add-enricher-no-name-"),
+      path.join(tmpdir(), "amplio-add-enricher-no-name-"),
     );
     await initWithRegistry(cwd);
     const result = runCli(["add", "enricher", "--cwd", cwd]);
     expectCliStatus(result, 1, "add enricher without name");
     expect(`${result.stderr}${result.stdout}`).toContain(
-      "Missing add name. Example: logcn add enricher service-metadata",
+      "Missing add name. Example: amplio add enricher service-metadata",
     );
   });
 
   it("add integration without name exits non-zero with Missing add name", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-add-integration-no-name-"),
+      path.join(tmpdir(), "amplio-add-integration-no-name-"),
     );
     await initWithRegistry(cwd);
     const result = runCli(["add", "integration", "--cwd", cwd]);
     expectCliStatus(result, 1, "add integration without name");
     expect(`${result.stderr}${result.stdout}`).toContain(
-      "Missing add name. Example: logcn add integration better-auth",
+      "Missing add name. Example: amplio add integration better-auth",
     );
   });
 
   it("add sink with whitespace-only name exits non-zero with Missing add name", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-add-sink-ws-name-"),
+      path.join(tmpdir(), "amplio-add-sink-ws-name-"),
     );
     await initWithRegistry(cwd);
     const result = runCli(["add", "sink", "   ", "--cwd", cwd]);
     expectCliStatus(result, 1, "add sink whitespace-only name");
     expect(`${result.stderr}${result.stdout}`).toContain(
-      "Missing add name. Example: logcn add sink console",
+      "Missing add name. Example: amplio add sink console",
     );
   });
 });
 
 describe("cli add event force", () => {
   it("add with --force overwrites auth.user.signed_up with registry content", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-force-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-force-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "event", "auth.user.signed_up", "--cwd", cwd]);
@@ -948,7 +948,7 @@ describe("cli add event force", () => {
 
 describe("cli add middleware idempotency", () => {
   it("second add hono exits 0 and preserves file (registry)", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-mw-idempotent-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-mw-idempotent-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "middleware", "hono", "--cwd", cwd]);
@@ -970,7 +970,7 @@ describe("cli add middleware idempotency", () => {
 
 describe("cli add middleware force", () => {
   it("add with --force overwrites hono with registry content", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-mw-force-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-mw-force-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "middleware", "hono", "--cwd", cwd]);
@@ -996,14 +996,14 @@ describe("cli add middleware force", () => {
     const after = await readFile(middlewarePath, "utf8");
     expect(after).toBe(template);
     expect(after).not.toContain("// user edit");
-    expect(after).toContain("logcnMiddleware");
+    expect(after).toContain("amplioMiddleware");
     expect(after).toContain("MiddlewareHandler");
   });
 });
 
 describe("cli add middleware unknown", () => {
   it("fails clearly for unknown middleware", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-unknown-middleware-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-unknown-middleware-"));
     await initWithRegistry(cwd);
     const result = runCli(["add", "middleware", "nope", "--cwd", cwd]);
     expect(result.status).not.toBe(0);
@@ -1013,7 +1013,7 @@ describe("cli add middleware unknown", () => {
 
 describe("cli add sink idempotency", () => {
   it("second add console exits 0 and preserves file (registry)", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-sink-idempotent-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-sink-idempotent-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "sink", "console", "--cwd", cwd]);
@@ -1035,7 +1035,7 @@ describe("cli add sink idempotency", () => {
 
 describe("cli add sink force", () => {
   it("add with --force overwrites console with registry content", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-sink-force-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-sink-force-"));
     await initWithRegistry(cwd, "test-app");
     const first = runCli(["add", "sink", "console", "--cwd", cwd]);
     expectCliStatus(first, 0, "first add sink console");
@@ -1056,7 +1056,7 @@ describe("cli add sink force", () => {
 
 describe("cli add sink unknown", () => {
   it("fails clearly for unknown sink", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-unknown-sink-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-unknown-sink-"));
     await initWithRegistry(cwd);
     const result = runCli(["add", "sink", "not-a-real-sink", "--cwd", cwd]);
     expect(result.status).not.toBe(0);
@@ -1068,7 +1068,7 @@ describe("cli add sink unknown", () => {
 describe("cli add sink otlp without init", () => {
   it("add sink otlp without prior init creates telemetry/sinks/otlp.ts", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-add-sink-otlp-no-init-"),
+      path.join(tmpdir(), "amplio-add-sink-otlp-no-init-"),
     );
 
     const result = runCli(["add", "sink", "otlp", "--cwd", cwd]);
@@ -1084,7 +1084,7 @@ describe("cli add sink otlp without init", () => {
 
 describe("cli add sink console nested cwd", () => {
   it("add sink console --cwd nonexistent nested path exits 0 and creates the sink file (mkdir -p)", async () => {
-    const parent = await mkdtemp(path.join(tmpdir(), "logcn-add-sink-mkdirp-"));
+    const parent = await mkdtemp(path.join(tmpdir(), "amplio-add-sink-mkdirp-"));
     const cwd = path.join(parent, "nested", "deep", "project");
     expect(existsSync(cwd)).toBe(false);
 
@@ -1097,7 +1097,7 @@ describe("cli add sink console nested cwd", () => {
 
 describe("cli add enricher idempotency", () => {
   it("second add service-metadata exits 0 and preserves file (registry)", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-enricher-idempotent-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-enricher-idempotent-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "enricher", "service-metadata", "--cwd", cwd]);
@@ -1119,7 +1119,7 @@ describe("cli add enricher idempotency", () => {
 
 describe("cli add enricher force", () => {
   it("add with --force overwrites service-metadata with registry content", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-enricher-force-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-enricher-force-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "enricher", "service-metadata", "--cwd", cwd]);
@@ -1153,7 +1153,7 @@ describe("cli add enricher force", () => {
 
 describe("cli add enricher unknown", () => {
   it("fails clearly for unknown enricher", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-unknown-enricher-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-unknown-enricher-"));
     await initWithRegistry(cwd);
     const result = runCli(["add", "enricher", "not-a-real-enricher", "--cwd", cwd]);
     expect(result.status).not.toBe(0);
@@ -1165,7 +1165,7 @@ describe("cli add enricher unknown", () => {
 describe("cli add integration resend without init", () => {
   it("add integration resend without prior init creates the integration file", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-add-integration-resend-no-init-"),
+      path.join(tmpdir(), "amplio-add-integration-resend-no-init-"),
     );
 
     const result = runCli(["add", "integration", "resend", "--cwd", cwd]);
@@ -1182,7 +1182,7 @@ describe("cli add integration resend without init", () => {
 describe("cli add integration clerk without init", () => {
   it("add integration clerk without prior init creates the integration file", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-add-integration-clerk-no-init-"),
+      path.join(tmpdir(), "amplio-add-integration-clerk-no-init-"),
     );
 
     const result = runCli(["add", "integration", "clerk", "--cwd", cwd]);
@@ -1199,7 +1199,7 @@ describe("cli add integration clerk without init", () => {
 describe("cli add integration polar without init", () => {
   it("add integration polar without prior init creates the integration file", async () => {
     const cwd = await mkdtemp(
-      path.join(tmpdir(), "logcn-add-integration-polar-no-init-"),
+      path.join(tmpdir(), "amplio-add-integration-polar-no-init-"),
     );
 
     const result = runCli(["add", "integration", "polar", "--cwd", cwd]);
@@ -1214,7 +1214,7 @@ describe("cli add integration polar without init", () => {
 
 describe("cli add integration idempotency", () => {
   it("second add resend exits 0 and preserves file (registry)", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-integration-idempotent-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-integration-idempotent-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "integration", "resend", "--cwd", cwd]);
@@ -1236,7 +1236,7 @@ describe("cli add integration idempotency", () => {
 
 describe("cli add integration resend force", () => {
   it("add with --force overwrites resend with registry content", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-integration-resend-force-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-integration-resend-force-"));
     await initWithRegistry(cwd, "test-app");
 
     const first = runCli(["add", "integration", "resend", "--cwd", cwd]);
@@ -1270,7 +1270,7 @@ describe("cli add integration resend force", () => {
 
 describe("cli add integration unknown", () => {
   it("fails clearly for unknown integration", async () => {
-    const cwd = await mkdtemp(path.join(tmpdir(), "logcn-add-unknown-integration-"));
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-unknown-integration-"));
     await initWithRegistry(cwd);
     const result = runCli(["add", "integration", "not-a-real-integration", "--cwd", cwd]);
     expect(result.status).not.toBe(0);

@@ -1,5 +1,5 @@
 {
-  "name": "@logcn/core",
+  "name": "@amplio/core",
   "version": "0.1.0",
   "description": "Tiny schema-first wide-event telemetry runtime",
   "type": "module",
@@ -9,12 +9,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/logcn/logcn.git",
+    "url": "https://github.com/alex-holovach/amplio.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/logcn/logcn#readme",
+  "homepage": "https://github.com/alex-holovach/amplio#readme",
   "bugs": {
-    "url": "https://github.com/logcn/logcn/issues"
+    "url": "https://github.com/alex-holovach/amplio/issues"
   },
   "keywords": [
     "telemetry",

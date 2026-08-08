@@ -1,5 +1,5 @@
 {
-  "name": "@logcn/example-fastify-smoke",
+  "name": "@amplio/example-fastify-smoke",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@logcn/core": "workspace:*",
+    "@amplio/core": "workspace:*",
     "fastify": "^5.2.1",
     "fastify-plugin": "^5.0.1"
   },

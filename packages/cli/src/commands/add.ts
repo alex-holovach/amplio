@@ -5,7 +5,7 @@ import {
   eventNameToRegistryId,
   eventNameToRelativePath,
 } from "../utils/event-name.js";
-import { readLogcnConfig, resolveRegistryPath } from "../utils/config.js";
+import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
 import { ensureDir, pathExists, upsertBarrelExport, writeFileOrSkip } from "../utils/fs.js";
 import { updateLoggerWithEnricher } from "../utils/logger-enricher.js";
 import { updateLoggerWithSink } from "../utils/logger-sink.js";
@@ -39,7 +39,7 @@ function itemId(kind: string, id: string): string {
 }
 
 async function getTelemetryDir(cwd: string): Promise<string> {
-  const config = await readLogcnConfig(cwd);
+  const config = await readAmplioConfig(cwd);
   return config?.telemetryDir ?? "telemetry";
 }
 
@@ -149,7 +149,7 @@ export async function runAddEvent(eventName: string, options: AddOptions): Promi
   const targetPath = path.join(paths.telemetry, relativePath);
 
   await ensureDir(path.dirname(targetPath));
-  console.log(`logcn add event ${eventName}`);
+  console.log(`amplio add event ${eventName}`);
 
   try {
     const registryPath = await resolveRegistryPath(options.cwd);
@@ -193,7 +193,7 @@ export async function runAddMiddleware(id: string, options: AddOptions): Promise
   const targetPath = path.join(paths.middleware, `${id}.ts`);
   const middlewareExists = await pathExists(targetPath);
 
-  console.log(`logcn add middleware ${id}`);
+  console.log(`amplio add middleware ${id}`);
   await installByName(options.cwd, itemId("middleware", id), options);
 
   if (middlewareExists && !(options.force ?? false)) {
@@ -210,7 +210,7 @@ export async function runAddSink(id: string, options: AddOptions): Promise<void>
   const targetPath = path.join(paths.sinks, `${id}.ts`);
   const sinkExists = await pathExists(targetPath);
 
-  console.log(`logcn add sink ${id}`);
+  console.log(`amplio add sink ${id}`);
   await installByName(options.cwd, itemId("sink", id), options);
 
   if (sinkExists && !(options.force ?? false)) {
@@ -235,7 +235,7 @@ export async function runAddEnricher(id: string, options: AddOptions): Promise<v
   const targetPath = path.join(paths.enrichers, `${registryId}.ts`);
   const enricherExists = await pathExists(targetPath);
 
-  console.log(`logcn add enricher ${id}`);
+  console.log(`amplio add enricher ${id}`);
   await installByName(options.cwd, itemId("enricher", registryId), options);
 
   if (enricherExists && !(options.force ?? false)) {
@@ -259,7 +259,7 @@ export async function runAddIntegration(id: string, options: AddOptions): Promis
   const targetPath = path.join(paths.integrations, `${id}.ts`);
   const integrationExists = await pathExists(targetPath);
 
-  console.log(`logcn add integration ${id}`);
+  console.log(`amplio add integration ${id}`);
   await installByName(options.cwd, itemId("integration", id), options);
 
   if (integrationExists && !(options.force ?? false)) {

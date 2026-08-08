@@ -1,4 +1,4 @@
-import { init, logger } from "@logcn/core";
+import { init, logger } from "@amplio/core";
 import { consoleJsonSink } from "./sinks/json";
 
 init({

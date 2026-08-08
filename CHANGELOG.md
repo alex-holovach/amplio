@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - P1#9: README redaction note no longer demos `[REDACTED]` in the hero JSON; example-basic `/signup` needs no request body.
 - Docs sync: AGENTS.md, SPEC.md, and packages/core/README.md match shipped API (no-op `useLogger` outside ALS, sealed no-op loggers, `.error()`/`flush()`, sync `emit()`, soft-fail validation, default redaction, `defineEvent(name, schema)`, Next middleware flush).
 - P1#7: `flush()` tracks pending async sinks; Next middleware schedules flush via `after` / optional `waitUntil`; dev warns on async sink rejections.
-- P1#8: `logcn init` detects framework from package.json and auto-scaffolds middleware + event (`--middleware`, `--event`, `--yes`).
+- P1#8: `amplio init` detects framework from package.json and auto-scaffolds middleware + event (`--middleware`, `--event`, `--yes`).
 - `EventLogger.error(err, ctx?)` delegates to bound logger; noop getters removed from public index.
 - P1#5: `DeepPartial<T>` on typed `EventLogger.set()` and `logger.event(def, initial?)` for nested incremental patches.
 - P1#6: `Logger.error(err, ctx?)` records structured errors without auto-emit; middleware uses `error()` instead of local `formatError` helpers.
@@ -100,17 +100,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - success-from-status: numeric string `"399"` → true.
 - success-from-status: numeric string `"400"` → false.
 - success-from-status defaults to true when status and success are unset.
-- JSON sink: whitespace-only `LOGCN_JSON_SINK_PATH` treated as unset (same as empty).
+- JSON sink: whitespace-only `AMPLIO_JSON_SINK_PATH` treated as unset (same as empty).
 - OTLP: log attributes omit null/undefined/object values for known fields.
-- JSON sink: empty/whitespace `LOGCN_JSON_SINK_PATH` treated as unset (default `logcn.jsonl`).
+- JSON sink: empty/whitespace `AMPLIO_JSON_SINK_PATH` treated as unset (default `amplio.jsonl`).
 - OTLP: options.headers override env headers; empty header keys skipped; typed attributes (int/bool/double).
 - OTLP header parsing skips malformed comma segments without `=`.
 - OTLP: trailing comma / empty header segments ignored.
 - OTLP: leading comma / empty header segments ignored (same as trailing).
 - OTLP: double-comma / empty middle header segments ignored.
 - OTLP: headers that are only commas / empty segments add no headers (default content-type only).
-- Service-metadata enricher treats empty LOGCN_SERVICE/VERSION/REGION env vars as unset (fall back / omit).
-- JSON file sink defaults to `logcn.jsonl` in the current working directory when `path` and `LOGCN_JSON_SINK_PATH` are unset.
+- Service-metadata enricher treats empty AMPLIO_SERVICE/VERSION/REGION env vars as unset (fall back / omit).
+- JSON file sink defaults to `amplio.jsonl` in the current working directory when `path` and `AMPLIO_JSON_SINK_PATH` are unset.
 - `requestMetadata` maps `userAgent` → `http.user_agent` (omitted when unset).
 - Service-metadata enricher omits unset version/region env keys (no undefined fields).
 - KeepRule `gte` + `lte` on the same rule form an inclusive AND range.
@@ -121,7 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - KeepRule supports optional `lte` (number ≤ threshold).
 - OTLP sink `throwOnError: false` also swallows HTTP non-OK responses (not only network errors).
 - OTLP sink sets timeUnixNano from record.timestamp when parseable (ISO/date or ms), else Date.now().
-- `logcn list` shows human titles when present.
+- `amplio list` shows human titles when present.
 - Registry items include human-readable descriptions (used by `list` / index).
 - `public/r/registry.json` index items include `title` and `description` (not only `name`/`type`).
 - Whitespace-only `--service` / `--package-manager` on non-init commands are ignored.
@@ -132,22 +132,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--service` is trimmed (whitespace-only → `my-app`).
 - `--package-manager` is trimmed and case-insensitive (whitespace-only → default).
 - Hosted shadcn registry URL is still TODO (local `public/r/` and bundled CLI registry work today).
-- Scoped packages (`@logcn/core`, `@logcn/cli`) set `publishConfig.access=public` for npm publish.
+- Scoped packages (`@amplio/core`, `@amplio/cli`) set `publishConfig.access=public` for npm publish.
 - CLI registry copy (`packages/cli/scripts/copy-registry.mjs`) uses a file lock to avoid concurrent build races.
 - Local full check: `pnpm run ci` (not `pnpm ci` — that is pnpm's install builtin).
 - GitHub Actions CI runs `pnpm run ci` as a single step (same bundle as local).
-- `logcn init --no-typescript` works (CLI `parseArgs` uses `allowNegative`) and writes `typescript: false`.
-- `logcn init --package-manager` rejects unknown values (pnpm|npm|yarn|bun only).
-- `@logcn/core` `peerDependencies.zod` is `"^3.0.0 || ^4.0.0"` (tested).
+- `amplio init --no-typescript` works (CLI `parseArgs` uses `allowNegative`) and writes `typescript: false`.
+- `amplio init --package-manager` rejects unknown values (pnpm|npm|yarn|bun only).
+- `@amplio/core` `peerDependencies.zod` is `"^3.0.0 || ^4.0.0"` (tested).
 - Invalid event names are rejected (leading/trailing dots, uppercase, single segment, double dots).
-- `logcn add` works without prior `init` for event/middleware/sink/enricher/integration.
-- `logcn init --cwd` creates missing directories (`mkdir -p`).
+- `amplio add` works without prior `init` for event/middleware/sink/enricher/integration.
+- `amplio init --cwd` creates missing directories (`mkdir -p`).
 - Root package is private MIT (`LICENSE` + `package.json` `license`).
-- `logcn add --cwd` creates missing directories (same `mkdir -p` as `init`).
+- `amplio add --cwd` creates missing directories (same `mkdir -p` as `init`).
 - `--cwd` paths are trimmed.
 - Unknown CLI options print a short `error:` line and exit 1 (no Node stack dump).
 - Missing CLI option values print a short `error:` line and exit 1 (no Node stack dump).
-- `logcn add <kind>` without a name prints a kind-specific missing-name error (vs bare `add` missing-target).
+- `amplio add <kind>` without a name prints a kind-specific missing-name error (vs bare `add` missing-target).
 - Whitespace around `list` kinds is ignored (kinds are trimmed).
 - Registry titles put the kind last (e.g. Console Sink, Hono Middleware), with JSON/OTLP/Next.js polish.
 - sampling: {} (no rate) defaults to always sample (rate 1).
@@ -157,11 +157,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-08-07
 
-Initial publish-ready snapshot of the logcn monorepo.
+Initial publish-ready snapshot of the amplio monorepo.
 
 ### Added
 
-- **`@logcn/core`** — schema-first wide-event runtime: `defineEvent`, `init`, `logger.event` / `logger.create`, `useLogger`, sampling, and redaction. Packaged as ESM with a frozen public API and optional Zod peer dependency.
-- **`@logcn/cli`** — `logcn init`, `logcn add`, and `logcn list` for scaffolding typed telemetry into `telemetry/`. Bundles the registry at build time (`registry/` copied into the published package).
+- **`@amplio/core`** — schema-first wide-event runtime: `defineEvent`, `init`, `logger.event` / `logger.create`, `useLogger`, sampling, and redaction. Packaged as ESM with a frozen public API and optional Zod peer dependency.
+- **`@amplio/cli`** — `amplio init`, `amplio add`, and `amplio list` for scaffolding typed telemetry into `telemetry/`. Bundles the registry at build time (`registry/` copied into the published package).
 - **Registry** — shadcn-compatible items (events, middleware, sinks, enrichers, integrations) declared in `registry/registry.manifest.json` and built to `public/r/*.json`.
 - **Examples** — runnable smoke apps for Hono, Express, Fastify, Next.js, and a standalone script under `examples/`.

@@ -1,4 +1,4 @@
-import { defineEvent } from "@logcn/core";
+import { defineEvent } from "@amplio/core";
 import { z } from "zod";
 
 export const PaymentOrderPaid = defineEvent(

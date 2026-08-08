@@ -1,10 +1,10 @@
 import express from "express";
-import { logcnMiddleware, useRequestLogger } from "../telemetry/middleware/express";
+import { amplioMiddleware, useRequestLogger } from "../telemetry/middleware/express";
 import "../telemetry/logger.js";
 
 const app = express();
 
-app.use(logcnMiddleware());
+app.use(amplioMiddleware());
 
 app.get("/health", (req, res) => {
   useRequestLogger(req).set({ route: { name: "health" } });

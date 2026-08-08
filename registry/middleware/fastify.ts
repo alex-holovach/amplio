@@ -1,11 +1,11 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@logcn/core";
+import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@amplio/core";
 
 
 declare module "fastify" {
   interface FastifyRequest {
-    logcn?: Logger;
+    amplio?: Logger;
   }
 }
 
@@ -25,12 +25,12 @@ const plugin: FastifyPluginAsync = async (app) => {
       },
     });
 
-    request.logcn = requestLogger;
+    request.amplio = requestLogger;
     runWithLogger(requestLogger, () => done());
   });
 
   app.addHook("onResponse", async (request, reply) => {
-    const requestLogger = request.logcn;
+    const requestLogger = request.amplio;
     if (!requestLogger || requestLogger.sealed) {
       return;
     }
@@ -43,7 +43,7 @@ const plugin: FastifyPluginAsync = async (app) => {
   });
 
   app.addHook("onError", async (request, _reply, error) => {
-    const requestLogger = request.logcn;
+    const requestLogger = request.amplio;
     if (!requestLogger || requestLogger.sealed) {
       return;
     }
@@ -53,8 +53,8 @@ const plugin: FastifyPluginAsync = async (app) => {
   });
 };
 
-export const logcnPlugin = fp(plugin, { name: "logcn" });
+export const amplioPlugin = fp(plugin, { name: "amplio" });
 
 export function useRequestLogger(request: FastifyRequest): Logger {
-  return request.logcn ?? useLogger();
+  return request.amplio ?? useLogger();
 }

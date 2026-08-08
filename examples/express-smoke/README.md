@@ -1,6 +1,6 @@
 # express-smoke
 
-Minimal Express app using the registry `express` middleware pattern with `@logcn/core`.
+Minimal Express app using the registry `express` middleware pattern with `@amplio/core`.
 
 ## Run
 
@@ -9,7 +9,7 @@ From the monorepo root:
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @logcn/example-express-smoke dev
+pnpm --filter @amplio/example-express-smoke dev
 ```
 
 Try it:
@@ -23,7 +23,7 @@ curl http://127.0.0.1:3001/health
 ## Smoke
 
 ```bash
-pnpm --filter @logcn/example-express-smoke smoke
+pnpm --filter @amplio/example-express-smoke smoke
 ```
 
 Starts the app, hits `GET /health`, asserts one JSON wide event with nested `http` and status 200.

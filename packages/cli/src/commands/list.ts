@@ -69,5 +69,5 @@ export async function runList(options: ListOptions): Promise<void> {
   }
 
   console.log(`Total: ${total}`);
-  console.log(`Add with: logcn add <kind> <id>`);
+  console.log(`Add with: amplio add <kind> <id>`);
 }

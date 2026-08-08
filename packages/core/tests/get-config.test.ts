@@ -15,7 +15,7 @@ beforeEach(() => {
 
 describe("getConfig", () => {
   it("throws before init", () => {
-    expect(() => getConfig()).toThrow(/logcn is not initialized/);
+    expect(() => getConfig()).toThrow(/amplio is not initialized/);
   });
 
   it("returns service, env, and sinks after init", () => {
@@ -164,7 +164,7 @@ describe("getConfig", () => {
     expect(getConfig().service).toBe("api");
 
     resetConfigForTests();
-    expect(() => getConfig()).toThrow(/logcn is not initialized/);
+    expect(() => getConfig()).toThrow(/amplio is not initialized/);
   });
 
   it("second init replaces getConfig service (and sampling)", () => {

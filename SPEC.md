@@ -1,13 +1,13 @@
-# SPEC.md — logcn
+# SPEC.md — amplio
 
-Technical specification and acceptance criteria for **logcn**.
+Technical specification and acceptance criteria for **amplio**.
 
 ## 1. Overview
 
-logcn provides:
+amplio provides:
 
-1. **`@logcn/core`** — immutable runtime for schema-first wide events.
-2. **`@logcn/cli`** — project init and registry-driven `add`.
+1. **`@amplio/core`** — immutable runtime for schema-first wide events.
+2. **`@amplio/cli`** — project init and registry-driven `add`.
 3. **`registry/`** — shadcn-compatible item definitions.
 4. **User-owned `telemetry/`** — events, sinks, enrichers, middleware, integrations.
 
@@ -34,8 +34,8 @@ logcn provides:
 ### 3.1 Monorepo
 
 ```
-packages/core/       → @logcn/core
-packages/cli/        → @logcn/cli
+packages/core/       → @amplio/core
+packages/cli/        → @amplio/cli
 registry/            → item sources + built manifest
 examples/
   hono/              → HTTP middleware reference
@@ -66,7 +66,7 @@ telemetry/
 ### 4.1 `defineEvent`
 
 ```typescript
-import { defineEvent } from "@logcn/core";
+import { defineEvent } from "@amplio/core";
 import { z } from "zod";
 
 export const AuthUserSignedUp = defineEvent(
@@ -94,7 +94,7 @@ export const AuthUserSignedUp = defineEvent(
 
 ```typescript
 // telemetry/logger.ts
-import { init } from "@logcn/core";
+import { init } from "@amplio/core";
 import { consoleJsonSink } from "./sinks/console-json";
 import { serviceMetadata } from "./enrichers/service-metadata";
 
@@ -143,7 +143,7 @@ ev.emit();
 ### 4.5 `useLogger`
 
 ```typescript
-import { useLogger } from "@logcn/core";
+import { useLogger } from "@amplio/core";
 
 export async function handler(c: Context) {
   const log = useLogger();
@@ -176,7 +176,7 @@ interface WideEvent {
 
 1. If sealed → dev warning, return `null`.
 2. Run enrichers (in registration order).
-3. If schema-bound → validate; on failure throw `LogcnValidationError` in test or when `init({ strict: true })`, otherwise soft-fail (attach `validation.issues`, set `success: false`, dev warn).
+3. If schema-bound → validate; on failure throw `AmplioValidationError` in test or when `init({ strict: true })`, otherwise soft-fail (attach `validation.issues`, set `success: false`, dev warn).
 4. Redact sensitive fields (on by default; `redact: false` to disable).
 5. Attach system fields: `timestamp`, `@event`, `service`, `env`, `duration_ms`, `level` (derived).
 6. Fan-out to sinks synchronously (`flush()` awaits pending async sink deliveries; sink errors logged, do not throw by default).
@@ -208,7 +208,7 @@ Explicit `success` wins over `status` derivation (ignore `status` when `success`
 | Event name | `domain.entity.action` | `billing.invoice.paid` |
 | File | kebab-case | `billing-invoice-paid.ts` |
 | Export | PascalCase matching semantic | `BillingInvoicePaid` |
-| Registry id | `@logcn/event-<kebab-full-name>` | `@logcn/event-billing-invoice-paid` |
+| Registry id | `@amplio/event-<kebab-full-name>` | `@amplio/event-billing-invoice-paid` |
 
 CLI `add event billing.invoice.paid` → `telemetry/events/billing/invoice-paid.ts` (+ barrels).
 
@@ -218,13 +218,13 @@ CLI `add event billing.invoice.paid` → `telemetry/events/billing/invoice-paid.
 
 | Command | Behavior |
 |---|---|
-| `logcn init` | Scaffold `telemetry/`, config, default sink |
-| `logcn list [kind]` | List registry items with titles when present (optional kind filter) |
-| `logcn add event <name>` | Add event file + export |
-| `logcn add middleware <id>` | Add middleware file + wiring instructions |
-| `logcn add sink <id>` | Add sink module |
-| `logcn add enricher <id>` | Add enricher module |
-| `logcn add integration <id>` | Add integration helper |
+| `amplio init` | Scaffold `telemetry/`, config, default sink |
+| `amplio list [kind]` | List registry items with titles when present (optional kind filter) |
+| `amplio add event <name>` | Add event file + export |
+| `amplio add middleware <id>` | Add middleware file + wiring instructions |
+| `amplio add sink <id>` | Add sink module |
+| `amplio add enricher <id>` | Add enricher module |
+| `amplio add integration <id>` | Add integration helper |
 
 ### 6.2 Init options
 
@@ -247,7 +247,7 @@ shadcn-compatible item:
 ```json
 {
   "name": "event-auth-user-signed-up",
-  "type": "registry:logcn",
+  "type": "registry:amplio",
   "files": [
     {
       "path": "registry/events/auth-user-signed-up.ts",
@@ -266,11 +266,11 @@ Built output published to `registry/` as static JSON for CDN or git raw hosting.
 `telemetry/middleware/hono.ts`:
 
 - On request: `logger.create()` or anonymous wide event with `{ http: { method, path } }`.
-- Store in ALS + Hono context (`c.set('logcn', log)`).
+- Store in ALS + Hono context (`c.set('amplio', log)`).
 - On response `finish` / `error`: `await log.emit()`.
-- Export factory `logcnMiddleware()` and typed `useLogger(c)`.
+- Export factory `amplioMiddleware()` and typed `useLogger(c)`.
 
-Auto-emit is middleware responsibility, not `@logcn/core` magic.
+Auto-emit is middleware responsibility, not `@amplio/core` magic.
 
 Next.js middleware (`registry/middleware/next.ts`): wraps handlers with AsyncLocalStorage via `runWithLogger`, auto-emits on response, and schedules `flush()` via Next.js `after`, optional `waitUntil`, or a fire-and-forget fallback.
 
@@ -279,26 +279,26 @@ Next.js middleware (`registry/middleware/next.ts`): wraps handlers with AsyncLoc
 ### Sink
 
 ```typescript
-export type LogcnSink = (event: Record<string, unknown>) => void | Promise<void>;
+export type AmplioSink = (event: Record<string, unknown>) => void | Promise<void>;
 ```
 
 ### Enricher
 
 ```typescript
-export type LogcnEnricher = (
+export type AmplioEnricher = (
   event: Record<string, unknown>
 ) => Record<string, unknown> | Promise<Record<string, unknown>>;
 ```
 
 Both are user-editable modules; core only invokes arrays registered in `init()`.
 
-`serviceMetadata` uses `LOGCN_SERVICE` / `LOGCN_SERVICE_VERSION` / `LOGCN_REGION` (name falls back to `record.service`; unset or empty-string version/region omitted — empty env strings are treated as unset).
+`serviceMetadata` uses `AMPLIO_SERVICE` / `AMPLIO_SERVICE_VERSION` / `AMPLIO_REGION` (name falls back to `record.service`; unset or empty-string version/region omitted — empty env strings are treated as unset).
 
 `requestMetadata` / request-metadata enricher: empty-string optional `route` / `ip` / `userAgent` / `requestId` ≡ unset (omitted from `http`; empty `requestId` does not wipe an existing `request_id`). `status` is still included when `0`.
 
 OTLP sink: when present, maps `record.service` → resource `service.name` and `record.env` → `deployment.environment`.
 
-JSON file sink: `LOGCN_JSON_SINK_PATH` empty or whitespace-only is treated as unset → default `logcn.jsonl`; `options.path` wins when set.
+JSON file sink: `AMPLIO_JSON_SINK_PATH` empty or whitespace-only is treated as unset → default `amplio.jsonl`; `options.path` wins when set.
 
 ## 10. Anti-slop rules
 
@@ -308,7 +308,7 @@ JSON file sink: `LOGCN_JSON_SINK_PATH` empty or whitespace-only is treated as un
 4. **Stable event names** — `@event` field always set from `defineEvent.name`.
 5. **One emit per scope** — sealed loggers prevent duplicate request events.
 
-## 11. `@logcn/core` internals (non-public)
+## 11. `@amplio/core` internals (non-public)
 
 May include: ALS store, merge util, validate adapter, seal flag, dev warnings.
 
@@ -317,11 +317,11 @@ Must NOT include: vendor SDKs, framework imports, CLI, code generation.
 ## 12. Error model
 
 ```typescript
-class LogcnValidationError extends Error {
+class AmplioValidationError extends Error {
   issues: StandardSchemaIssue[];
 }
 
-class LogcnSealedError extends Error {} // dev-only throw if strict mode
+class AmplioSealedError extends Error {} // dev-only throw if strict mode
 ```
 
 Structured errors via `.error()` (does not auto-emit):
@@ -362,7 +362,7 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 ### AC-2 Core API surface
 
-- [x] `@logcn/core` exports a frozen public surface (`defineEvent`, `init`, `logger`/`createLogger`, `useLogger`/`runWithLogger`, errors, types) — verified by tests.
+- [x] `@amplio/core` exports a frozen public surface (`defineEvent`, `init`, `logger`/`createLogger`, `useLogger`/`runWithLogger`, errors, types) — verified by tests.
 - [x] `init()` returns `logger` with `.event()` and `.create()`.
 - [x] Wide event instances expose `.set()`, `.error()`, and `.emit()` (no level methods like `.info()`).
 - [x] Public API documented in package README and matches this spec.
@@ -371,7 +371,7 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 - [x] Invalid event name rejected at definition time (`defineEvent` + CLI).
 - [x] Schema-bound emit validates with Standard Schema adapter.
-- [x] Validation failure throws `LogcnValidationError` in test or `strict: true`; otherwise soft-fails with `validation.issues` on the record.
+- [x] Validation failure throws `AmplioValidationError` in test or `strict: true`; otherwise soft-fails with `validation.issues` on the record.
 - [x] Successful emit includes `@event` equal to declared name.
 
 ### AC-4 Wide-event lifecycle
@@ -394,32 +394,32 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 ### AC-6 CLI init
 
-- [x] `npx logcn init` creates `telemetry/logger.ts`, `telemetry/events/`, `telemetry/middleware/`, `telemetry/sinks/`, `telemetry/enrichers/`, `telemetry/integrations/`.
+- [x] `npx amplio init` creates `telemetry/logger.ts`, `telemetry/events/`, `telemetry/middleware/`, `telemetry/sinks/`, `telemetry/enrichers/`, `telemetry/integrations/`.
 - [x] Default console JSON sink wired and importable.
-- [x] Second `logcn init` is idempotent — existing files left unchanged.
+- [x] Second `amplio init` is idempotent — existing files left unchanged.
 - [x] CLI `--help` and `--version` exit 0.
 - [x] Project compiles after init (`telemetry/events/index.ts` scaffolded as `export {}`).
 
 ### AC-6b CLI list
 
-- [x] `logcn list` prints grouped registry items and exits 0.
-- [x] `logcn list sink` filters to sink items only.
+- [x] `amplio list` prints grouped registry items and exits 0.
+- [x] `amplio list sink` filters to sink items only.
 
 ### AC-7 CLI add event
 
-- [x] `logcn add event auth.user.signed_up` creates `telemetry/events/auth/user-signed-up.ts`.
+- [x] `amplio add event auth.user.signed_up` creates `telemetry/events/auth/user-signed-up.ts`.
 - [x] File contains `defineEvent`, Zod schema with nested objects, PascalCase export.
 - [x] Re-run skips existing files; `--force` overwrites (documented in README).
 
 ### AC-8 Registry
 
 - [x] `pnpm registry:build` emits shadcn-compatible JSON.
-- [x] At least one event item installable via `shadcn add @logcn/event-auth-user-signed-up` (shadcn-compatible `public/r` install proven in tests).
+- [x] At least one event item installable via `shadcn add @amplio/event-auth-user-signed-up` (shadcn-compatible `public/r` install proven in tests).
 - [x] Registry item lands files only under `telemetry/` (`~/…` targets).
 
 ### AC-9 Middleware (Hono example)
 
-- [x] Example app in `examples/basic` uses `logcnMiddleware`.
+- [x] Example app in `examples/basic` uses `amplioMiddleware`.
 - [x] One wide event emitted per HTTP request (smoke scripts).
 - [x] Handler uses `useLogger()` and `.set()`; no manual emit in handler.
 - [x] Emitted JSON includes nested `http` object.
@@ -437,14 +437,14 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 ### AC-12 Performance & size
 
-- [x] `pnpm size` reports `@logcn/core` ≤ 8 KB gzip.
+- [x] `pnpm size` reports `@amplio/core` ≤ 8 KB gzip.
 - [x] Benchmark documents `set` + `emit` median & p99 for 1 KB payload (`pnpm bench`).
 - [x] Core package ships with zero runtime dependencies.
 
 ### AC-13 Differentiation
 
 - [x] README states open-code + in-repo schema vs opaque npm runtime.
-- [x] User can delete `@logcn/cli` after init and keep editing `telemetry/` with only `@logcn/core` installed (documented in README).
+- [x] User can delete `@amplio/cli` after init and keep editing `telemetry/` with only `@amplio/core` installed (documented in README).
 
 ### AC-14 Tests
 
@@ -463,7 +463,7 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 - Head/tail sampling in `init({ sample })`
 - `logger.fork()` for sub-operations
 - OpenTelemetry trace correlation enricher
-- `logcn add integration ai-sdk`
+- `amplio add integration ai-sdk`
 
 ---
 

@@ -1,17 +1,17 @@
 import type { NextFunction, Request, Response } from "express";
-import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@logcn/core";
+import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@amplio/core";
 
 
 declare global {
   namespace Express {
     interface Request {
-      logcn?: Logger;
+      amplio?: Logger;
     }
   }
 }
 
 
-export function logcnMiddleware() {
+export function amplioMiddleware() {
   return (req: Request, res: Response, next: NextFunction) => {
     const requestLogger = createRequestLogger({
       method: req.method,
@@ -26,7 +26,7 @@ export function logcnMiddleware() {
       },
     });
 
-    req.logcn = requestLogger;
+    req.amplio = requestLogger;
 
     runWithLogger(requestLogger, () => {
       res.on("finish", () => {
@@ -46,5 +46,5 @@ export function logcnMiddleware() {
 }
 
 export function useRequestLogger(req: Request): Logger {
-  return req.logcn ?? useLogger();
+  return req.amplio ?? useLogger();
 }

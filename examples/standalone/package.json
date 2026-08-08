@@ -1,5 +1,5 @@
 {
-  "name": "@logcn/example-standalone",
+  "name": "@amplio/example-standalone",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@logcn/core": "workspace:*",
+    "@amplio/core": "workspace:*",
     "zod": "^3.24.2"
   },
   "devDependencies": {

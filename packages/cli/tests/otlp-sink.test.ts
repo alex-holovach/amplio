@@ -1,4 +1,4 @@
-import type { LogRecord } from "@logcn/core";
+import type { LogRecord } from "@amplio/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { otlpSink } from "../../../registry/sinks/otlp.ts";
 

@@ -2,11 +2,11 @@
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "integration-clerk",
   "title": "Clerk Integration",
-  "description": "Clerk helpers that emit logcn auth events.",
+  "description": "Clerk helpers that emit amplio auth events.",
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@logcn/core",
+    "@amplio/core",
     "@clerk/backend"
   ],
   "registryDependencies": [

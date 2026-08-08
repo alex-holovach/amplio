@@ -38,7 +38,7 @@ describe("registry item metadata", () => {
       ).toBe(true);
 
       expect(
-        !String(item.description).startsWith("logcn registry item:"),
+        !String(item.description).startsWith("amplio registry item:"),
         `${fileName}: description must not use the build fallback prefix`,
       ).toBe(true);
     }
@@ -74,6 +74,6 @@ describe("registry item metadata", () => {
     expect(item.description).toBe(
       "Console sink that prints wide events as JSON.",
     );
-    expect(item.description?.startsWith("logcn registry item:")).toBe(false);
+    expect(item.description?.startsWith("amplio registry item:")).toBe(false);
   });
 });

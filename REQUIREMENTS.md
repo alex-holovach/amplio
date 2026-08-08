@@ -1,6 +1,6 @@
-# REQUIREMENTS.md — logcn
+# REQUIREMENTS.md — amplio
 
-Product requirements for **logcn**: schema-first wide-event telemetry with shadcn-style open code.
+Product requirements for **amplio**: schema-first wide-event telemetry with shadcn-style open code.
 
 ## Problem
 
@@ -13,15 +13,15 @@ Teams want **structured, queryable observability** without:
 
 **evlog** popularized wide events (one rich event per unit of work) but keeps schemas optional via module augmentation and ships primarily as an npm runtime.
 
-**logcn** targets teams that want **evlog's mental model** with **shadcn's ownership model**: typed event definitions live in the repo, install as files, and diff like normal code.
+**amplio** targets teams that want **evlog's mental model** with **shadcn's ownership model**: typed event definitions live in the repo, install as files, and diff like normal code.
 
 ## Goals
 
 1. **Schema-first events** — important domain events are declared before use.
 2. **Wide events** — accumulate context, emit once per request/job/run.
 3. **Open code** — `telemetry/` is part of the application, not hidden in `node_modules`.
-4. **Tiny runtime** — `@logcn/core` stays small, dependency-light, and immutable in API shape.
-5. **shadcn-native DX** — `npx logcn add …` and `npx shadcn add @logcn/…` scaffold registry items.
+4. **Tiny runtime** — `@amplio/core` stays small, dependency-light, and immutable in API shape.
+5. **shadcn-native DX** — `npx amplio add …` and `npx shadcn add @amplio/…` scaffold registry items.
 6. **Agent-friendly output** — nested JSON, stable field names, self-describing event names.
 
 ## Non-goals (v0)
@@ -64,7 +64,7 @@ A shadcn-compatible installable unit that copies or merges files into `telemetry
 
 ### FR-1 Init
 
-`npx logcn init` scaffolds:
+`npx amplio init` scaffolds:
 
 ```
 telemetry/
@@ -75,7 +75,7 @@ telemetry/
   logger.ts
 ```
 
-- Creates config (`components.json` or logcn-specific manifest) pointing registry namespace `@logcn`.
+- Creates config (`components.json` or amplio-specific manifest) pointing registry namespace `@amplio`.
 - Writes a minimal `telemetry/logger.ts` that calls `init()` with default console sink.
 - Does not create `middleware/` until an middleware item is added.
 
@@ -89,11 +89,11 @@ telemetry/
 ### FR-3 CLI add
 
 ```bash
-npx logcn add event auth.user.signed_up
-npx logcn add middleware hono
-npx logcn add sink axiom
-npx logcn add enricher request-metadata
-npx logcn add integration better-auth
+npx amplio add event auth.user.signed_up
+npx amplio add middleware hono
+npx amplio add sink axiom
+npx amplio add enricher request-metadata
+npx amplio add integration better-auth
 ```
 
 - Resolves registry item, writes files, installs declared peer dependencies.
@@ -103,8 +103,8 @@ npx logcn add integration better-auth
 ### FR-4 shadcn registry
 
 - Registry builds from `registry/` via `pnpm registry:build`.
-- Items addressable as `@logcn/event-auth-user-signed-up`, `@logcn/middleware-hono`, etc.
-- Compatible with `npx shadcn@latest add @logcn/…`.
+- Items addressable as `@amplio/event-auth-user-signed-up`, `@amplio/middleware-hono`, etc.
+- Compatible with `npx shadcn@latest add @amplio/…`.
 
 ### FR-5 Wide-event lifecycle
 
@@ -134,7 +134,7 @@ npx logcn add integration better-auth
 
 ## Public API requirements
 
-The **only** exported runtime API from `@logcn/core`:
+The **only** exported runtime API from `@amplio/core`:
 
 - `defineEvent`
 - `init`
@@ -150,7 +150,7 @@ No `info` / `warn` / `debug` methods on the public logger.
 
 ### QR-1 Bundle size
 
-`@logcn/core` gzipped size budget: **≤ 8 KB** (benchmark enforced in CI).
+`@amplio/core` gzipped size budget: **≤ 8 KB** (benchmark enforced in CI).
 
 ### QR-2 Performance
 
@@ -174,7 +174,7 @@ Inferred payload types from `defineEvent` flow through `.set()` and `.emit()`.
 
 ## Differentiation from evlog
 
-| Dimension | evlog | logcn |
+| Dimension | evlog | amplio |
 |---|---|---|
 | Code location | npm package runtime | `telemetry/` open code in user repo |
 | Typing | Optional module augmentation | Schema-first `defineEvent` in repo |
@@ -182,7 +182,7 @@ Inferred payload types from `defineEvent` flow through `.set()` and `.emit()`.
 | Customization | hooks/adapters | edit sinks, enrichers, events directly |
 | API surface | wider (levels, helpers) | minimal: set/emit + schemas |
 
-logcn may interoperate with evlog-shaped **ideas** (wide events, structured errors) but must not copy evlog's API verbatim.
+amplio may interoperate with evlog-shaped **ideas** (wide events, structured errors) but must not copy evlog's API verbatim.
 
 ## Documentation requirements
 
@@ -194,9 +194,9 @@ logcn may interoperate with evlog-shaped **ideas** (wide events, structured erro
 
 ## Success metrics
 
-1. `npx logcn init && npx logcn add event …` produces a compiling TypeScript tree in under 30 seconds.
+1. `npx amplio init && npx amplio add event …` produces a compiling TypeScript tree in under 30 seconds.
 2. A new contributor can add an event schema and see it in emitted JSON without reading core source.
-3. `@logcn/core` passes size and bench gates.
+3. `@amplio/core` passes size and bench gates.
 4. One example emits exactly one wide event per HTTP request in middleware mode.
 
 ## Open questions

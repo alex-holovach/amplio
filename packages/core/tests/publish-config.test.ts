@@ -19,36 +19,36 @@ function readPackageJson(relativePath: string): PackageJson {
 }
 
 describe("publish config", () => {
-  it("@logcn/core has publishConfig.access === \"public\"", () => {
+  it("@amplio/core has publishConfig.access === \"public\"", () => {
     const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@logcn/core");
+    expect(pkg.name).toBe("@amplio/core");
     expect(pkg.publishConfig?.access).toBe("public");
   });
 
-  it("@logcn/cli has publishConfig.access === \"public\"", () => {
+  it("@amplio/cli has publishConfig.access === \"public\"", () => {
     const pkg = readPackageJson("packages/cli/package.json");
-    expect(pkg.name).toBe("@logcn/cli");
+    expect(pkg.name).toBe("@amplio/cli");
     expect(pkg.publishConfig?.access).toBe("public");
   });
 
-  it("@logcn/core and @logcn/cli require Node >=20", () => {
+  it("@amplio/core and @amplio/cli require Node >=20", () => {
     const core = readPackageJson("packages/core/package.json");
     const cli = readPackageJson("packages/cli/package.json");
-    expect(core.name).toBe("@logcn/core");
-    expect(cli.name).toBe("@logcn/cli");
+    expect(core.name).toBe("@amplio/core");
+    expect(cli.name).toBe("@amplio/cli");
     expect(core.engines?.node).toBe(">=20");
     expect(cli.engines?.node).toBe(">=20");
   });
 
-  it('@logcn/core peerDependencies.zod === "^3.0.0 || ^4.0.0"', () => {
+  it('@amplio/core peerDependencies.zod === "^3.0.0 || ^4.0.0"', () => {
     const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@logcn/core");
+    expect(pkg.name).toBe("@amplio/core");
     expect(pkg.peerDependencies?.zod).toBe("^3.0.0 || ^4.0.0");
   });
 
-  it("@logcn/core peerDependenciesMeta.zod.optional === true", () => {
+  it("@amplio/core peerDependenciesMeta.zod.optional === true", () => {
     const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@logcn/core");
+    expect(pkg.name).toBe("@amplio/core");
     expect(pkg.peerDependenciesMeta?.zod?.optional).toBe(true);
   });
 });

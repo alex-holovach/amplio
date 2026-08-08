@@ -1,5 +1,5 @@
 import type { EventShape, StandardSchemaV1, ZodLikeSchema } from "./types.js";
-import { LogcnValidationError, issuesFromUnknown } from "./validation-error.js";
+import { AmplioValidationError, issuesFromUnknown } from "./validation-error.js";
 
 const isStandardSchema = <T extends Record<string, unknown>>(
   shape: EventShape<T>,
@@ -25,7 +25,7 @@ export function validateShape<T extends Record<string, unknown>>(
   if (isStandardSchema(shape)) {
     const result = shape["~standard"].validate(value);
     if (result.issues?.length) {
-      throw new LogcnValidationError(
+      throw new AmplioValidationError(
         result.issues.map((issue) => ({
           message: issue.message,
           path: issue.path ? [...issue.path] : [],
@@ -38,7 +38,7 @@ export function validateShape<T extends Record<string, unknown>>(
   if (isZodLike(shape)) {
     const result = shape.safeParse(value);
     if (!result.success) {
-      throw new LogcnValidationError(issuesFromUnknown(result.error));
+      throw new AmplioValidationError(issuesFromUnknown(result.error));
     }
     return result.data;
   }

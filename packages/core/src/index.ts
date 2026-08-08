@@ -10,8 +10,8 @@ export { redactRecord } from "./redact.js";
 export { shouldSample } from "./sampling.js";
 export { flush, runSinks, runSinksSync } from "./sinks.js";
 export { validateShape } from "./schema.js";
-export { LogcnValidationError } from "./validation-error.js";
-export type { LogcnValidationIssue } from "./validation-error.js";
+export { AmplioValidationError } from "./validation-error.js";
+export type { AmplioValidationIssue } from "./validation-error.js";
 export { createRequestId } from "./request-id.js";
 
 export type {
@@ -25,7 +25,7 @@ export type {
   JsonValue,
   KeepRule,
   LogRecord,
-  LogcnConfig,
+  AmplioConfig,
   Logger,
   RedactConfig,
   RequestLoggerOptions,

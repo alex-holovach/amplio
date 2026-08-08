@@ -15,22 +15,22 @@ import {
 import { runList } from "./commands/list.js";
 
 function printHelp(): void {
-  console.log(`logcn — schema-first wide-event telemetry scaffolding
+  console.log(`amplio — schema-first wide-event telemetry scaffolding
 
 Usage:
-  logcn init [options]
-  logcn list [kind]   List registry items (id, title, description)
-  logcn add event <domain.entity.action>
-  logcn add middleware <hono|express|next|fastify>
-  logcn add sink <console|otlp|json>
-  logcn add enricher <service-metadata|request|request-metadata>
-  logcn add integration <better-auth|clerk|resend|polar>
+  amplio init [options]
+  amplio list [kind]   List registry items (id, title, description)
+  amplio add event <domain.entity.action>
+  amplio add middleware <hono|express|next|fastify>
+  amplio add sink <console|otlp|json>
+  amplio add enricher <service-metadata|request|request-metadata>
+  amplio add integration <better-auth|clerk|resend|polar>
 
 Options:
   --cwd <path>                 Project directory (default: .)
   --service <name>             Service name for logger.ts (init)
   --package-manager <pm>       pnpm | npm | yarn | bun (init)
-  --no-typescript              Disable TypeScript defaults in logcn.json (init)
+  --no-typescript              Disable TypeScript defaults in amplio.json (init)
   --middleware <name|none>     Scaffold middleware on init (auto-detect from package.json)
   --event <name|none>          Scaffold event on init (default: auth.user.signed_up when auto)
   --yes                        Non-interactive init: auto-scaffold detected middleware + event
@@ -166,19 +166,19 @@ async function main(): Promise<void> {
       const id = positionals[2]?.trim();
 
       if (!kind) {
-        throw new Error("Missing add target. Example: logcn add event auth.user.signed_up");
+        throw new Error("Missing add target. Example: amplio add event auth.user.signed_up");
       }
 
       if (!id) {
         const examples: Record<string, string> = {
-          event: "logcn add event auth.user.signed_up",
-          middleware: "logcn add middleware hono",
-          sink: "logcn add sink console",
-          enricher: "logcn add enricher service-metadata",
-          integration: "logcn add integration better-auth",
+          event: "amplio add event auth.user.signed_up",
+          middleware: "amplio add middleware hono",
+          sink: "amplio add sink console",
+          enricher: "amplio add enricher service-metadata",
+          integration: "amplio add integration better-auth",
         };
         const example =
-          examples[kind] ?? "logcn add event auth.user.signed_up";
+          examples[kind] ?? "amplio add event auth.user.signed_up";
         throw new Error(`Missing add name. Example: ${example}`);
       }
 

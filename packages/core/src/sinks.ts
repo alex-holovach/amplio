@@ -8,7 +8,7 @@ function trackAsyncSink(promise: Promise<unknown>): void {
     .catch((error) => {
       if (isDevelopment()) {
         const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[logcn] async sink failed: ${message}`);
+        console.warn(`[amplio] async sink failed: ${message}`);
       }
     })
     .then(() => undefined);
@@ -42,7 +42,7 @@ export async function runSinks(sinks: Sink[], record: LogRecord): Promise<void> 
     } catch (error) {
       if (isDevelopment()) {
         const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[logcn] async sink failed: ${message}`);
+        console.warn(`[amplio] async sink failed: ${message}`);
       }
     }
   }

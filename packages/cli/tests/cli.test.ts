@@ -23,7 +23,7 @@ async function makeTempDir(prefix: string): Promise<string> {
 
 async function initWithRegistry(cwd: string, service?: string): Promise<void> {
   await runInit({ cwd, service });
-  const configPath = path.join(cwd, "logcn.json");
+  const configPath = path.join(cwd, "amplio.json");
   const config = JSON.parse(await readFile(configPath, "utf8"));
   config.registry = monorepoRegistry;
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}
@@ -31,11 +31,11 @@ async function initWithRegistry(cwd: string, service?: string): Promise<void> {
 }
 
 describe("runInit", () => {
-  it("creates logcn.json, telemetry/logger.ts, and telemetry tree dirs", async () => {
-    const cwd = await makeTempDir("logcn-init-");
+  it("creates amplio.json, telemetry/logger.ts, and telemetry tree dirs", async () => {
+    const cwd = await makeTempDir("amplio-init-");
     await runInit({ cwd, service: "test-app" });
 
-    await access(path.join(cwd, "logcn.json"));
+    await access(path.join(cwd, "amplio.json"));
     await access(path.join(cwd, "telemetry/logger.ts"));
     await access(path.join(cwd, "telemetry/events"));
     await access(path.join(cwd, "telemetry/middleware"));
@@ -47,17 +47,17 @@ describe("runInit", () => {
     const eventsIndex = await readFile(path.join(cwd, "telemetry/events/index.ts"), "utf8");
     expect(eventsIndex.trim()).toBe("export {};");
 
-    const config = JSON.parse(await readFile(path.join(cwd, "logcn.json"), "utf8"));
+    const config = JSON.parse(await readFile(path.join(cwd, "amplio.json"), "utf8"));
     expect(config.telemetryDir).toBe("telemetry");
 
     const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
-    expect(loggerSource).toContain('import { init, logger } from "@logcn/core"');
+    expect(loggerSource).toContain('import { init, logger } from "@amplio/core"');
     expect(loggerSource).toContain("consoleJsonSink");
     expect(loggerSource).toContain("enrichers: []");
     expect(loggerSource).toContain("export { logger }");
   });
   it("is idempotent — second init preserves events from add event", async () => {
-    const cwd = await makeTempDir("logcn-init-idempotent-");
+    const cwd = await makeTempDir("amplio-init-idempotent-");
     await runInit({ cwd, service: "test-app" });
     await runAddEvent("auth.user.signed_up", { cwd });
 
@@ -75,7 +75,7 @@ describe("runInit", () => {
 
 describe("runAddEvent", () => {
   it("scaffolds nested auth.user.signed_up with barrel files", async () => {
-    const cwd = await makeTempDir("logcn-add-");
+    const cwd = await makeTempDir("amplio-add-");
     await runInit({ cwd });
     await runAddEvent("auth.user.signed_up", { cwd });
 
@@ -93,7 +93,7 @@ describe("runAddEvent", () => {
     expect(rootBarrel).toContain("AuthUserSignedUp");
   });
   it("add event auth.user.signed_up without init creates event file", async () => {
-    const cwd = await makeTempDir("logcn-add-no-init-");
+    const cwd = await makeTempDir("amplio-add-no-init-");
     await expect(runAddEvent("auth.user.signed_up", { cwd })).resolves.toBeUndefined();
 
     const eventPath = path.join(cwd, "telemetry/events/auth/user-signed-up.ts");
@@ -102,7 +102,7 @@ describe("runAddEvent", () => {
 
 
   it("installs payment.order.paid from registry with barrels", async () => {
-    const cwd = await makeTempDir("logcn-add-payment-");
+    const cwd = await makeTempDir("amplio-add-payment-");
     await initWithRegistry(cwd);
     await runAddEvent("payment.order.paid", { cwd });
 
@@ -125,7 +125,7 @@ describe("runAddEvent", () => {
   });
 
   it("is idempotent — second add auth.user.signed_up preserves file (registry)", async () => {
-    const cwd = await makeTempDir("logcn-add-idempotent-");
+    const cwd = await makeTempDir("amplio-add-idempotent-");
     await initWithRegistry(cwd);
     await runAddEvent("auth.user.signed_up", { cwd });
 
@@ -139,7 +139,7 @@ describe("runAddEvent", () => {
   });
 
   it("force:true overwrites auth.user.signed_up with registry content", async () => {
-    const cwd = await makeTempDir("logcn-add-force-");
+    const cwd = await makeTempDir("amplio-add-force-");
     await initWithRegistry(cwd);
     await runAddEvent("auth.user.signed_up", { cwd });
 
@@ -160,7 +160,7 @@ describe("runAddEvent", () => {
   });
 
   it("installs email.sent from registry with barrels", async () => {
-    const cwd = await makeTempDir("logcn-add-email-");
+    const cwd = await makeTempDir("amplio-add-email-");
     await initWithRegistry(cwd);
     await runAddEvent("email.sent", { cwd });
 
@@ -183,7 +183,7 @@ describe("runAddEvent", () => {
 
 describe("runAddMiddleware", () => {
   it("scaffolds hono middleware after init", async () => {
-    const cwd = await makeTempDir("logcn-mw-");
+    const cwd = await makeTempDir("amplio-mw-");
     await initWithRegistry(cwd);
     await runAddMiddleware("hono", { cwd });
 
@@ -191,18 +191,18 @@ describe("runAddMiddleware", () => {
     await access(middlewarePath);
 
     const source = await readFile(middlewarePath, "utf8");
-    expect(source).toContain("logcnMiddleware");
+    expect(source).toContain("amplioMiddleware");
   });
 
   it("add middleware hono without init creates telemetry/middleware/hono.ts", async () => {
-    const cwd = await makeTempDir("logcn-mw-no-init-");
+    const cwd = await makeTempDir("amplio-mw-no-init-");
     await expect(runAddMiddleware("hono", { cwd })).resolves.toBeUndefined();
     const middlewarePath = path.join(cwd, "telemetry/middleware/hono.ts");
     await access(middlewarePath);
   });
 
   it("scaffolds fastify middleware after init", async () => {
-    const cwd = await makeTempDir("logcn-mw-fastify-");
+    const cwd = await makeTempDir("amplio-mw-fastify-");
     await initWithRegistry(cwd);
     await runAddMiddleware("fastify", { cwd });
 
@@ -210,19 +210,19 @@ describe("runAddMiddleware", () => {
     await access(middlewarePath);
 
     const source = await readFile(middlewarePath, "utf8");
-    expect(source).toContain("logcnPlugin");
+    expect(source).toContain("amplioPlugin");
     expect(source).toContain("useRequestLogger");
   });
 
   it("add middleware fastify without init creates telemetry/middleware/fastify.ts", async () => {
-    const cwd = await makeTempDir("logcn-mw-fastify-no-init-");
+    const cwd = await makeTempDir("amplio-mw-fastify-no-init-");
     await expect(runAddMiddleware("fastify", { cwd })).resolves.toBeUndefined();
     const middlewarePath = path.join(cwd, "telemetry/middleware/fastify.ts");
     await access(middlewarePath);
   });
 
   it("scaffolds express middleware after init", async () => {
-    const cwd = await makeTempDir("logcn-mw-express-");
+    const cwd = await makeTempDir("amplio-mw-express-");
     await initWithRegistry(cwd);
     await runAddMiddleware("express", { cwd });
 
@@ -230,19 +230,19 @@ describe("runAddMiddleware", () => {
     await access(middlewarePath);
 
     const source = await readFile(middlewarePath, "utf8");
-    expect(source).toContain("logcnMiddleware");
+    expect(source).toContain("amplioMiddleware");
     expect(source).toContain("useRequestLogger");
   });
 
   it("add middleware express without init creates telemetry/middleware/express.ts", async () => {
-    const cwd = await makeTempDir("logcn-mw-express-no-init-");
+    const cwd = await makeTempDir("amplio-mw-express-no-init-");
     await expect(runAddMiddleware("express", { cwd })).resolves.toBeUndefined();
     const middlewarePath = path.join(cwd, "telemetry/middleware/express.ts");
     await access(middlewarePath);
   });
 
   it("scaffolds next middleware after init", async () => {
-    const cwd = await makeTempDir("logcn-mw-next-");
+    const cwd = await makeTempDir("amplio-mw-next-");
     await initWithRegistry(cwd);
     await runAddMiddleware("next", { cwd });
 
@@ -250,20 +250,20 @@ describe("runAddMiddleware", () => {
     await access(middlewarePath);
 
     const source = await readFile(middlewarePath, "utf8");
-    expect(source).toContain("withLogcn");
+    expect(source).toContain("withAmplio");
     expect(source).toContain("useRequestLogger");
   });
 
 
   it("add middleware next without init creates telemetry/middleware/next.ts", async () => {
-    const cwd = await makeTempDir("logcn-mw-next-no-init-");
+    const cwd = await makeTempDir("amplio-mw-next-no-init-");
     await expect(runAddMiddleware("next", { cwd })).resolves.toBeUndefined();
     const middlewarePath = path.join(cwd, "telemetry/middleware/next.ts");
     await access(middlewarePath);
   });
 
   it("second add hono preserves existing middleware file", async () => {
-    const cwd = await makeTempDir("logcn-mw-idempotent-");
+    const cwd = await makeTempDir("amplio-mw-idempotent-");
     await initWithRegistry(cwd);
     await runAddMiddleware("hono", { cwd });
 
@@ -287,7 +287,7 @@ describe("runAddMiddleware", () => {
 
 describe("runAddSink", () => {
   it("scaffolds console sink after init", async () => {
-    const cwd = await makeTempDir("logcn-sink-");
+    const cwd = await makeTempDir("amplio-sink-");
     await initWithRegistry(cwd);
     await runAddSink("console", { cwd });
 
@@ -299,14 +299,14 @@ describe("runAddSink", () => {
   });
 
   it("add sink console without init creates telemetry/sinks/console.ts", async () => {
-    const cwd = await makeTempDir("logcn-sink-no-init-");
+    const cwd = await makeTempDir("amplio-sink-no-init-");
     await expect(runAddSink("console", { cwd })).resolves.toBeUndefined();
     const sinkPath = path.join(cwd, "telemetry/sinks/console.ts");
     await access(sinkPath);
   });
 
   it("scaffolds otlp sink after init", async () => {
-    const cwd = await makeTempDir("logcn-sink-otlp-");
+    const cwd = await makeTempDir("amplio-sink-otlp-");
     await initWithRegistry(cwd);
     await runAddSink("otlp", { cwd });
     const sinkPath = path.join(cwd, "telemetry/sinks/otlp.ts");
@@ -321,14 +321,14 @@ describe("runAddSink", () => {
   });
 
   it("add sink otlp without init creates telemetry/sinks/otlp.ts", async () => {
-    const cwd = await makeTempDir("logcn-sink-otlp-no-init-");
+    const cwd = await makeTempDir("amplio-sink-otlp-no-init-");
     await expect(runAddSink("otlp", { cwd })).resolves.toBeUndefined();
     const sinkPath = path.join(cwd, "telemetry/sinks/otlp.ts");
     await access(sinkPath);
   });
 
   it("does not double-add otlp sink to logger.ts", async () => {
-    const cwd = await makeTempDir("logcn-sink-idempotent-");
+    const cwd = await makeTempDir("amplio-sink-idempotent-");
     await initWithRegistry(cwd);
     await runAddSink("otlp", { cwd });
     await runAddSink("otlp", { cwd });
@@ -338,12 +338,12 @@ describe("runAddSink", () => {
   });
 
   it("updates composeSinks logger when adding otlp", async () => {
-    const cwd = await makeTempDir("logcn-sink-compose-");
+    const cwd = await makeTempDir("amplio-sink-compose-");
     await initWithRegistry(cwd);
     const loggerPath = path.join(cwd, "telemetry/logger.ts");
     await writeFile(
       loggerPath,
-      `import { init, logger, type LogRecord, type Sink } from "@logcn/core";
+      `import { init, logger, type LogRecord, type Sink } from "@amplio/core";
 import { consoleSink } from "./sinks/console";
 
 type Enricher = (record: LogRecord) => LogRecord;
@@ -372,7 +372,7 @@ export { logger };
   });
 
   it("scaffolds json sink after init", async () => {
-    const cwd = await makeTempDir("logcn-sink-json-");
+    const cwd = await makeTempDir("amplio-sink-json-");
     await initWithRegistry(cwd);
     await runAddSink("json", { cwd });
 
@@ -384,14 +384,14 @@ export { logger };
   });
 
   it("add sink json without init creates telemetry/sinks/json.ts", async () => {
-    const cwd = await makeTempDir("logcn-sink-json-no-init-");
+    const cwd = await makeTempDir("amplio-sink-json-no-init-");
     await expect(runAddSink("json", { cwd })).resolves.toBeUndefined();
     const sinkPath = path.join(cwd, "telemetry/sinks/json.ts");
     await access(sinkPath);
   });
 
   it("second add console preserves existing sink file", async () => {
-    const cwd = await makeTempDir("logcn-sink-idempotent-");
+    const cwd = await makeTempDir("amplio-sink-idempotent-");
     await initWithRegistry(cwd);
     await runAddSink("console", { cwd });
 
@@ -414,21 +414,21 @@ export { logger };
 
 describe("runAddEnricher", () => {
   it("add enricher request without init creates telemetry/enrichers/request-metadata.ts", async () => {
-    const cwd = await makeTempDir("logcn-enricher-no-init-");
+    const cwd = await makeTempDir("amplio-enricher-no-init-");
     await expect(runAddEnricher("request", { cwd })).resolves.toBeUndefined();
     const enricherPath = path.join(cwd, "telemetry/enrichers/request-metadata.ts");
     await access(enricherPath);
   });
 
   it("add enricher service-metadata without init creates telemetry/enrichers/service-metadata.ts", async () => {
-    const cwd = await makeTempDir("logcn-enricher-service-metadata-no-init-");
+    const cwd = await makeTempDir("amplio-enricher-service-metadata-no-init-");
     await expect(runAddEnricher("service-metadata", { cwd })).resolves.toBeUndefined();
     const enricherPath = path.join(cwd, "telemetry/enrichers/service-metadata.ts");
     await access(enricherPath);
   });
 
   it("scaffolds request-metadata enricher when alias request is used", async () => {
-    const cwd = await makeTempDir("logcn-enricher-");
+    const cwd = await makeTempDir("amplio-enricher-");
     await initWithRegistry(cwd);
     await runAddEnricher("request", { cwd });
 
@@ -444,7 +444,7 @@ describe("runAddEnricher", () => {
   });
 
   it("scaffolds service-metadata enricher after init", async () => {
-    const cwd = await makeTempDir("logcn-enricher-service-metadata-");
+    const cwd = await makeTempDir("amplio-enricher-service-metadata-");
     await initWithRegistry(cwd);
     await runAddEnricher("service-metadata", { cwd });
 
@@ -461,7 +461,7 @@ describe("runAddEnricher", () => {
   });
 
   it("second add request preserves existing enricher file", async () => {
-    const cwd = await makeTempDir("logcn-enricher-idempotent-");
+    const cwd = await makeTempDir("amplio-enricher-idempotent-");
     await initWithRegistry(cwd);
     await runAddEnricher("request", { cwd });
 
@@ -483,7 +483,7 @@ describe("runAddEnricher", () => {
 
 describe("runAddIntegration", () => {
   it("scaffolds resend integration and email.sent event after init", async () => {
-    const cwd = await makeTempDir("logcn-int-");
+    const cwd = await makeTempDir("amplio-int-");
     await initWithRegistry(cwd);
     await runAddIntegration("resend", { cwd });
 
@@ -502,7 +502,7 @@ describe("runAddIntegration", () => {
   });
 
   it("second add resend preserves existing integration file", async () => {
-    const cwd = await makeTempDir("logcn-int-idempotent-");
+    const cwd = await makeTempDir("amplio-int-idempotent-");
     await initWithRegistry(cwd);
     await runAddIntegration("resend", { cwd });
 
@@ -522,14 +522,14 @@ describe("runAddIntegration", () => {
   });
 
   it("add integration resend without init creates telemetry/integrations/resend.ts", async () => {
-    const cwd = await makeTempDir("logcn-int-resend-no-init-");
+    const cwd = await makeTempDir("amplio-int-resend-no-init-");
     await expect(runAddIntegration("resend", { cwd })).resolves.toBeUndefined();
     const integrationPath = path.join(cwd, "telemetry/integrations/resend.ts");
     await access(integrationPath);
   });
 
   it("scaffolds better-auth integration and auth events after init", async () => {
-    const cwd = await makeTempDir("logcn-int-better-auth-");
+    const cwd = await makeTempDir("amplio-int-better-auth-");
     await initWithRegistry(cwd);
     await runAddIntegration("better-auth", { cwd });
     const integrationPath = path.join(cwd, "telemetry/integrations/better-auth.ts");
@@ -539,7 +539,7 @@ describe("runAddIntegration", () => {
     const signedInPath = path.join(cwd, "telemetry/events/auth/user-signed-in.ts");
     await access(signedInPath);
     const integrationSource = await readFile(integrationPath, "utf8");
-    expect(integrationSource).toContain("createBetterAuthLogcnPlugin");
+    expect(integrationSource).toContain("createBetterAuthAmplioPlugin");
     const signedUpSource = await readFile(signedUpPath, "utf8");
     expect(signedUpSource).toContain('"auth.user.signed_up"');
     expect(signedUpSource).toContain("AuthUserSignedUp");
@@ -549,14 +549,14 @@ describe("runAddIntegration", () => {
   });
 
   it("add integration better-auth without init creates telemetry/integrations/better-auth.ts", async () => {
-    const cwd = await makeTempDir("logcn-int-better-auth-no-init-");
+    const cwd = await makeTempDir("amplio-int-better-auth-no-init-");
     await expect(runAddIntegration("better-auth", { cwd })).resolves.toBeUndefined();
     const integrationPath = path.join(cwd, "telemetry/integrations/better-auth.ts");
     await access(integrationPath);
   });
 
   it("scaffolds clerk integration and auth events after init", async () => {
-    const cwd = await makeTempDir("logcn-int-clerk-");
+    const cwd = await makeTempDir("amplio-int-clerk-");
     await initWithRegistry(cwd);
     await runAddIntegration("clerk", { cwd });
     const integrationPath = path.join(cwd, "telemetry/integrations/clerk.ts");
@@ -577,14 +577,14 @@ describe("runAddIntegration", () => {
   });
 
   it("add integration clerk without init creates telemetry/integrations/clerk.ts", async () => {
-    const cwd = await makeTempDir("logcn-int-clerk-no-init-");
+    const cwd = await makeTempDir("amplio-int-clerk-no-init-");
     await expect(runAddIntegration("clerk", { cwd })).resolves.toBeUndefined();
     const integrationPath = path.join(cwd, "telemetry/integrations/clerk.ts");
     await access(integrationPath);
   });
 
   it("scaffolds polar integration and payment.order.paid event after init", async () => {
-    const cwd = await makeTempDir("logcn-int-polar-");
+    const cwd = await makeTempDir("amplio-int-polar-");
     await initWithRegistry(cwd);
     await runAddIntegration("polar", { cwd });
     const integrationPath = path.join(cwd, "telemetry/integrations/polar.ts");
@@ -600,7 +600,7 @@ describe("runAddIntegration", () => {
   });
 
   it("add integration polar without init creates telemetry/integrations/polar.ts", async () => {
-    const cwd = await makeTempDir("logcn-int-polar-no-init-");
+    const cwd = await makeTempDir("amplio-int-polar-no-init-");
     await expect(runAddIntegration("polar", { cwd })).resolves.toBeUndefined();
     const integrationPath = path.join(cwd, "telemetry/integrations/polar.ts");
     await access(integrationPath);
@@ -609,7 +609,7 @@ describe("runAddIntegration", () => {
 
 describe("runInit framework detect", () => {
   it("auto-scaffolds next middleware and auth.user.signed_up with --yes", async () => {
-    const cwd = await makeTempDir("logcn-init-next-");
+    const cwd = await makeTempDir("amplio-init-next-");
     await writeFile(
       path.join(cwd, "package.json"),
       JSON.stringify({ dependencies: { next: "^15.0.0" } }, null, 2),
@@ -622,12 +622,12 @@ describe("runInit framework detect", () => {
     await access(eventPath);
 
     const middlewareSource = await readFile(middlewarePath, "utf8");
-    expect(middlewareSource).toContain("withLogcn");
+    expect(middlewareSource).toContain("withAmplio");
     expect(middlewareSource).toContain("flush");
   });
 
   it("respects --middleware none --event none", async () => {
-    const cwd = await makeTempDir("logcn-init-skip-");
+    const cwd = await makeTempDir("amplio-init-skip-");
     await writeFile(
       path.join(cwd, "package.json"),
       JSON.stringify({ dependencies: { hono: "^4.0.0" } }, null, 2),
@@ -639,7 +639,7 @@ describe("runInit framework detect", () => {
   });
 
   it("explicit --middleware hono scaffolds hono without package.json", async () => {
-    const cwd = await makeTempDir("logcn-init-explicit-mw-");
+    const cwd = await makeTempDir("amplio-init-explicit-mw-");
     await runInit({ cwd, middleware: "hono", event: "none" });
 
     const middlewarePath = path.join(cwd, "telemetry/middleware/hono.ts");

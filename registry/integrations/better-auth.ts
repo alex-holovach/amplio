@@ -124,9 +124,9 @@ function trackSignInFromContext(
   });
 }
 
-export function createBetterAuthLogcnPlugin(): BetterAuthPlugin {
+export function createBetterAuthAmplioPlugin(): BetterAuthPlugin {
   return {
-    id: "logcn",
+    id: "amplio",
     hooks: {
       after: [
         {
