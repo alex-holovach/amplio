@@ -394,7 +394,7 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 ### AC-6 CLI init
 
-- [x] `npx amplio init` creates `telemetry/logger.ts`, `telemetry/events/`, `telemetry/middleware/`, `telemetry/sinks/`, `telemetry/enrichers/`, `telemetry/integrations/`.
+- [x] `npx @useamplio/cli@alpha init` creates `telemetry/logger.ts`, `telemetry/events/`, `telemetry/middleware/`, `telemetry/sinks/`, `telemetry/enrichers/`, `telemetry/integrations/`.
 - [x] Default console JSON sink wired and importable.
 - [x] Second `amplio init` is idempotent — existing files left unchanged.
 - [x] CLI `--help` and `--version` exit 0.

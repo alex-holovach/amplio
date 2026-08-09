@@ -58,7 +58,7 @@ Schema validation soft-fails outside `NODE_ENV=test` unless `init({ strict: true
 
 **Do not add** `log.info`, `log.warn`, `log.debug`, or free-form string logging to the public API. Use `.error()` plus schema fields for structured errors — not printf-style methods.
 
-## User repo layout (after `npx amplio init`)
+## User repo layout (after `npx @useamplio/cli@alpha init`)
 
 ```
 telemetry/

@@ -21,7 +21,7 @@ Teams want **structured, queryable observability** without:
 2. **Wide events** — accumulate context, emit once per request/job/run.
 3. **Open code** — `telemetry/` is part of the application, not hidden in `node_modules`.
 4. **Tiny runtime** — `@useamplio/amplio` stays small, dependency-light, and immutable in API shape.
-5. **shadcn-native DX** — `npx amplio add …` and `npx shadcn add @useamplio/…` scaffold registry items.
+5. **shadcn-native DX** — `npx @useamplio/cli@alpha add …` and `npx shadcn add @useamplio/…` scaffold registry items.
 6. **Agent-friendly output** — nested JSON, stable field names, self-describing event names.
 
 ## Non-goals (v0)
@@ -64,7 +64,7 @@ A shadcn-compatible installable unit that copies or merges files into `telemetry
 
 ### FR-1 Init
 
-`npx amplio init` scaffolds:
+`npx @useamplio/cli@alpha init` scaffolds:
 
 ```
 telemetry/
@@ -89,11 +89,11 @@ telemetry/
 ### FR-3 CLI add
 
 ```bash
-npx amplio add event auth.user.signed_up
-npx amplio add middleware hono
-npx amplio add sink axiom
-npx amplio add enricher request-metadata
-npx amplio add integration better-auth
+npx @useamplio/cli@alpha add event auth.user.signed_up
+npx @useamplio/cli@alpha add middleware hono
+npx @useamplio/cli@alpha add sink axiom
+npx @useamplio/cli@alpha add enricher request-metadata
+npx @useamplio/cli@alpha add integration better-auth
 ```
 
 - Resolves registry item, writes files, installs declared peer dependencies.
@@ -194,7 +194,7 @@ amplio may interoperate with evlog-shaped **ideas** (wide events, structured err
 
 ## Success metrics
 
-1. `npx amplio init && npx amplio add event …` produces a compiling TypeScript tree in under 30 seconds.
+1. `npx @useamplio/cli@alpha init && npx @useamplio/cli@alpha add event …` produces a compiling TypeScript tree in under 30 seconds.
 2. A new contributor can add an event schema and see it in emitted JSON without reading core source.
 3. `@useamplio/amplio` passes size and bench gates.
 4. One example emits exactly one wide event per HTTP request in middleware mode.

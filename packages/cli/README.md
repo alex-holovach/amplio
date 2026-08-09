@@ -5,8 +5,8 @@ CLI for scaffolding amplio telemetry in your repo (`init`, `add`).
 ## Binary
 
 ```bash
-npx amplio init
-npx amplio add event auth.user.signed_up
+npx @useamplio/cli@alpha init
+npx @useamplio/cli@alpha add event auth.user.signed_up
 ```
 
 The published package exposes the `amplio` bin (`dist/cli.js`).
