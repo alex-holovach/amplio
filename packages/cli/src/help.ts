@@ -62,6 +62,7 @@ Usage:
 Options:
   --cwd <path>                 Project directory (default: .)
   --force                      Overwrite generated files
+  --dry-run                    Preview what would be created/updated/wired — writes nothing
   -h, --help                   Show this help
 
 Examples:
@@ -69,6 +70,7 @@ Examples:
   amplio add event auth.user.signed_up
   amplio add event post.created comment.created vote.cast
   amplio add middleware hono
+  amplio add sink otlp --dry-run
 `);
 }
 

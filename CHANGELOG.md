@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.14] - 2026-08-09
+
+Dogfood iter 9 — form-encoded redaction gap closed, OTLP spec-compliant endpoints + batching + attribute promotion, `add --dry-run`, NextAuth createUser, memorySink, four new registry events.
+
+### Runtime
+
+- **`+`-encoded secrets no longer survive redaction** — `NextRequest.nextUrl.search` form-encodes spaces as `+`, and `decodeURIComponent` does not turn `+` back into a space, so `Bearer+abc123…` (and `4111+1111+1111+1111`) slipped past the value patterns. The Bearer pattern now accepts `+` separators directly, the pattern-scan gate counts digit runs through `+`, and a form-decode pass (`+` → space) runs alongside the percent-decode pass.
+- **Encoding caveat documented** — when a pattern only matches after decoding, the stored value comes out decoded; the README redaction contract now says so explicitly instead of leaving consumers to discover the shape change.
+- **New `memorySink()`** — in-memory sink for tests (`sink.records`, `sink.clear()`); pairs with `resetConfigForTests()` and the NODE_ENV=test hard-throw validation for event assertions in vitest.
+
+### Registry
+
+- **OTLP sink honors `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`** per the OTel spec (signal-specific endpoint used verbatim and wins; base `OTEL_EXPORTER_OTLP_ENDPOINT` gets `/v1/logs` appended). Previously docs told users to set the signal var and the sink never read it. The disabled-export warning now names both vars and carries the `[amplio]` prefix like every other runtime message.
+- **OTLP sink batching (opt-in)** — `otlpSink({ batch: true })` coalesces 100 records / 1 s (tunable via `{ maxSize, maxWaitMs }`) into one export request, grouped by (service, env) resource; per-emit POST remains the default and the header comment now states that limitation prominently.
+- **OTLP attribute promotion is configurable** — defaults now include `trpc.path`, `http.path`, `http.method` (dot paths walk nested fields), and `otlpSink({ attributes: […] })` replaces the list.
+- **NextAuth integration covers `createUser`** — the adapter event marks the id so the subsequent `signIn` emits `auth.user.signed_up` exactly once with the account-derived method, fixing signup detection for database-session credential flows where `isNewUser` is unreliable. `signOut` / `linkAccount` ship as commented recipes in the file.
+- **Four new registry events** — `page.viewed`, `job.completed`, `webhook.received`, `payment.refunded`, so the registry demonstrates richer shapes beyond the auth/email/payment starter set.
+
+### CLI
+
+- **`amplio add … --dry-run`** — previews created/overwritten/skipped files, barrel wiring, `logger.ts` edits, and dependency additions without writing anything (for a tool that edits logger.ts, tsconfig.json, and app source, trust needs a preview mode).
+- **Skip glyph explains itself** — `· path (exists — --force to overwrite)` instead of a bare `·`.
+- **`add integration next-auth` no longer prints duplicate barrel lines** — barrel updates are reported once per file per install, not once per pulled-in event.
+- **`doctor` prints a bottom-line summary** — `⚠ N warning(s) …` / `✗ N check(s) failed …` after the epilogue so warnings are not skimmed past.
+- **`init` (Next.js) warns about `http.search`** — the epilogue now surfaces the query-string PII trap and the `add enricher query-allowlist` fix, the same way it surfaces the port trap.
+- **Generated `logger.ts` carries a "which entry point?" comment** — the 3-line version of the README table, in the file everyone opens first.
+
+### Docs
+
+- **t3.md fixed:** the sampling section claimed `.emit()` returns the record when sampling skips delivery — it returns `null` (README/ALPHA/implementation agree); the `src/env.js` example's `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` is now actually honored by the sink and annotated with the verbatim-URL semantics.
+- **t3.md added:** "Annotate the spine with the authenticated user" recipe (one `.set()` in `protectedProcedure` makes every request row user-scoped), a vitest testing recipe built on `memorySink()`, and the `components.json` merge behavior for apps that already have one (registries map merged, everything else untouched).
+- **README added:** `success` dashboard note (`success != false` for domain rows), the `.error()` sets-success-not-status asymmetry, and the decoded-form redaction caveat.
+
 ## [0.1.0-alpha.13] - 2026-08-09
 
 Dogfood iter 8 — PAN redaction fix, honest async-sink warning, `.event()` footgun removed, NextAuth wired end-to-end, quieter init.

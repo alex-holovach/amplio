@@ -7,7 +7,7 @@
   "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.13"
+    "@useamplio/amplio@^0.1.0-alpha.14"
   ],
   "files": [
     {

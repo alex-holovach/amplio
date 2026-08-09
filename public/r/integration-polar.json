@@ -7,7 +7,7 @@
   "docs": "Call handlePolarWebhook (or trackPolarOrderPaid) from your Polar webhook route (order.paid). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.13"
+    "@useamplio/amplio@^0.1.0-alpha.14"
   ],
   "registryDependencies": [
     "@useamplio/event-payment-order-paid"

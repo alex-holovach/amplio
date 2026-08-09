@@ -61,6 +61,7 @@ createLogger()
 | `hasAmbientLogger()` | `true` inside a `runWithLogger` scope — used by middleware to decide between annotating the ambient spine and creating a standalone one |
 | `createRequestId()` | New unique request id (`req_<time36>_<rand36>`) — pass to `createRequestLogger({ requestId })` to preserve an upstream id |
 | `flush()` | Await pending async sink deliveries |
+| `memorySink()` | In-memory sink for tests — assert on `sink.records`, reset with `sink.clear()` |
 | `scheduleFlush({ waitUntil? })` | Schedule `flush()` via platform `waitUntil` or Next.js `after()` |
 | `trpcErrorHttpStatus(error)` | Map tRPC error `code` strings to HTTP status (defaults 500) |
 | `createError({ message, why, fix, code, link })` | Structured errors for events |
@@ -76,8 +77,9 @@ createLogger()
 - **Soft seal:** after `.emit()`, the instance is sealed. Further `.set()` / `.error()` are no-ops; repeat `.emit()` returns `null`. Post-seal `.create()` and `.event()` return sealed no-op loggers (not `null`). Ignored calls log a dev warning (`console.warn`).
 - **`getLogger()`** returns a no-op logger outside AsyncLocalStorage (does not throw). **`useLogger()`** is a deprecated alias with identical behavior.
 - **Validation** soft-fails outside `NODE_ENV=test` unless `init({ strict: true })`; failed emits attach `validation.issues` and set `success: false`.
-- **`.error(err)`** on `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when `err.code` is a string or number (Node-style `ENOENT`, etc.) — plain `Error` omits `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field.
+- **`.error(err)`** on `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when `err.code` is a string or number (Node-style `ENOENT`, etc.) — plain `Error` omits `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field. `.error()` sets `success: false` but **not** `status` — only transport middleware stamps `status`; a domain row's error is not an HTTP status.
 - **Auto fields** on emit: `timestamp`, `duration_ms` (time since the logger was created — a `.child()` created right before `.emit()` reports `~0`; create the child before the work to time the work), `request_id` (when set), `success` (derived from `status` or set explicitly via `.set()` / `.error()` — omitted when neither applies), `service`, `env`. Schema events set `event` and `@event` to the declared name; `@event` is canonical, `event` is a duplicate because some sinks and columnar stores reject or mangle `@`-prefixed keys. Pass `init({ canonicalKeyOnly: true })` to emit only `@event`. `createRequestLogger` seeds `http.request` on both keys.
+  **Dashboard implication:** clean domain rows (`.child(Def).emit()` with no `status`) omit `success` entirely, so `success = true` silently excludes them — filter domain events with `success != false` (or on `@event`) instead.
 - **Redaction** is on by default (`redact: false` to opt out) — exact contract in [Redaction](#redaction) below. It runs at emit time, so fields derived before redaction (e.g. a length computed from a raw value) can look inconsistent next to `[REDACTED]`; that is expected.
 
 ## Redaction
@@ -86,7 +88,7 @@ The precise default contract (relying on this for compliance? read the limits):
 
 **Field names** — any field whose (case-insensitive) key is one of `authorization`, `cookie`, `set-cookie`, `email`, `password`, `secret`, `token`, `access_token`, `refresh_token`, `card`, `card_number`, `credit_card`, `pan` has its string value replaced with `[REDACTED]`, at any nesting depth (arrays included). Exact key match only — `user_email` is *not* matched by `email`. Add your own with `init({ redact: { fields: ["ssn"] } })`.
 
-**Value patterns** — scanned inside every string value (and once more on the percent-decoded string when it contains `%xx` escapes):
+**Value patterns** — scanned inside every string value, then again on decoded variants when the string looks encoded: the percent-decoded string (when it contains `%xx` escapes) and a form-decoded pass with `+` treated as a space (query strings form-encode spaces as `+`, which `decodeURIComponent` does not undo). The Bearer pattern also accepts `+` as the separator directly (`Bearer+abc…`).
 
 | Pattern | Shape | Limits |
 |---|---|---|
@@ -97,6 +99,8 @@ The precise default contract (relying on this for compliance? read the limits):
 | Authorization header | `Authorization: <value>` inside strings | stops at whitespace/comma |
 
 Add custom patterns with `init({ redact: { patterns: [/my-regex/g] } })`. Redaction does **not** parse query strings as key/value pairs — use the `query-allowlist` enricher for `http.search`.
+
+**Encoding caveat:** when a pattern only matches after decoding, the stored value is the **decoded** string (and, if the match needed the form-decode pass, with `+` turned into spaces) — e.g. a percent-encoded `http.search` that gets redacted comes out decoded. Consumers parsing such fields must handle both encodings; leaking the value beats preserving its shape.
 
 ## Sampling
 

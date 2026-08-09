@@ -685,14 +685,21 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
     console.log("  JSON sink: amplio.jsonl in the project root (or AMPLIO_JSON_SINK_PATH).");
   }
 
+  // Bottom-line summary so warnings above the epilogue are not skimmed past.
   if (hardFailures > 0) {
+    console.log(
+      `\n✗ ${hardFailures} check(s) failed${warnings > 0 ? `, ${warnings} warning(s)` : ""} — see the fix: lines above`,
+    );
     return 1;
   }
   if (strict && warnings > 0) {
+    console.log(`\n⚠ ${warnings} warning(s) — failing because --strict is set`);
     return 1;
   }
   if (warnings > 0) {
-    console.log("\n(exit 0 with warnings — use --strict to fail on warnings, e.g. in CI)");
+    console.log(
+      `\n⚠ ${warnings} warning(s) (exit 0 with warnings — use --strict to fail on warnings, e.g. in CI)`,
+    );
   }
   return 0;
 }

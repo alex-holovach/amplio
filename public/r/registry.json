@@ -28,6 +28,30 @@
       "description": "Wide event when a payment order is paid."
     },
     {
+      "name": "event-page-viewed",
+      "type": "registry:lib",
+      "title": "Page Viewed",
+      "description": "Wide event when a page is viewed (path only — query strings stay out)."
+    },
+    {
+      "name": "event-job-completed",
+      "type": "registry:lib",
+      "title": "Job Completed",
+      "description": "Wide event when a background job finishes (success, failed, or cancelled)."
+    },
+    {
+      "name": "event-webhook-received",
+      "type": "registry:lib",
+      "title": "Webhook Received",
+      "description": "Wide event when an inbound webhook arrives (provider, event type, signature validity)."
+    },
+    {
+      "name": "event-payment-refunded",
+      "type": "registry:lib",
+      "title": "Payment Refunded",
+      "description": "Wide event when a payment is refunded (full or partial)."
+    },
+    {
       "name": "middleware-hono",
       "type": "registry:lib",
       "title": "Hono Middleware",

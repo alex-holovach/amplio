@@ -589,6 +589,18 @@ export async function runInit(options: InitOptions): Promise<void> {
     );
     console.log("  3. Expect one JSON line on stdout (console sink)");
     console.log(`  4. ${scriptRunCommand(packageManager, "amplio doctor")}`);
+
+    // http.search is the most PII-prone field in the schema and redaction
+    // does not parse query strings — surface the opt-in scrubber here, the
+    // same way the port trap is surfaced.
+    if (!(await pathExists(path.join(paths.enrichers, "query-allowlist.ts")))) {
+      console.log(
+        "\nHeads-up: the request spine records http.search (the query string) verbatim; redaction does not parse it.",
+      );
+      console.log(
+        `  If query params may carry tokens or PII: ${scriptRunCommand(packageManager, "amplio add enricher query-allowlist")}`,
+      );
+    }
   }
 
   if (t3LayoutDetected) {

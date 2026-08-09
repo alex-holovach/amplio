@@ -32,7 +32,10 @@ const CC_VERIFY_PATTERN =
   /^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})$/;
 // 13+ digits allowing single space/dash separators between them.
 const CC_GATE_PATTERN = /\d(?:[ -]?\d){12}/;
-const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9\-._~+/]+=*\b/gi;
+// Separator accepts `+` as well as whitespace: query strings form-encode
+// spaces as `+` (NextRequest.nextUrl.search normalizes %20 to +), and
+// decodeURIComponent does not turn `+` back into a space.
+const BEARER_PATTERN = /\bBearer(?:\s|\+)+[A-Za-z0-9\-._~+/]+=*\b/gi;
 const AUTH_HEADER_PATTERN = /\bAuthorization:\s*[^\s,]+/gi;
 
 const luhnValid = (digits: string): boolean => {
@@ -171,9 +174,10 @@ const needsPatternScan = (input: string): boolean => {
         }
         continue;
       }
-      // Space/dash separators do not reset the digit run — "4111-1111-1111-1111"
-      // must still reach the PAN pattern scan.
-      if (ch !== 45) {
+      // Space/dash/plus separators do not reset the digit run —
+      // "4111-1111-1111-1111" and form-encoded "4111+1111+1111+1111" must
+      // still reach the PAN pattern scan.
+      if (ch !== 45 && ch !== 43) {
         safeDigitRun = 0;
       }
       if (
@@ -205,8 +209,9 @@ const needsPatternScan = (input: string): boolean => {
       if (digitRun >= 13) {
         return true;
       }
-    } else if (ch !== 32 && ch !== 45) {
-      // Spaced/dashed PANs keep counting: "4111 1111 1111 1111".
+    } else if (ch !== 32 && ch !== 45 && ch !== 43) {
+      // Spaced/dashed/plus-separated PANs keep counting: "4111 1111 1111 1111",
+      // form-encoded "4111+1111+1111+1111".
       digitRun = 0;
     }
     if (ch === 69 || ch === 101) {
@@ -240,16 +245,34 @@ const applyGatedPatterns = (input: string, gatedPatterns: GatedPattern[]): strin
   return out === input ? input : out;
 };
 
+// When a pattern only matches after decoding, the redacted value is stored in
+// its DECODED form (and, if the match needed the form-decode pass, with `+`
+// separators turned into spaces) — the stored string's encoding changes when
+// redaction fires. Leaking beats shape stability; documented in the README
+// redaction contract.
 const redactString = (input: string, gatedPatterns: GatedPattern[]): string => {
   const raw = applyGatedPatterns(input, gatedPatterns);
-  if (!PERCENT_ENCODED.test(input)) {
+  const percentEncoded = PERCENT_ENCODED.test(input);
+  if (!percentEncoded && !input.includes("+")) {
     return raw;
   }
   try {
-    const decoded = decodeURIComponent(input);
-    const decodedRedacted = applyGatedPatterns(decoded, gatedPatterns);
-    if (decodedRedacted !== decoded) {
-      return decodedRedacted;
+    const decoded = percentEncoded ? decodeURIComponent(input) : input;
+    if (decoded !== input) {
+      const decodedRedacted = applyGatedPatterns(decoded, gatedPatterns);
+      if (decodedRedacted !== decoded) {
+        return decodedRedacted;
+      }
+    }
+    // Form-encoding pass: decodeURIComponent does not map `+` to a space, so
+    // "Bearer+abc" / "4111+1111+1111+1111" in query strings would otherwise
+    // slip past patterns that expect space or dash separators.
+    const formDecoded = decoded.replace(/\+/g, " ");
+    if (formDecoded !== decoded) {
+      const formRedacted = applyGatedPatterns(formDecoded, gatedPatterns);
+      if (formRedacted !== formDecoded) {
+        return formRedacted;
+      }
     }
   } catch {
     // malformed percent-encoding — fall back to raw-string result only

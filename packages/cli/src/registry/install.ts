@@ -16,6 +16,8 @@ export interface InstallOptions {
   registryPath: string;
   telemetryDir?: string;
   force?: boolean;
+  /** Compute created/updated/skipped without writing anything. */
+  dryRun?: boolean;
 }
 
 export interface InstallResult {
@@ -57,9 +59,16 @@ export async function installRegistryItem(
     );
 
     const targetPath = resolveTargetPath(options.cwd, telemetryDir, file.target);
-    await ensureDir(path.dirname(targetPath));
 
-    const status = await writeFileOrSkip(targetPath, content, options.force ?? false);
+    let status: "created" | "updated" | "skipped";
+    if (options.dryRun) {
+      // Mirror writeFileOrSkip's decision without touching the filesystem.
+      const exists = await pathExists(targetPath);
+      status = exists ? ((options.force ?? false) ? "updated" : "skipped") : "created";
+    } else {
+      await ensureDir(path.dirname(targetPath));
+      status = await writeFileOrSkip(targetPath, content, options.force ?? false);
+    }
     if (status === "created") {
       result.created.push(targetPath);
     } else if (status === "updated") {
@@ -102,6 +111,7 @@ export async function mergePackageDependencies(
   cwd: string,
   dependencies: string[] = [],
   devDependencies: string[] = [],
+  dryRun = false,
 ): Promise<boolean> {
   const pkgPath = path.join(cwd, "package.json");
   if (!(await pathExists(pkgPath))) {
@@ -122,7 +132,7 @@ export async function mergePackageDependencies(
     ...Object.keys(pkg.devDependencies),
   ]);
 
-  let changed = false;
+  const addedNames: string[] = [];
 
   for (const dep of dependencies) {
     const { name, version } = splitDep(dep);
@@ -132,7 +142,7 @@ export async function mergePackageDependencies(
     const resolved = version ?? resolveDefaultVersion(name);
     pkg.dependencies[name] = resolved;
     existing.add(name);
-    changed = true;
+    addedNames.push(name);
   }
 
   for (const dep of devDependencies) {
@@ -143,10 +153,15 @@ export async function mergePackageDependencies(
     const resolved = version ?? resolveDefaultVersion(name);
     pkg.devDependencies[name] = resolved;
     existing.add(name);
-    changed = true;
+    addedNames.push(name);
   }
 
-  if (!changed) {
+  if (addedNames.length === 0) {
+    return false;
+  }
+
+  if (dryRun) {
+    console.log(`  ~ package.json (would add: ${addedNames.join(", ")})`);
     return false;
   }
 

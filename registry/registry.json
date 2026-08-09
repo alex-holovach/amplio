@@ -12,7 +12,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -32,7 +32,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -52,7 +52,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -72,7 +72,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -85,13 +85,93 @@
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "event-page-viewed",
+      "title": "Page Viewed",
+      "description": "Wide event when a page is viewed (path only — query strings stay out).",
+      "type": "registry:lib",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio@^0.1.0-alpha.14"
+      ],
+      "files": [
+        {
+          "path": "registry/events/page/viewed.ts",
+          "target": "~/telemetry/events/page/viewed.ts",
+          "type": "registry:lib",
+          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PageViewed = defineEvent(\n  \"page.viewed\",\n  z.object({\n    page: z.object({\n      // Pathname only (\"/pricing\") — query strings carry PII; if you need a\n      // param, add it as its own typed field instead.\n      path: z.string(),\n      title: z.string().optional(),\n      referrer: z.string().optional(),\n    }),\n    visitor: z\n      .object({\n        // Authenticated user id or anonymous visitor id — whichever you have.\n        id: z.string(),\n        authenticated: z.boolean().optional(),\n      })\n      .optional(),\n  }),\n);\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "event-job-completed",
+      "title": "Job Completed",
+      "description": "Wide event when a background job finishes (success, failed, or cancelled).",
+      "type": "registry:lib",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio@^0.1.0-alpha.14"
+      ],
+      "files": [
+        {
+          "path": "registry/events/job/completed.ts",
+          "target": "~/telemetry/events/job/completed.ts",
+          "type": "registry:lib",
+          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const JobCompleted = defineEvent(\n  \"job.completed\",\n  z.object({\n    job: z.object({\n      name: z.string(),\n      // Queue-assigned id (BullMQ, Inngest, pg-boss, …) when you have one.\n      id: z.union([z.string(), z.number()]).optional(),\n      queue: z.string().optional(),\n    }),\n    result: z.object({\n      status: z.enum([\"success\", \"failed\", \"cancelled\"]),\n      attempt: z.number().int().positive().optional(),\n      // Domain-level count (\"rows synced\"), not a timing — the auto\n      // duration_ms field already times the logger's lifetime.\n      records_processed: z.number().int().nonnegative().optional(),\n    }),\n  }),\n);\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "event-webhook-received",
+      "title": "Webhook Received",
+      "description": "Wide event when an inbound webhook arrives (provider, event type, signature validity).",
+      "type": "registry:lib",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio@^0.1.0-alpha.14"
+      ],
+      "files": [
+        {
+          "path": "registry/events/webhook/received.ts",
+          "target": "~/telemetry/events/webhook/received.ts",
+          "type": "registry:lib",
+          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const WebhookReceived = defineEvent(\n  \"webhook.received\",\n  z.object({\n    webhook: z.object({\n      provider: z.string(), // \"stripe\", \"resend\", \"github\", …\n      // The provider's event type (\"invoice.paid\") — kept separate from the\n      // amplio event name so you can group all webhook traffic in one place.\n      event_type: z.string(),\n      delivery_id: z.string().optional(),\n    }),\n    verification: z\n      .object({\n        // Emit failed verifications too — silent signature failures are the\n        // webhook bug you want a dashboard for.\n        signature_valid: z.boolean(),\n      })\n      .optional(),\n  }),\n);\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "event-payment-refunded",
+      "title": "Payment Refunded",
+      "description": "Wide event when a payment is refunded (full or partial).",
+      "type": "registry:lib",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio@^0.1.0-alpha.14"
+      ],
+      "files": [
+        {
+          "path": "registry/events/payment/refunded.ts",
+          "target": "~/telemetry/events/payment/refunded.ts",
+          "type": "registry:lib",
+          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PaymentRefunded = defineEvent(\n  \"payment.refunded\",\n  z.object({\n    refund: z.object({\n      id: z.string(),\n      currency: z.string().length(3),\n      amount_cents: z.number().int().nonnegative(),\n      // Partial refunds: amount_cents < the original order amount.\n      reason: z\n        .enum([\"requested_by_customer\", \"duplicate\", \"fraud\", \"other\"])\n        .optional(),\n    }),\n    order: z.object({\n      id: z.string(),\n    }),\n    payment: z.object({\n      provider: z.enum([\"stripe\", \"polar\", \"paddle\", \"other\"]),\n    }),\n  }),\n);\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
       "name": "middleware-hono",
       "title": "Hono Middleware",
       "description": "Hono middleware that attaches request-scoped amplio context.",
       "type": "registry:lib",
       "docs": "Wire the middleware: `app.use(\"*\", amplioMiddleware())` in your Hono app. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -110,7 +190,7 @@
       "type": "registry:lib",
       "docs": "Wire the middleware: `app.use(amplioMiddleware())` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -129,7 +209,7 @@
       "type": "registry:lib",
       "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -148,7 +228,7 @@
       "type": "registry:lib",
       "docs": "Wire the plugin: `await app.register(amplioPlugin)` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13",
+        "@useamplio/amplio@^0.1.0-alpha.14",
         "fastify-plugin@^5.0.0"
       ],
       "files": [
@@ -168,7 +248,7 @@
       "type": "registry:lib",
       "docs": "Wire into your procedure bases: `const amplioMiddleware = t.middleware(amplioTrpcMiddleware())` then `.use(amplioMiddleware)` on publicProcedure/protectedProcedure. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/server/api/trpc.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -187,7 +267,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { consoleSink } from \"./sinks/console\"` to telemetry/logger.ts and append `consoleSink` to the init() sinks array. Prefer `npx @useamplio/cli@alpha add sink console` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -206,7 +286,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio.jsonl to .gitignore. Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -223,16 +303,16 @@
       "title": "OTLP Sink",
       "description": "OTLP sink that exports wide events over OpenTelemetry.",
       "type": "registry:lib",
-      "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (or OTEL_EXPORTER_OTLP_ENDPOINT) in your env. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
+      "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (base URL, /v1/logs appended). Default is one POST per emit — pass otlpSink({ batch: true }) for production traffic. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
           "path": "registry/sinks/otlp.ts",
           "target": "~/telemetry/sinks/otlp.ts",
           "type": "registry:lib",
-          "content": "import type { JsonValue, LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport interface OtlpSinkOptions {\n  endpoint?: string;\n  headers?: Record<string, string>;\n  /** When false (default), export failures warn once then stay silent. Pass true to throw. */\n  throwOnError?: boolean;\n}\n\nconst ATTRIBUTE_FIELDS = [\n  \"service\",\n  \"event\",\n  \"status\",\n  \"duration_ms\",\n  \"request_id\",\n  \"success\",\n] as const;\n\ntype OtlpAttributeValue =\n  | { stringValue: string }\n  | { boolValue: boolean }\n  | { intValue: number }\n  | { doubleValue: number };\n\ninterface OtlpAttribute {\n  key: string;\n  value: OtlpAttributeValue;\n}\n\nconst parseOtlpHeaders = (raw: string | undefined): Record<string, string> => {\n  if (!raw) {\n    return {};\n  }\n\n  const headers: Record<string, string> = {};\n  for (const pair of raw.split(\",\")) {\n    const trimmed = pair.trim();\n    if (!trimmed) {\n      continue;\n    }\n\n    const eq = trimmed.indexOf(\"=\");\n    if (eq === -1) {\n      continue;\n    }\n\n    const key = trimmed.slice(0, eq).trim();\n    const value = trimmed.slice(eq + 1).trim();\n    if (key) {\n      headers[key] = value;\n    }\n  }\n\n  return headers;\n};\n\nconst toOtlpAttribute = (key: string, value: JsonValue | undefined): OtlpAttribute | undefined => {\n  if (value === null || value === undefined) {\n    return undefined;\n  }\n\n  if (typeof value === \"string\") {\n    return { key, value: { stringValue: value } };\n  }\n\n  if (typeof value === \"boolean\") {\n    return { key, value: { boolValue: value } };\n  }\n\n  if (typeof value === \"number\") {\n    if (Number.isInteger(value)) {\n      return { key, value: { intValue: value } };\n    }\n    return { key, value: { doubleValue: value } };\n  }\n\n  return undefined;\n};\n\nconst toTimeUnixNano = (timestamp: JsonValue | undefined): string => {\n  let ms: number;\n\n  if (typeof timestamp === \"number\" && Number.isFinite(timestamp)) {\n    ms = timestamp;\n  } else if (typeof timestamp === \"string\" && timestamp.length > 0) {\n    const parsed = Date.parse(timestamp);\n    ms = Number.isNaN(parsed) ? Date.now() : parsed;\n  } else {\n    ms = Date.now();\n  }\n\n  return `${Math.trunc(ms)}000000`;\n};\n\nconst buildAttributes = (record: LogRecord): OtlpAttribute[] => {\n  const attributes: OtlpAttribute[] = [];\n\n  for (const field of ATTRIBUTE_FIELDS) {\n    const attr = toOtlpAttribute(field, record[field]);\n    if (attr) {\n      attributes.push(attr);\n    }\n  }\n\n  return attributes;\n};\n\nexport function otlpSink(options: OtlpSinkOptions = {}): Sink {\n  const endpoint = options.endpoint ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;\n  const throwOnError = options.throwOnError ?? false;\n  const headers = {\n    \"content-type\": \"application/json\",\n    ...parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS),\n    ...(options.headers ?? {}),\n  };\n\n  if (!endpoint) {\n    let warned = false;\n    return async () => {\n      if (!warned) {\n        warned = true;\n        console.warn(\n          \"otlpSink: OTEL_EXPORTER_OTLP_ENDPOINT is not set; OTLP export is disabled\",\n        );\n      }\n    };\n  }\n\n  const base = endpoint.replace(/\\/$/, \"\");\n  const url = base.endsWith(\"/v1/logs\") ? base : `${base}/v1/logs`;\n\n  let warnedExportFailure = false;\n\n  const warnExportFailure = (detail: string): void => {\n    if (throwOnError || warnedExportFailure) {\n      return;\n    }\n    warnedExportFailure = true;\n    console.warn(\n      `[amplio] otlpSink: export failed (${detail}); further failures will be silent. Pass throwOnError: true to fail hard.`,\n    );\n  };\n\n  return async (record: LogRecord) => {\n    const attributes = buildAttributes(record);\n    const serviceName =\n      typeof record.service === \"string\" && record.service.length > 0\n        ? record.service\n        : undefined;\n    const deploymentEnvironment =\n      typeof record.env === \"string\" && record.env.length > 0\n        ? record.env\n        : undefined;\n\n    const resourceAttributes: OtlpAttribute[] = [];\n    if (serviceName) {\n      resourceAttributes.push({\n        key: \"service.name\",\n        value: { stringValue: serviceName },\n      });\n    }\n    if (deploymentEnvironment) {\n      resourceAttributes.push({\n        key: \"deployment.environment\",\n        value: { stringValue: deploymentEnvironment },\n      });\n    }\n\n    let response: Response;\n    try {\n      response = await fetch(url, {\n        method: \"POST\",\n        headers,\n        body: JSON.stringify({\n          resourceLogs: [\n            {\n              ...(resourceAttributes.length > 0\n                ? {\n                    resource: {\n                      attributes: resourceAttributes,\n                    },\n                  }\n                : {}),\n              scopeLogs: [\n                {\n                  logRecords: [\n                    {\n                      timeUnixNano: toTimeUnixNano(record.timestamp),\n                      body: { stringValue: JSON.stringify(record) },\n                      ...(attributes.length > 0 ? { attributes } : {}),\n                    },\n                  ],\n                },\n              ],\n            },\n          ],\n        }),\n      });\n    } catch (error) {\n      if (throwOnError) {\n        throw error;\n      }\n      warnExportFailure(error instanceof Error ? error.message : String(error));\n      return;\n    }\n\n    if (!response.ok) {\n      if (throwOnError) {\n        throw new Error(`OTLP export failed with status ${response.status}`);\n      }\n      warnExportFailure(`status ${response.status}`);\n      return;\n    }\n  };\n}\n"
+          "content": "/**\n * OTLP/HTTP logs sink.\n *\n * Endpoint resolution (first match wins):\n *   1. options.endpoint                          — `/v1/logs` appended unless already present\n *   2. OTEL_EXPORTER_OTLP_LOGS_ENDPOINT          — used VERBATIM (per the OTel spec,\n *      signal-specific endpoints are full URLs)\n *   3. OTEL_EXPORTER_OTLP_ENDPOINT               — base URL, `/v1/logs` appended\n *\n * Delivery: by default this sink POSTs ONE request per emit — fine for dev\n * and low traffic, not for production request rates. Pass `batch: true`\n * (100 records / 1 s) or `batch: { maxSize, maxWaitMs }` to coalesce records\n * into one export request. Batching makes the sink async-pending between\n * flushes: on serverless, pass `waitUntil` to your middleware or `await\n * flush()` before returning so the last batch is not cut off.\n */\nimport type { JsonValue, LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport interface OtlpSinkOptions {\n  endpoint?: string;\n  headers?: Record<string, string>;\n  /** When false (default), export failures warn once then stay silent. Pass true to throw. */\n  throwOnError?: boolean;\n  /**\n   * Record fields promoted to typed OTLP log attributes (the fields you can\n   * filter on in an OTel backend without parsing the JSON body). Dot paths\n   * walk nested objects (`\"trpc.path\"` → record.trpc.path). Replaces the\n   * default list; the full record always ships in the log body.\n   */\n  attributes?: string[];\n  /**\n   * Coalesce records into one export request. `true` = 100 records / 1 s;\n   * pass `{ maxSize, maxWaitMs }` to tune. Default: off (one POST per emit).\n   */\n  batch?: boolean | { maxSize?: number; maxWaitMs?: number };\n}\n\nconst DEFAULT_ATTRIBUTE_FIELDS = [\n  \"service\",\n  \"event\",\n  \"status\",\n  \"duration_ms\",\n  \"request_id\",\n  \"success\",\n  // The fields people actually filter on in an OTel backend:\n  \"trpc.path\",\n  \"http.path\",\n  \"http.method\",\n] as const;\n\nconst DEFAULT_BATCH_MAX_SIZE = 100;\nconst DEFAULT_BATCH_MAX_WAIT_MS = 1_000;\n\ntype OtlpAttributeValue =\n  | { stringValue: string }\n  | { boolValue: boolean }\n  | { intValue: number }\n  | { doubleValue: number };\n\ninterface OtlpAttribute {\n  key: string;\n  value: OtlpAttributeValue;\n}\n\nconst parseOtlpHeaders = (raw: string | undefined): Record<string, string> => {\n  if (!raw) {\n    return {};\n  }\n\n  const headers: Record<string, string> = {};\n  for (const pair of raw.split(\",\")) {\n    const trimmed = pair.trim();\n    if (!trimmed) {\n      continue;\n    }\n\n    const eq = trimmed.indexOf(\"=\");\n    if (eq === -1) {\n      continue;\n    }\n\n    const key = trimmed.slice(0, eq).trim();\n    const value = trimmed.slice(eq + 1).trim();\n    if (key) {\n      headers[key] = value;\n    }\n  }\n\n  return headers;\n};\n\n/** Flat key first (`record[\"trpc.path\"]`), then dot-path walk (`record.trpc.path`). */\nconst fieldValue = (record: LogRecord, field: string): JsonValue | undefined => {\n  const flat = record[field];\n  if (flat !== undefined || !field.includes(\".\")) {\n    return flat;\n  }\n  let current: JsonValue | undefined = record as JsonValue;\n  for (const part of field.split(\".\")) {\n    if (\n      current === null ||\n      typeof current !== \"object\" ||\n      Array.isArray(current)\n    ) {\n      return undefined;\n    }\n    current = (current as Record<string, JsonValue>)[part];\n  }\n  return current;\n};\n\nconst toOtlpAttribute = (key: string, value: JsonValue | undefined): OtlpAttribute | undefined => {\n  if (value === null || value === undefined) {\n    return undefined;\n  }\n\n  if (typeof value === \"string\") {\n    return { key, value: { stringValue: value } };\n  }\n\n  if (typeof value === \"boolean\") {\n    return { key, value: { boolValue: value } };\n  }\n\n  if (typeof value === \"number\") {\n    if (Number.isInteger(value)) {\n      return { key, value: { intValue: value } };\n    }\n    return { key, value: { doubleValue: value } };\n  }\n\n  return undefined;\n};\n\nconst toTimeUnixNano = (timestamp: JsonValue | undefined): string => {\n  let ms: number;\n\n  if (typeof timestamp === \"number\" && Number.isFinite(timestamp)) {\n    ms = timestamp;\n  } else if (typeof timestamp === \"string\" && timestamp.length > 0) {\n    const parsed = Date.parse(timestamp);\n    ms = Number.isNaN(parsed) ? Date.now() : parsed;\n  } else {\n    ms = Date.now();\n  }\n\n  return `${Math.trunc(ms)}000000`;\n};\n\nconst resolveUrl = (options: OtlpSinkOptions): string | undefined => {\n  const appendLogsPath = (endpoint: string): string => {\n    const base = endpoint.replace(/\\/$/, \"\");\n    return base.endsWith(\"/v1/logs\") ? base : `${base}/v1/logs`;\n  };\n\n  if (options.endpoint) {\n    return appendLogsPath(options.endpoint);\n  }\n  // Per the OTel spec the signal-specific endpoint is a full URL used as-is;\n  // only the base endpoint gets the signal path appended.\n  const signalEndpoint = process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT;\n  if (signalEndpoint) {\n    return signalEndpoint;\n  }\n  const baseEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;\n  if (baseEndpoint) {\n    return appendLogsPath(baseEndpoint);\n  }\n  return undefined;\n};\n\nconst resourceKeyOf = (record: LogRecord): string => {\n  const service =\n    typeof record.service === \"string\" && record.service.length > 0\n      ? record.service\n      : \"\";\n  const env =\n    typeof record.env === \"string\" && record.env.length > 0 ? record.env : \"\";\n  return `${service}\\u0000${env}`;\n};\n\nexport function otlpSink(options: OtlpSinkOptions = {}): Sink {\n  const url = resolveUrl(options);\n  const throwOnError = options.throwOnError ?? false;\n  const attributeFields = options.attributes ?? DEFAULT_ATTRIBUTE_FIELDS;\n  const headers = {\n    \"content-type\": \"application/json\",\n    ...parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS),\n    ...(options.headers ?? {}),\n  };\n\n  if (!url) {\n    let warned = false;\n    return async () => {\n      if (!warned) {\n        warned = true;\n        console.warn(\n          \"[amplio] otlpSink: no endpoint configured — set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (base URL, /v1/logs appended), or pass otlpSink({ endpoint }); OTLP export is disabled\",\n        );\n      }\n    };\n  }\n\n  let warnedExportFailure = false;\n\n  const warnExportFailure = (detail: string): void => {\n    if (throwOnError || warnedExportFailure) {\n      return;\n    }\n    warnedExportFailure = true;\n    console.warn(\n      `[amplio] otlpSink: export failed (${detail}); further failures will be silent. Pass throwOnError: true to fail hard.`,\n    );\n  };\n\n  const buildAttributes = (record: LogRecord): OtlpAttribute[] => {\n    const attributes: OtlpAttribute[] = [];\n    for (const field of attributeFields) {\n      const attr = toOtlpAttribute(field, fieldValue(record, field));\n      if (attr) {\n        attributes.push(attr);\n      }\n    }\n    return attributes;\n  };\n\n  const toLogRecord = (record: LogRecord) => {\n    const attributes = buildAttributes(record);\n    return {\n      timeUnixNano: toTimeUnixNano(record.timestamp),\n      body: { stringValue: JSON.stringify(record) },\n      ...(attributes.length > 0 ? { attributes } : {}),\n    };\n  };\n\n  // One resourceLogs entry per distinct (service, env) pair — records in a\n  // batch almost always share one, but never stamp record A with B's resource.\n  const buildPayload = (records: LogRecord[]) => {\n    const groups = new Map<string, LogRecord[]>();\n    for (const record of records) {\n      const key = resourceKeyOf(record);\n      const group = groups.get(key);\n      if (group) {\n        group.push(record);\n      } else {\n        groups.set(key, [record]);\n      }\n    }\n\n    const resourceLogs = [...groups.values()].map((group) => {\n      const first = group[0]!;\n      const resourceAttributes: OtlpAttribute[] = [];\n      if (typeof first.service === \"string\" && first.service.length > 0) {\n        resourceAttributes.push({\n          key: \"service.name\",\n          value: { stringValue: first.service },\n        });\n      }\n      if (typeof first.env === \"string\" && first.env.length > 0) {\n        resourceAttributes.push({\n          key: \"deployment.environment\",\n          value: { stringValue: first.env },\n        });\n      }\n      return {\n        ...(resourceAttributes.length > 0\n          ? { resource: { attributes: resourceAttributes } }\n          : {}),\n        scopeLogs: [{ logRecords: group.map(toLogRecord) }],\n      };\n    });\n\n    return { resourceLogs };\n  };\n\n  const exportRecords = async (records: LogRecord[]): Promise<void> => {\n    let response: Response;\n    try {\n      response = await fetch(url, {\n        method: \"POST\",\n        headers,\n        body: JSON.stringify(buildPayload(records)),\n      });\n    } catch (error) {\n      if (throwOnError) {\n        throw error;\n      }\n      warnExportFailure(error instanceof Error ? error.message : String(error));\n      return;\n    }\n\n    if (!response.ok) {\n      if (throwOnError) {\n        throw new Error(`OTLP export failed with status ${response.status}`);\n      }\n      warnExportFailure(`status ${response.status}`);\n      return;\n    }\n  };\n\n  if (!options.batch) {\n    return (record: LogRecord) => exportRecords([record]);\n  }\n\n  const batchConfig = options.batch === true ? {} : options.batch;\n  const maxSize = batchConfig.maxSize ?? DEFAULT_BATCH_MAX_SIZE;\n  const maxWaitMs = batchConfig.maxWaitMs ?? DEFAULT_BATCH_MAX_WAIT_MS;\n\n  let buffer: LogRecord[] = [];\n  let timer: ReturnType<typeof setTimeout> | null = null;\n  let pending: { promise: Promise<void>; resolve: () => void; reject: (e: unknown) => void } | null =\n    null;\n\n  const flushBatch = (): void => {\n    if (timer !== null) {\n      clearTimeout(timer);\n      timer = null;\n    }\n    const records = buffer;\n    const settled = pending;\n    buffer = [];\n    pending = null;\n    if (records.length === 0) {\n      settled?.resolve();\n      return;\n    }\n    exportRecords(records).then(\n      () => settled?.resolve(),\n      (error) => {\n        // Every emit in the batch awaited this promise — reject them all so\n        // throwOnError surfaces per-record, matching the unbatched contract.\n        if (settled) {\n          settled.reject(error);\n        }\n      },\n    );\n  };\n\n  return (record: LogRecord): Promise<void> => {\n    buffer.push(record);\n    if (pending === null) {\n      let resolve!: () => void;\n      let reject!: (e: unknown) => void;\n      const promise = new Promise<void>((res, rej) => {\n        resolve = res;\n        reject = rej;\n      });\n      pending = { promise, resolve, reject };\n    }\n    const result = pending.promise;\n    if (buffer.length >= maxSize) {\n      flushBatch();\n    } else if (timer === null) {\n      timer = setTimeout(flushBatch, maxWaitMs);\n      // Don't keep a Node process alive just for a pending batch window.\n      (timer as { unref?: () => void }).unref?.();\n    }\n    return result;\n  };\n}\n"
         }
       ]
     },
@@ -244,7 +324,7 @@
       "type": "registry:lib",
       "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -263,7 +343,7 @@
       "type": "registry:lib",
       "docs": "Wire the enricher: add `queryAllowlist()` to the init() enrichers array in telemetry/logger.ts (pass { allow: [\"page\"] } to keep specific params). Prefer `npx @useamplio/cli@alpha add enricher query-allowlist` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -282,7 +362,7 @@
       "type": "registry:lib",
       "docs": "requestMetadata is a per-request enricher factory — use it inside middleware/wrappers (requestLogger.set(enrich({}))), not in the init() enrichers array.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "files": [
         {
@@ -302,7 +382,7 @@
       "docs": "Wire into your NextAuth config: `events: amplioNextAuthEvents()` (create-t3-app: src/server/auth/config.ts), and wrap src/app/api/auth/[...nextauth]/route.ts with withAmplio so rows share the request spine's request_id (`amplio init --wire` does this). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "registryDependencies": [
         "@useamplio/event-auth-user-signed-up",
@@ -313,7 +393,7 @@
           "path": "registry/integrations/next-auth.ts",
           "target": "~/telemetry/integrations/next-auth.ts",
           "type": "registry:lib",
-          "content": "/**\n * NextAuth (Auth.js v5) → amplio auth events.\n *\n * Wire into your NextAuth config (create-t3-app: src/server/auth/config.ts):\n *\n *   import { amplioNextAuthEvents } from \"../../../telemetry/integrations/next-auth\";\n *\n *   export const authConfig = {\n *     providers: [...],\n *     events: amplioNextAuthEvents(),\n *   } satisfies NextAuthConfig;\n *\n * These events fire inside the [...nextauth] route handler. Wrap that route\n * with withAmplio so the rows share the request spine's request_id — in a\n * stock create-t3-app layout `amplio init --yes` (or `init --wire`) does it:\n *\n *   // src/app/api/auth/[...nextauth]/route.ts\n *   const { GET: authGet, POST: authPost } = handlers;\n *   export const GET = withAmplio(authGet);\n *   export const POST = withAmplio(authPost);\n *\n * Uses structural types for the NextAuth event messages instead of importing\n * from next-auth (its v5 type exports are still beta-unstable).\n */\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\ntype NextAuthUser = {\n  id?: string;\n  email?: string | null;\n};\n\ntype NextAuthAccount = {\n  provider?: string;\n  type?: string;\n} | null;\n\nexport type NextAuthSignInMessage = {\n  user: NextAuthUser;\n  account?: NextAuthAccount;\n  isNewUser?: boolean;\n};\n\ntype SignInMethod = \"password\" | \"oauth\" | \"magic_link\" | \"sso\";\n\nfunction signInMethod(account: NextAuthAccount | undefined): SignInMethod {\n  switch (account?.type) {\n    case \"credentials\":\n      return \"password\";\n    case \"email\":\n      return \"magic_link\";\n    default:\n      // oidc / oauth / webauthn all reach the app via a provider flow.\n      return \"oauth\";\n  }\n}\n\nfunction userFields(user: NextAuthUser): { id: string; email?: string } | null {\n  if (!user.id) {\n    return null;\n  }\n  return { id: user.id, ...(user.email ? { email: user.email } : {}) };\n}\n\nexport function trackNextAuthSignIn(message: NextAuthSignInMessage) {\n  const user = userFields(message.user);\n  if (!user) {\n    return null;\n  }\n\n  // NextAuth fires one signIn event for both flows; isNewUser distinguishes a\n  // first-time registration. Emit signed_up as an extra row so both funnels\n  // stay queryable on their own event name.\n  if (message.isNewUser) {\n    logger\n      .event(AuthUserSignedUp)\n      .set({\n        user,\n        signup: {\n          method: message.account?.type === \"credentials\" ? \"email\" : \"oauth\",\n        },\n      })\n      .emit();\n  }\n\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user,\n      session: { method: signInMethod(message.account) },\n    })\n    .emit();\n}\n\n/**\n * Drop-in `events` object for NextAuth(config). Inside a withAmplio-wrapped\n * route these rows correlate with the http.request spine via request_id;\n * outside one they still emit as standalone rows.\n */\nexport function amplioNextAuthEvents() {\n  return {\n    signIn: (message: NextAuthSignInMessage) => {\n      trackNextAuthSignIn(message);\n    },\n  };\n}\n"
+          "content": "/**\n * NextAuth (Auth.js v5) → amplio auth events.\n *\n * Wire into your NextAuth config (create-t3-app: src/server/auth/config.ts):\n *\n *   import { amplioNextAuthEvents } from \"../../../telemetry/integrations/next-auth\";\n *\n *   export const authConfig = {\n *     providers: [...],\n *     events: amplioNextAuthEvents(),\n *   } satisfies NextAuthConfig;\n *\n * These events fire inside the [...nextauth] route handler. Wrap that route\n * with withAmplio so the rows share the request spine's request_id — in a\n * stock create-t3-app layout `amplio init --yes` (or `init --wire`) does it:\n *\n *   // src/app/api/auth/[...nextauth]/route.ts\n *   const { GET: authGet, POST: authPost } = handlers;\n *   export const GET = withAmplio(authGet);\n *   export const POST = withAmplio(authPost);\n *\n * Uses structural types for the NextAuth event messages instead of importing\n * from next-auth (its v5 type exports are still beta-unstable).\n */\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\ntype NextAuthUser = {\n  id?: string;\n  email?: string | null;\n};\n\ntype NextAuthAccount = {\n  provider?: string;\n  type?: string;\n} | null;\n\nexport type NextAuthSignInMessage = {\n  user: NextAuthUser;\n  account?: NextAuthAccount;\n  isNewUser?: boolean;\n};\n\nexport type NextAuthCreateUserMessage = {\n  user: NextAuthUser;\n};\n\ntype SignInMethod = \"password\" | \"oauth\" | \"magic_link\" | \"sso\";\n\nfunction signInMethod(account: NextAuthAccount | undefined): SignInMethod {\n  switch (account?.type) {\n    case \"credentials\":\n      return \"password\";\n    case \"email\":\n      return \"magic_link\";\n    default:\n      // oidc / oauth / webauthn all reach the app via a provider flow.\n      return \"oauth\";\n  }\n}\n\nfunction userFields(user: NextAuthUser): { id: string; email?: string } | null {\n  if (!user.id) {\n    return null;\n  }\n  return { id: user.id, ...(user.email ? { email: user.email } : {}) };\n}\n\n// `createUser` (adapter created a user row) is the reliable \"signed up\"\n// signal — `isNewUser` on signIn is not set for database-session credential\n// flows. createUser has no account, though, so it cannot name the signup\n// method; instead of emitting a half-empty row here we mark the id and let\n// the signIn event (which fires right after, with the account) emit\n// auth.user.signed_up exactly once with the real method. Bounded so a\n// long-lived process never grows it past ~1000 ids.\nconst newlyCreatedUserIds = new Set<string>();\nconst NEWLY_CREATED_CAP = 1000;\n\nexport function trackNextAuthCreateUser(message: NextAuthCreateUserMessage): void {\n  const user = userFields(message.user);\n  if (!user) {\n    return;\n  }\n  if (newlyCreatedUserIds.size >= NEWLY_CREATED_CAP) {\n    newlyCreatedUserIds.clear();\n  }\n  newlyCreatedUserIds.add(user.id);\n}\n\nexport function trackNextAuthSignIn(message: NextAuthSignInMessage) {\n  const user = userFields(message.user);\n  if (!user) {\n    return null;\n  }\n\n  // NextAuth fires one signIn event for both flows; isNewUser (or a\n  // createUser event seen just before) distinguishes a first-time\n  // registration. Emit signed_up as an extra row so both funnels stay\n  // queryable on their own event name.\n  const isNewUser = message.isNewUser === true || newlyCreatedUserIds.has(user.id);\n  newlyCreatedUserIds.delete(user.id);\n  if (isNewUser) {\n    logger\n      .event(AuthUserSignedUp)\n      .set({\n        user,\n        signup: {\n          method: message.account?.type === \"credentials\" ? \"email\" : \"oauth\",\n        },\n      })\n      .emit();\n  }\n\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user,\n      session: { method: signInMethod(message.account) },\n    })\n    .emit();\n}\n\n/**\n * Drop-in `events` object for NextAuth(config). Inside a withAmplio-wrapped\n * route these rows correlate with the http.request spine via request_id;\n * outside one they still emit as standalone rows.\n *\n * Covered: signIn (auth.user.signed_in) and createUser + signIn\n * (auth.user.signed_up — reliable even when isNewUser is not set, e.g.\n * database-session credential flows).\n *\n * Not covered by default — this file is open code, extend it in place:\n *\n *   signOut: NextAuth's message shape depends on session strategy\n *   ({ token } for JWT, { session } for database). Scaffold an event with\n *   `amplio add event auth.user.signed_out`, then add:\n *\n *     signOut: (message: { token?: { sub?: string } | null }) => {\n *       const id = message.token?.sub;\n *       if (id) {\n *         logger.event(AuthUserSignedOut).set({ user: { id } }).emit();\n *       }\n *     },\n *\n *   linkAccount: fires when an OAuth account is linked to an existing user\n *   (message: { user, account }). Scaffold `amplio add event\n *   auth.account.linked` and emit `{ user, account: { provider } }` the same\n *   way.\n */\nexport function amplioNextAuthEvents() {\n  return {\n    createUser: (message: NextAuthCreateUserMessage) => {\n      trackNextAuthCreateUser(message);\n    },\n    signIn: (message: NextAuthSignInMessage) => {\n      trackNextAuthSignIn(message);\n    },\n  };\n}\n"
         }
       ]
     },
@@ -326,7 +406,7 @@
       "docs": "Wire the plugin: add `createBetterAuthAmplioPlugin()` to your betterAuth({ plugins: [...] }) config. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13",
+        "@useamplio/amplio@^0.1.0-alpha.14",
         "better-auth@^1.2.0"
       ],
       "registryDependencies": [
@@ -351,7 +431,7 @@
       "docs": "Call handleClerkWebhook from your Clerk webhook route (user.created / session.created). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13",
+        "@useamplio/amplio@^0.1.0-alpha.14",
         "@clerk/backend@^1.25.0"
       ],
       "registryDependencies": [
@@ -376,7 +456,7 @@
       "docs": "Call trackResendEmail after sending, or handleResendWebhook from your Resend webhook route. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "registryDependencies": [
         "@useamplio/event-email-sent"
@@ -399,7 +479,7 @@
       "docs": "Call handlePolarWebhook (or trackPolarOrderPaid) from your Polar webhook route (order.paid). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.13"
+        "@useamplio/amplio@^0.1.0-alpha.14"
       ],
       "registryDependencies": [
         "@useamplio/event-payment-order-paid"

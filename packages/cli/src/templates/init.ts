@@ -20,6 +20,11 @@ init({
   sinks: [consoleJsonSink],
 });
 
+// Which entry point do I use?
+//   getLogger()                    — inside middleware-wrapped requests: annotate the
+//                                    spine (.set()) or emit domain rows (.child(Def))
+//   logger (below) / logger.create — jobs, crons, one-shot scripts (no request scope)
+//   createRequestLogger            — only when writing your own middleware
 export { logger };
 `;
 }

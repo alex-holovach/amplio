@@ -249,6 +249,7 @@ Browse the hosted items at [/r/](https://amplio-ruddy.vercel.app/r/) (machine-re
 - `amplio add <badkind> …` — errors with `Unknown add kind "…". Valid kinds: event, middleware, sink, enricher, integration.` (no silent fallthrough).
 - `amplio add event <name>` — prints `matched registry event` or `generated starter schema`. Names need two+ segments (`post.created`, `auth.user.signed_up`); hyphenated registry ids from `list` (e.g. `auth-user-signed-in`) are accepted and mapped to the dot name.
 - `amplio add enricher query-allowlist` — wires an enricher that drops `http.search` by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.
+- `amplio add … --dry-run` — previews the install: which files would be created/overwritten/skipped, which barrels and `logger.ts` edits would be wired, which dependencies would be added. Writes nothing.
 - `amplio list --json` — machine-readable registry listing (events listed by dot name).
 - `amplio doctor` — wiring checks (middleware exports, event schemas, tsconfig paths, Turbopack `../logger` import on `telemetry/middleware/next.ts` and `trpc.ts`, `NEXT_RUNTIME` guard in instrumentation.ts, event barrel exports including shadcn-installed events).
 - `amplio doctor --fix` — regenerates missing event barrel `index.ts` exports, prunes stale ones, and coalesces repeated per-module export lines into one statement.
@@ -269,9 +270,14 @@ By default the CLI reads the bundled `registry/` shipped in `@useamplio/cli`. Se
 
 Absolute paths work too. Resolution: `amplio.json` → bundled registry → monorepo checkout fallback (dev only).
 
-### OTLP sink default
+### OTLP sink defaults
 
-Registry `otlpSink` defaults to **`throwOnError: false`** — export failures log a one-time dev warning and are swallowed. Pass `throwOnError: true` to fail hard on network or HTTP errors.
+Registry `otlpSink` defaults:
+
+- **`throwOnError: false`** — export failures log a one-time dev warning and are swallowed. Pass `throwOnError: true` to fail hard on network or HTTP errors.
+- **Endpoint** — `otlpSink({ endpoint })`, else `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` (full URL, used verbatim per the OTel spec), else `OTEL_EXPORTER_OTLP_ENDPOINT` (base URL, `/v1/logs` appended). With none set the sink warns once and disables export.
+- **One POST per emit** — fine for dev, not for production request rates. Pass `batch: true` (100 records / 1 s) or `batch: { maxSize, maxWaitMs }` to coalesce; with batching, `await flush()` / pass `waitUntil` on serverless so the final batch is not cut off.
+- **Promoted attributes** — `service`, `event`, `status`, `duration_ms`, `request_id`, `success`, `trpc.path`, `http.path`, `http.method` become typed OTLP attributes (dot paths walk nested fields); override the list with `otlpSink({ attributes: […] })`. The full record always ships in the log body.
 
 ## Feedback
 

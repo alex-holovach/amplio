@@ -142,6 +142,7 @@ export interface LoggerSinkUpdate {
 export async function updateLoggerWithSink(
   loggerPath: string,
   sinkId: string,
+  dryRun = false,
 ): Promise<LoggerSinkUpdate | null> {
   const meta = SINK_META[sinkId];
   if (!meta) {
@@ -177,6 +178,8 @@ export async function updateLoggerWithSink(
     insertedLines.push(`+ ${meta.sinkExpression} appended to init() sinks array`);
   }
 
-  await fs.writeFile(loggerPath, updated, "utf8");
+  if (!dryRun) {
+    await fs.writeFile(loggerPath, updated, "utf8");
+  }
   return { insertedLines };
 }

@@ -10,6 +10,7 @@ describe("otlpSink", () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
     delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    delete process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT;
     delete process.env.OTEL_EXPORTER_OTLP_HEADERS;
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -31,8 +32,181 @@ describe("otlpSink", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledOnce();
-    expect(warnSpy).toHaveBeenCalledWith(
-      "otlpSink: OTEL_EXPORTER_OTLP_ENDPOINT is not set; OTLP export is disabled",
+    const warning = warnSpy.mock.calls[0]![0] as string;
+    expect(warning).toContain("[amplio] otlpSink:");
+    expect(warning).toContain("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT");
+    expect(warning).toContain("OTEL_EXPORTER_OTLP_ENDPOINT");
+    expect(warning).toContain("OTLP export is disabled");
+  });
+
+  it("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT is used verbatim (no /v1/logs appended)", async () => {
+    process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT =
+      "https://otel.example.com/custom/logs-path";
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+
+    const sink = otlpSink();
+    await sink({ event: "test.event" } as LogRecord);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://otel.example.com/custom/logs-path",
+    );
+  });
+
+  it("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT wins over OTEL_EXPORTER_OTLP_ENDPOINT", async () => {
+    process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT =
+      "https://logs.example.com/v1/logs";
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://base.example.com";
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+
+    const sink = otlpSink();
+    await sink({ event: "test.event" } as LogRecord);
+
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://logs.example.com/v1/logs");
+  });
+
+  it("options.endpoint wins over both env endpoints", async () => {
+    process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT = "https://logs.example.com/v1/logs";
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://base.example.com";
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+
+    const sink = otlpSink({ endpoint: "https://option.example.com" });
+    await sink({ event: "test.event" } as LogRecord);
+
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://option.example.com/v1/logs");
+  });
+
+  it("promotes nested trpc.path / http.path / http.method by default", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({ endpoint: "https://otel.example.com" });
+
+    await sink({
+      event: "trpc.request",
+      trpc: { path: "post.create", type: "mutation" },
+      http: { path: "/api/trpc/post.create", method: "POST" },
+    } as LogRecord);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    const attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0]
+      .attributes as Array<{ key: string; value: Record<string, unknown> }>;
+    expect(attributes.find((a) => a.key === "trpc.path")).toEqual({
+      key: "trpc.path",
+      value: { stringValue: "post.create" },
+    });
+    expect(attributes.find((a) => a.key === "http.path")).toEqual({
+      key: "http.path",
+      value: { stringValue: "/api/trpc/post.create" },
+    });
+    expect(attributes.find((a) => a.key === "http.method")).toEqual({
+      key: "http.method",
+      value: { stringValue: "POST" },
+    });
+    // trpc.type is not in the default promotion list
+    expect(attributes.map((a) => a.key)).not.toContain("trpc.type");
+  });
+
+  it("attributes option replaces the default promotion list", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      attributes: ["event", "trpc.type"],
+    });
+
+    await sink({
+      event: "trpc.request",
+      service: "my-api",
+      trpc: { path: "post.create", type: "mutation" },
+    } as LogRecord);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    const attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0]
+      .attributes as Array<{ key: string; value: Record<string, unknown> }>;
+    expect(attributes.map((a) => a.key).sort()).toEqual(["event", "trpc.type"]);
+    expect(attributes.find((a) => a.key === "trpc.type")).toEqual({
+      key: "trpc.type",
+      value: { stringValue: "mutation" },
+    });
+  });
+
+  it("batch: maxSize reached -> one POST with all buffered logRecords", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      batch: { maxSize: 3, maxWaitMs: 60_000 },
+    });
+
+    const deliveries = [
+      sink({ event: "a", service: "my-api" } as LogRecord),
+      sink({ event: "b", service: "my-api" } as LogRecord),
+      sink({ event: "c", service: "my-api" } as LogRecord),
+    ];
+    await Promise.all(deliveries);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    expect(body.resourceLogs).toHaveLength(1);
+    expect(body.resourceLogs[0].scopeLogs[0].logRecords).toHaveLength(3);
+  });
+
+  it("batch: maxWaitMs timer flushes a partial batch", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      batch: { maxSize: 100, maxWaitMs: 10 },
+    });
+
+    await sink({ event: "solo" } as LogRecord);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    expect(body.resourceLogs[0].scopeLogs[0].logRecords).toHaveLength(1);
+  });
+
+  it("batch: records with different service/env land in separate resourceLogs groups", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      batch: { maxSize: 2, maxWaitMs: 60_000 },
+    });
+
+    await Promise.all([
+      sink({ event: "a", service: "api-one" } as LogRecord),
+      sink({ event: "b", service: "api-two" } as LogRecord),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    expect(body.resourceLogs).toHaveLength(2);
+    const names = body.resourceLogs.map(
+      (rl: { resource: { attributes: Array<{ key: string; value: { stringValue: string } }> } }) =>
+        rl.resource.attributes.find((a: { key: string }) => a.key === "service.name")!
+          .value.stringValue,
+    );
+    expect(names.sort()).toEqual(["api-one", "api-two"]);
+  });
+
+  it("batch + fetch 500 (default throwOnError) -> resolves, warns once", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500 });
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      batch: { maxSize: 1, maxWaitMs: 10 },
+    });
+
+    await expect(sink({ event: "a" } as LogRecord)).resolves.toBeUndefined();
+    await expect(sink({ event: "b" } as LogRecord)).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledOnce();
+  });
+
+  it("batch + throwOnError true -> the batch promise rejects", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500 });
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      throwOnError: true,
+      batch: { maxSize: 1, maxWaitMs: 10 },
+    });
+
+    await expect(sink({ event: "a" } as LogRecord)).rejects.toThrow(
+      "OTLP export failed with status 500",
     );
   });
 

@@ -47,6 +47,7 @@ function parseCliArgs() {
         strict: { type: "boolean", default: false },
         verbose: { type: "boolean", default: false },
         force: { type: "boolean", default: false },
+        "dry-run": { type: "boolean", default: false },
         json: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
         version: { type: "boolean", short: "V", default: false },
@@ -96,6 +97,11 @@ async function main(): Promise<void> {
 
   if (values.force && command !== "add") {
     console.error("error: --force is only valid with add");
+    process.exit(1);
+  }
+
+  if (values["dry-run"] && command !== "add") {
+    console.error("error: --dry-run is only valid with add");
     process.exit(1);
   }
 
@@ -239,7 +245,11 @@ async function main(): Promise<void> {
         throw new Error(`Missing add name. Example: ${examples[kind as (typeof VALID_ADD_KINDS)[number]]}`);
       }
 
-      const options = { cwd, force: values.force ?? false };
+      const options = {
+        cwd,
+        force: values.force ?? false,
+        dryRun: values["dry-run"] ?? false,
+      };
 
       for (const id of ids) {
         switch (kind as (typeof VALID_ADD_KINDS)[number]) {

@@ -22,6 +22,8 @@ export { deepMerge } from "./deep-merge.js";
 export { redactRecord } from "./redact.js";
 export { shouldSample } from "./sampling.js";
 export { flush, runSinks, runSinksSync } from "./sinks.js";
+export { memorySink } from "./memory-sink.js";
+export type { MemorySink } from "./memory-sink.js";
 export { scheduleFlush, resetScheduleFlushWarningForTests } from "./schedule-flush.js";
 export type { ScheduleFlushOptions } from "./schedule-flush.js";
 export { trpcErrorHttpStatus } from "./trpc-status.js";

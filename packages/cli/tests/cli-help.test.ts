@@ -1676,3 +1676,80 @@ describe("cli --version", () => {
     expect(result.stdout.trim()).toBe(cliPackageVersion);
   });
 });
+
+describe("cli add --dry-run", () => {
+  it("add sink otlp --dry-run previews without writing", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-dry-run-sink-"));
+    await initWithRegistry(cwd, "test-app");
+    const loggerBefore = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
+
+    const result = runCli(["add", "sink", "otlp", "--cwd", cwd, "--dry-run"]);
+    expectCliStatus(result, 0, "add sink otlp --dry-run");
+
+    expect(result.stdout).toContain("(would create)");
+    expect(result.stdout).toContain("would auto-wire sink");
+    expect(result.stdout).toContain("(dry run — nothing was written)");
+
+    expect(existsSync(path.join(cwd, "telemetry/sinks/otlp.ts"))).toBe(false);
+    expect(await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8")).toBe(loggerBefore);
+  });
+
+  it("add event --dry-run (starter schema) previews without writing", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-dry-run-event-"));
+    await initWithRegistry(cwd, "test-app");
+
+    const result = runCli(["add", "event", "post.created", "--cwd", cwd, "--dry-run"]);
+    expectCliStatus(result, 0, "add event post.created --dry-run");
+
+    expect(result.stdout).toContain("(would create)");
+    expect(result.stdout).toContain("would wire barrel export");
+    expect(result.stdout).toContain("(dry run — nothing was written)");
+    expect(existsSync(path.join(cwd, "telemetry/events/post/created.ts"))).toBe(false);
+  });
+
+  it("--dry-run is rejected outside add", async () => {
+    const result = runCli(["doctor", "--dry-run"]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--dry-run is only valid with add");
+  });
+
+  it("add --help mentions --dry-run", () => {
+    const result = runCli(["add", "--help"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("--dry-run");
+  });
+});
+
+describe("cli add report formatting", () => {
+  it("skip lines carry the --force hint instead of a bare glyph", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-skip-glyph-"));
+    await initWithRegistry(cwd, "test-app");
+
+    const first = runCli(["add", "sink", "console", "--cwd", cwd]);
+    expectCliStatus(first, 0, "first add sink console");
+
+    const second = runCli(["add", "sink", "console", "--cwd", cwd]);
+    expectCliStatus(second, 0, "second add sink console");
+    expect(second.stdout).toContain("telemetry/sinks/console.ts (exists — --force to overwrite)");
+  });
+
+  it("add integration next-auth prints each barrel line once", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-dedupe-barrels-"));
+    await initWithRegistry(cwd, "test-app");
+
+    const result = runCli(["add", "integration", "next-auth", "--cwd", cwd]);
+    expectCliStatus(result, 0, "add integration next-auth");
+
+    const rootBarrelLines = result.stdout
+      .split("\n")
+      .filter((line) => line.trim() === `✓ ${path.join("telemetry", "events", "index.ts")}`);
+    expect(rootBarrelLines).toHaveLength(1);
+
+    const domainBarrelLines = result.stdout
+      .split("\n")
+      .filter(
+        (line) => line.trim() === `✓ ${path.join("telemetry", "events", "auth", "index.ts")}`,
+      );
+    expect(domainBarrelLines).toHaveLength(1);
+  });
+});

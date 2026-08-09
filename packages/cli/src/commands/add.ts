@@ -34,9 +34,11 @@ function resolveEnricherId(id: string): string {
   return ENRICHER_ALIASES[id] ?? id;
 }
 
-async function appendGitignoreJsonSink(cwd: string): Promise<"created" | "updated" | "skipped"> {
+async function appendGitignoreJsonSink(
+  cwd: string,
+  dryRun = false,
+): Promise<"created" | "updated" | "skipped"> {
   const gitignorePath = path.join(cwd, ".gitignore");
-  const entry = "amplio.jsonl";
   const block = "# amplio JSON sink output\namplio.jsonl\n";
 
   if (await pathExists(gitignorePath)) {
@@ -44,16 +46,23 @@ async function appendGitignoreJsonSink(cwd: string): Promise<"created" | "update
     if (/(^|\n)\s*amplio\.jsonl(\s|$)/m.test(current)) {
       return "skipped";
     }
-    const next = current.endsWith("\n") ? `${current}${block}` : `${current}\n${block}`;
-    await fs.writeFile(gitignorePath, next, "utf8");
+    if (!dryRun) {
+      const next = current.endsWith("\n") ? `${current}${block}` : `${current}\n${block}`;
+      await fs.writeFile(gitignorePath, next, "utf8");
+    }
     return "updated";
   }
 
-  await fs.writeFile(gitignorePath, block, "utf8");
+  if (!dryRun) {
+    await fs.writeFile(gitignorePath, block, "utf8");
+  }
   return "created";
 }
 
-async function appendEnvExampleJsonSink(cwd: string): Promise<"updated" | "skipped"> {
+async function appendEnvExampleJsonSink(
+  cwd: string,
+  dryRun = false,
+): Promise<"updated" | "skipped"> {
   const envExamplePath = path.join(cwd, ".env.example");
   if (!(await pathExists(envExamplePath))) {
     return "skipped";
@@ -64,10 +73,12 @@ async function appendEnvExampleJsonSink(cwd: string): Promise<"updated" | "skipp
     return "skipped";
   }
 
-  const block =
-    "\n# Path for the amplio JSON file sink (defaults to amplio.jsonl)\n# AMPLIO_JSON_SINK_PATH=amplio.jsonl\n";
-  const next = current.endsWith("\n") ? `${current}${block.slice(1)}` : `${current}${block}`;
-  await fs.writeFile(envExamplePath, next, "utf8");
+  if (!dryRun) {
+    const block =
+      "\n# Path for the amplio JSON file sink (defaults to amplio.jsonl)\n# AMPLIO_JSON_SINK_PATH=amplio.jsonl\n";
+    const next = current.endsWith("\n") ? `${current}${block.slice(1)}` : `${current}${block}`;
+    await fs.writeFile(envExamplePath, next, "utf8");
+  }
   return "updated";
 }
 
@@ -76,10 +87,30 @@ const INTEGRATION_IDS = new Set(["better-auth", "clerk", "next-auth", "resend", 
 export interface AddOptions {
   cwd: string;
   force?: boolean;
+  /** Preview mode: print what would be created/updated/wired, write nothing. */
+  dryRun?: boolean;
 }
 
 function itemId(kind: string, id: string): string {
   return `${kind}-${id}`;
+}
+
+function fileStatusLine(
+  rel: string,
+  status: "created" | "updated" | "skipped",
+  dryRun: boolean,
+): string {
+  if (status === "created") {
+    return dryRun ? `✓ ${rel} (would create)` : `✓ ${rel}`;
+  }
+  if (status === "updated") {
+    return dryRun ? `↻ ${rel} (would overwrite)` : `↻ ${rel}`;
+  }
+  return `· ${rel} (exists — --force to overwrite)`;
+}
+
+function printDryRunFooter(): void {
+  console.log("  (dry run — nothing was written)");
 }
 
 async function getTelemetryDir(cwd: string): Promise<string> {
@@ -112,22 +143,25 @@ async function installByName(
   const items = await resolveRegistryDependencies(registryPath, manifest, item);
   const telemetryDir = await getTelemetryDir(cwd);
   const paths = resolveProjectPaths(cwd, telemetryDir);
+  const dryRun = options.dryRun ?? false;
 
-  for (const entry of items) {
-    if (entry.files.some((file) => file.target?.includes("/middleware/"))) {
-      await ensureDir(paths.middleware);
-    }
-    if (entry.files.some((file) => file.target?.includes("/sinks/"))) {
-      await ensureDir(paths.sinks);
-    }
-    if (entry.files.some((file) => file.target?.includes("/enrichers/"))) {
-      await ensureDir(paths.enrichers);
-    }
-    if (entry.files.some((file) => file.target?.includes("/integrations/"))) {
-      await ensureDir(paths.integrations);
-    }
-    if (entry.files.some((file) => file.target?.includes("/events/"))) {
-      await ensureDir(paths.events);
+  if (!dryRun) {
+    for (const entry of items) {
+      if (entry.files.some((file) => file.target?.includes("/middleware/"))) {
+        await ensureDir(paths.middleware);
+      }
+      if (entry.files.some((file) => file.target?.includes("/sinks/"))) {
+        await ensureDir(paths.sinks);
+      }
+      if (entry.files.some((file) => file.target?.includes("/enrichers/"))) {
+        await ensureDir(paths.enrichers);
+      }
+      if (entry.files.some((file) => file.target?.includes("/integrations/"))) {
+        await ensureDir(paths.integrations);
+      }
+      if (entry.files.some((file) => file.target?.includes("/events/"))) {
+        await ensureDir(paths.events);
+      }
     }
   }
 
@@ -141,16 +175,17 @@ async function installByName(
       registryPath,
       telemetryDir,
       force: options.force,
+      dryRun,
     });
 
     for (const file of [...result.created, ...result.updated, ...result.skipped]) {
       const rel = path.relative(cwd, file);
-      const marker = result.created.includes(file)
-        ? "✓"
+      const status = result.created.includes(file)
+        ? "created"
         : result.updated.includes(file)
-          ? "↻"
-          : "·";
-      console.log(`  ${marker} ${rel}`);
+          ? "updated"
+          : "skipped";
+      console.log(`  ${fileStatusLine(rel, status, dryRun)}`);
       if (rel.replace(/\\/g, "/").includes("/events/")) {
         installedEventFiles.push(file);
       }
@@ -166,12 +201,29 @@ async function installByName(
 
   // Registry-dependency events (e.g. an integration pulling in its event)
   // must be wired into the barrels like a direct `add event`, or the install
-  // is only half done and tsc/doctor complain immediately after.
-  for (const file of installedEventFiles) {
-    await wireInstalledEventBarrels(cwd, telemetryDir, file);
+  // is only half done and tsc/doctor complain immediately after. One printed
+  // set for the whole install — an integration pulling in two events touches
+  // the same barrels twice, but the report should say so once.
+  const printedBarrels = new Set<string>();
+  if (dryRun) {
+    for (const file of installedEventFiles) {
+      const domainBarrel = path.join(path.dirname(file), "index.ts");
+      const rootBarrel = path.join(cwd, telemetryDir, "events", "index.ts");
+      for (const barrel of [domainBarrel, rootBarrel]) {
+        const rel = path.relative(cwd, barrel);
+        if (!printedBarrels.has(rel)) {
+          printedBarrels.add(rel);
+          console.log(`  ~ ${rel} (would wire barrel export)`);
+        }
+      }
+    }
+  } else {
+    for (const file of installedEventFiles) {
+      await wireInstalledEventBarrels(cwd, telemetryDir, file, printedBarrels);
+    }
   }
 
-  await mergePackageDependencies(cwd, [...mergedDeps], [...mergedDevDeps]);
+  await mergePackageDependencies(cwd, [...mergedDeps], [...mergedDevDeps], dryRun);
 }
 
 const DEFINE_EVENT_EXPORT_RE =
@@ -181,6 +233,7 @@ async function wireInstalledEventBarrels(
   cwd: string,
   telemetryDir: string,
   eventFile: string,
+  printed?: Set<string>,
 ): Promise<void> {
   try {
     const source = await fs.readFile(eventFile, "utf8");
@@ -195,7 +248,7 @@ async function wireInstalledEventBarrels(
     if (relativePath !== eventNameToRelativePath(eventName!)) {
       return;
     }
-    await updateEventBarrels(cwd, telemetryDir, relativePath, exportName!);
+    await updateEventBarrels(cwd, telemetryDir, relativePath, exportName!, printed);
   } catch {
     // best effort — doctor --fix covers anything missed here
   }
@@ -206,6 +259,8 @@ export async function updateEventBarrels(
   telemetryDir: string,
   eventRelativePath: string,
   exportName: string,
+  /** Barrel paths already reported this run — suppresses duplicate ✓ lines. */
+  printed?: Set<string>,
 ): Promise<void> {
   const telemetryRoot = path.join(cwd, telemetryDir);
   const eventFile = path.join(telemetryRoot, eventRelativePath);
@@ -228,8 +283,16 @@ export async function updateEventBarrels(
     `export { ${exportName} } from "${domainExportPath}";`,
   );
 
-  console.log(`  ✓ ${path.relative(cwd, domainBarrel)}`);
-  console.log(`  ✓ ${path.relative(cwd, rootBarrel)}`);
+  for (const barrel of [domainBarrel, rootBarrel]) {
+    const rel = path.relative(cwd, barrel);
+    if (printed) {
+      if (printed.has(rel)) {
+        continue;
+      }
+      printed.add(rel);
+    }
+    console.log(`  ✓ ${rel}`);
+  }
 }
 
 const DEFINE_EVENT_NAME_RE = /defineEvent\s*\(\s*["']([^"']+)["']/;
@@ -276,7 +339,10 @@ export async function runAddEvent(rawEventName: string, options: AddOptions): Pr
   const relativePath = eventNameToRelativePath(eventName);
   const targetPath = path.join(paths.telemetry, relativePath);
 
-  await ensureDir(path.dirname(targetPath));
+  const dryRun = options.dryRun ?? false;
+  if (!dryRun) {
+    await ensureDir(path.dirname(targetPath));
+  }
   console.log(`amplio add event ${eventName}`);
   if (eventName !== rawEventName) {
     console.log(`  (registry id ${rawEventName} → event ${eventName})`);
@@ -295,6 +361,10 @@ export async function runAddEvent(rawEventName: string, options: AddOptions): Pr
       if (eventExists && !(options.force ?? false)) {
         console.log("  · skipped existing event file");
       }
+      if (dryRun) {
+        printDryRunFooter();
+        return;
+      }
       await formatTelemetry(options.cwd);
       return;
     }
@@ -308,8 +378,30 @@ export async function runAddEvent(rawEventName: string, options: AddOptions): Pr
       : renderEventTemplate(eventName, exportName);
 
   console.log(`  generated starter schema (no registry template for ${eventName})`);
+
+  if (dryRun) {
+    const exists = await pathExists(targetPath);
+    const status = exists ? ((options.force ?? false) ? "updated" : "skipped") : "created";
+    console.log(
+      `  ${fileStatusLine(path.relative(options.cwd, targetPath), status, true)}`,
+    );
+    if (status !== "skipped") {
+      const domainBarrel = path.join(path.dirname(targetPath), "index.ts");
+      const rootBarrel = path.join(paths.events, "index.ts");
+      for (const barrel of [domainBarrel, rootBarrel]) {
+        console.log(`  ~ ${path.relative(options.cwd, barrel)} (would wire barrel export)`);
+      }
+    } else {
+      console.log("  · skipped existing event file");
+    }
+    printDryRunFooter();
+    return;
+  }
+
   const status = await writeFileOrSkip(targetPath, content, options.force ?? false);
-  console.log(`  ${status === "skipped" ? "·" : "✓"} ${path.relative(options.cwd, targetPath)}`);
+  console.log(
+    `  ${fileStatusLine(path.relative(options.cwd, targetPath), status, false)}`,
+  );
 
   if (status !== "skipped") {
     await updateEventBarrels(options.cwd, telemetryDir, relativePath, exportName);
@@ -334,6 +426,10 @@ export async function runAddMiddleware(id: string, options: AddOptions): Promise
   if (middlewareExists && !(options.force ?? false)) {
     console.log("  · skipped existing middleware file");
   }
+  if (options.dryRun) {
+    printDryRunFooter();
+    return;
+  }
   await formatTelemetry(options.cwd);
 }
 
@@ -353,23 +449,35 @@ export async function runAddSink(id: string, options: AddOptions): Promise<void>
     console.log("  · skipped existing sink file");
   }
 
-  const loggerUpdate = await updateLoggerWithSink(paths.logger, id);
+  const dryRun = options.dryRun ?? false;
+  const loggerUpdate = await updateLoggerWithSink(paths.logger, id, dryRun);
   if (loggerUpdate) {
-    console.log(`  ✓ ${path.relative(options.cwd, paths.logger)} (auto-wired sink)`);
+    const rel = path.relative(options.cwd, paths.logger);
+    console.log(`  ${dryRun ? `~ ${rel} (would auto-wire sink)` : `✓ ${rel} (auto-wired sink)`}`);
     for (const line of loggerUpdate.insertedLines) {
       console.log(`    ${line}`);
     }
   }
 
   if (id === "json") {
-    const gitignoreResult = await appendGitignoreJsonSink(options.cwd);
+    const gitignoreResult = await appendGitignoreJsonSink(options.cwd, dryRun);
     if (gitignoreResult !== "skipped") {
-      console.log(`  ✓ .gitignore (${gitignoreResult})`);
+      console.log(
+        dryRun
+          ? `  ~ .gitignore (would add amplio.jsonl)`
+          : `  ✓ .gitignore (${gitignoreResult})`,
+      );
     }
-    const envResult = await appendEnvExampleJsonSink(options.cwd);
+    const envResult = await appendEnvExampleJsonSink(options.cwd, dryRun);
     if (envResult === "updated") {
-      console.log("  ✓ .env.example");
+      console.log(
+        dryRun ? "  ~ .env.example (would document AMPLIO_JSON_SINK_PATH)" : "  ✓ .env.example",
+      );
     }
+  }
+  if (dryRun) {
+    printDryRunFooter();
+    return;
   }
   await formatTelemetry(options.cwd);
 }
@@ -404,14 +512,20 @@ export async function runAddEnricher(id: string, options: AddOptions): Promise<v
     return;
   }
 
-  const loggerUpdated = await updateLoggerWithEnricher(paths.logger, registryId);
+  const dryRun = options.dryRun ?? false;
+  const loggerUpdated = await updateLoggerWithEnricher(paths.logger, registryId, dryRun);
   if (loggerUpdated) {
-    console.log(`  ✓ ${path.relative(options.cwd, paths.logger)}`);
+    const rel = path.relative(options.cwd, paths.logger);
+    console.log(dryRun ? `  ~ ${rel} (would auto-wire enricher)` : `  ✓ ${rel}`);
   }
   if (registryId === "query-allowlist") {
     console.log(
       '  queryAllowlist() drops http.search entirely — pass { allow: ["page", "sort"] } in logger.ts to keep specific params (others become [REDACTED])',
     );
+  }
+  if (dryRun) {
+    printDryRunFooter();
+    return;
   }
   await formatTelemetry(options.cwd);
 }
@@ -432,6 +546,10 @@ export async function runAddIntegration(id: string, options: AddOptions): Promis
 
   if (integrationExists && !(options.force ?? false)) {
     console.log("  · skipped existing integration file");
+  }
+  if (options.dryRun) {
+    printDryRunFooter();
+    return;
   }
   await formatTelemetry(options.cwd);
 }

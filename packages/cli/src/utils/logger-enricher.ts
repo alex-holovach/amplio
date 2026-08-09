@@ -310,6 +310,7 @@ function wireEnricherIntoInit(source: string, meta: EnricherMeta): string {
 export async function updateLoggerWithEnricher(
   loggerPath: string,
   enricherId: string,
+  dryRun = false,
 ): Promise<boolean> {
   const meta = ENRICHER_META[enricherId];
   if (!meta || !meta.wireIntoInit) {
@@ -337,6 +338,8 @@ export async function updateLoggerWithEnricher(
     return false;
   }
 
-  await fs.writeFile(loggerPath, updated, "utf8");
+  if (!dryRun) {
+    await fs.writeFile(loggerPath, updated, "utf8");
+  }
   return true;
 }

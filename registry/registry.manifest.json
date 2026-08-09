@@ -47,6 +47,50 @@
       ]
     },
     {
+      "name": "event-page-viewed",
+      "description": "Wide event when a page is viewed (path only — query strings stay out).",
+      "source": "events/page/viewed.ts",
+      "target": "telemetry/events/page/viewed.ts",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio"
+      ]
+    },
+    {
+      "name": "event-job-completed",
+      "description": "Wide event when a background job finishes (success, failed, or cancelled).",
+      "source": "events/job/completed.ts",
+      "target": "telemetry/events/job/completed.ts",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio"
+      ]
+    },
+    {
+      "name": "event-webhook-received",
+      "description": "Wide event when an inbound webhook arrives (provider, event type, signature validity).",
+      "source": "events/webhook/received.ts",
+      "target": "telemetry/events/webhook/received.ts",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio"
+      ]
+    },
+    {
+      "name": "event-payment-refunded",
+      "description": "Wide event when a payment is refunded (full or partial).",
+      "source": "events/payment/refunded.ts",
+      "target": "telemetry/events/payment/refunded.ts",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio"
+      ]
+    },
+    {
       "name": "middleware-hono",
       "description": "Hono middleware that attaches request-scoped amplio context.",
       "source": "middleware/hono.ts",
@@ -124,7 +168,7 @@
       "description": "OTLP sink that exports wide events over OpenTelemetry.",
       "source": "sinks/otlp.ts",
       "target": "telemetry/sinks/otlp.ts",
-      "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (or OTEL_EXPORTER_OTLP_ENDPOINT) in your env. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
+      "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (base URL, /v1/logs appended). Default is one POST per emit — pass otlpSink({ batch: true }) for production traffic. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
       "dependencies": [
         "@useamplio/amplio"
       ]

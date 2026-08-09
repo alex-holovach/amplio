@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.13"
+    "@useamplio/amplio@^0.1.0-alpha.14"
   ],
   "files": [
     {
