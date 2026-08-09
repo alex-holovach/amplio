@@ -46,7 +46,7 @@ Valid kinds: `event`, `middleware`, `sink`, `enricher`, `integration`.
 - Event names need two+ lowercase dot-separated segments (`post.created`, `auth.user.signed_up`). `add event` prints whether it `matched registry event` or `generated starter schema`.
 - `add` never overwrites an existing file under `telemetry/` — re-run with `--force` to overwrite with the current registry template.
 - `--dry-run` previews files, wiring, and dependencies without writing anything.
-- `add integration <id>` (next-auth, better-auth, clerk, resend, polar) prints the manual wiring steps after installing.
+- `add integration <id>` (next-auth, better-auth, clerk, resend, polar) prints the manual wiring steps after installing, and warns when the integration's target package is missing from `package.json`.
 
 `amplio add` wires barrels, `logger.ts`, `.gitignore`, and `.env.example` in one command. shadcn drops files only — run `doctor --fix` after.
 
@@ -57,6 +57,8 @@ npx @useamplio/cli@alpha list
 npx @useamplio/cli@alpha list middleware --json
 ```
 
+Works without prior `init` — it reads the bundled registry. Filter by kind; each line includes the human title (e.g. Console Sink). `--json` prints a machine-readable listing (events by dot name).
+
 ## doctor
 
 ```bash
@@ -65,9 +67,9 @@ npx @useamplio/cli@alpha doctor --fix
 npx @useamplio/cli@alpha doctor --strict   # CI gate
 ```
 
-Checks middleware exports, event barrels (in both directions — missing exports *and* stale ones), Turbopack `../logger` imports, the `NEXT_RUNTIME` instrumentation guard, and T3 wiring (`route.ts` still wraps with `withAmplio`, `trpc.ts` still uses `amplioTrpcMiddleware`).
+Checks middleware exports, event barrels (in both directions — missing exports *and* stale ones), Turbopack `../logger` imports, the `NEXT_RUNTIME` instrumentation guard, and T3 wiring (`route.ts` still wraps with `withAmplio`, `trpc.ts` still uses `amplioTrpcMiddleware`, the NextAuth route is still wrapped) — the app-side edits most likely to be lost in a merge or T3 upgrade.
 
-`--fix` regenerates missing event barrel exports and prunes stale ones. `--strict` exits non-zero on warnings for CI; without it, doctor prints an explicit `(exit 0 with warnings …)` note.
+`--fix` regenerates missing event barrel exports and prunes stale ones. `--strict` exits non-zero on warnings for CI; without it, doctor prints an explicit `(exit 0 with warnings …)` note. `--verbose` always prints the end-to-end verification epilogue (otherwise it appears only after `--fix` or when something needs attention).
 
 ## smoke
 
@@ -76,6 +78,17 @@ npx @useamplio/cli@alpha smoke http://localhost:3000/api/health
 ```
 
 End-to-end verification: requests the URL, watches `amplio*.jsonl` for a newly emitted row, and reports PASS/FAIL with a diagnosis (wrong port / unwired route / init never ran). Requires the JSON sink (`amplio add sink json`); `--timeout <seconds>` adjusts the wait (default 10).
+
+## amplio.json
+
+`init` writes `amplio.json` at the project root — plain JSON, safe to hand-edit, read only by the CLI (the runtime never loads it):
+
+| Field | Default | Purpose |
+|---|---|---|
+| `telemetryDir` | `"telemetry"` | Directory the CLI scaffolds into and `doctor` validates |
+| `packageManager` | detected | Used for install commands and printed tips (`pnpm`, `npm`, `yarn`, `bun`) |
+| `typescript` | `true` | TypeScript defaults for generated files |
+| `registry` | *(unset)* | Path to a local registry checkout — overrides the CLI's bundled registry |
 
 ## shadcn registry
 

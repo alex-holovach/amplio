@@ -60,6 +60,7 @@ The runtime imports `node:async_hooks` at module top level — never import `tel
 
 ```typescript
 import { amplioMiddleware, getRequestLogger } from "./telemetry/middleware/express";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
 
 app.use(amplioMiddleware());
 
@@ -76,6 +77,7 @@ app.post("/signup", (req, res) => {
 
 ```typescript
 import { amplioPlugin, getRequestLogger } from "./telemetry/middleware/fastify";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
 
 await app.register(amplioPlugin);
 

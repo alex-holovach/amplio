@@ -49,6 +49,8 @@ await flush();            // don't lose the last batch on serverless
 
 Defaults: `throwOnError: false` (export failures log a one-time dev warning and are swallowed), one POST per emit (fine for dev — pass `batch` for production rates). `service` / `env` map to OTLP resource `service.name` / `deployment.environment`; `service`, `event`, `status`, `duration_ms`, `request_id`, and other key fields become typed OTLP attributes (override with `otlpSink({ attributes: […] })`); the full record always ships in the log body.
 
+A dev-only `async sinks may be cut off without waitUntil/after` warning means an async delivery (OTLP) was still pending when a request finished — pass `waitUntil` where your platform provides it, or `await flush()` before returning. It never fires with only synchronous sinks (console + JSONL).
+
 ## Enrichers
 
 Run in order at emit time; each sees fields from previous enrichers. The return value **replaces** the payload (not deep-merge) — return `{ ...record, … }` to keep prior fields. A throwing enricher is skipped (dev warn); later enrichers and sinks still run.
@@ -60,6 +62,8 @@ init({
   ],
 });
 ```
+
+The registry ships two ready-made enrichers: `requestMetadata` (route, IP, user agent, request id — empty strings are treated as unset, and an empty `requestId` never overwrites an existing `request_id`) and `serviceMetadata` (reads `AMPLIO_SERVICE` / `AMPLIO_SERVICE_VERSION` / `AMPLIO_REGION`; name falls back to `record.service`).
 
 ## Redaction
 
@@ -91,5 +95,7 @@ init({
 ```
 
 `keep` rules are OR'd — any match always delivers. `field` supports dotted paths (`user.plan`) with `equals`, `matches` (string regex), `gte`, or `lte`; `gte` + `lte` on one rule form an inclusive range. `rate: 0` drops everything that matches no rule; `rate: 1` always keeps.
+
+To keep **all** domain events wholesale, match names that are not a transport spine: `{ field: "@event", matches: "^(?!http\\.request$|trpc\\.request$)" }`.
 
 `.emit()` returns **`null`** when sampling skips delivery (enrichers and redaction still run; only sinks are skipped) — don't gate retries or metrics on a non-null return in sampled paths.

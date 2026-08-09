@@ -56,6 +56,16 @@ await getLogger().time(PostCreated, async (ev) => {
 });
 ```
 
+## create() for jobs and scripts
+
+Outside request scope (cron jobs, scripts, CLI runs), `logger.create()` starts a standalone wide-event scope:
+
+```typescript
+logger.create({ job: "nightly-sync" })
+  .set({ records_processed: 42 })
+  .emit();
+```
+
 ## success field
 
 When neither `status` nor an explicit `success` is set, `success` is **omitted** from the record. Numeric `status` in `[200, 400)` or the exact string `"ok"` derives `success: true`. Explicit `success` always wins.

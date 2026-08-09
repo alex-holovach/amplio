@@ -28,6 +28,40 @@ export async function register() {
 }
 ```
 
+## Manual wiring
+
+If your files have drifted from the stock T3 shape, `init` leaves them alone and prints the manual snippets. Two edits:
+
+```typescript
+// src/app/api/trpc/[trpc]/route.ts
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { withAmplio } from "../../../../../telemetry/middleware/next";
+import { appRouter } from "@/server/api/root";
+import { createTRPCContext } from "@/server/api/trpc";
+
+const handler = (request: Request) =>
+  fetchRequestHandler({
+    endpoint: "/api/trpc",
+    req: request,
+    router: appRouter,
+    createContext: () => createTRPCContext({ headers: request.headers }),
+  });
+
+export const GET = withAmplio(handler);
+export const POST = withAmplio(handler);
+```
+
+```typescript
+// src/server/api/trpc.ts
+import { amplioTrpcMiddleware } from "../../../telemetry/middleware/trpc";
+
+const amplioMiddleware = t.middleware(amplioTrpcMiddleware());
+export const publicProcedure = t.procedure.use(amplioMiddleware);
+// repeat for protectedProcedure / other bases
+```
+
+`withAmplio` owns the `http.request` spine; `amplioTrpcMiddleware` annotates it with `trpc.path`, `trpc.type`, and status — it does not emit a sibling row. `amplioTrpcMiddleware()` typechecks under strict `tsconfig` without casts.
+
 ## Domain events from procedures
 
 ```typescript
@@ -104,6 +138,12 @@ export const authConfig = {
 ```
 
 Every sign-in emits `auth.user.signed_in` (plus `auth.user.signed_up` for first-time registrations), correlated with the request spine via `request_id`. `signOut` / `linkAccount` are not wired by default — the integration file carries commented recipes; it is open code, edit it.
+
+## Errors
+
+tRPC v11 returns `{ ok: false, error }` from `next()` instead of throwing for many procedure failures. The middleware inspects that result and annotates the spine via `.error()`: `error.message`, `error.name` (thrown class name), and `status` / `http.status` derived from the tRPC code (`BAD_REQUEST` → 400, `UNAUTHORIZED` → 401, …). Thrown errors are handled the same way.
+
+When a procedure's Zod input parsing fails, the middleware detects the wrapped `ZodError` and emits structured `error.issues` (`[{ path, message }]`) plus a short `error.message` (`input validation failed: name: …`) — not the pretty-printed multiline ZodError JSON.
 
 ## Batched requests
 
