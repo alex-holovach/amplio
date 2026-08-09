@@ -13,6 +13,8 @@ npx @useamplio/cli@alpha add sink otlp
 
 Each command edits `telemetry/logger.ts` — import + append to `init({ sinks: [...] })`.
 
+A sink installed through shadcn (`npx shadcn add @useamplio/sink-otlp`) is dropped but **not** wired — re-run `amplio add sink otlp`, or add the import and sinks-array entry yourself. `doctor` warns when a sink file exists but is not referenced in `logger.ts`.
+
 ## Console
 
 ```typescript
@@ -63,7 +65,7 @@ init({
 });
 ```
 
-The registry ships two ready-made enrichers: `requestMetadata` (route, IP, user agent, request id — empty strings are treated as unset, and an empty `requestId` never overwrites an existing `request_id`) and `serviceMetadata` (reads `AMPLIO_SERVICE` / `AMPLIO_SERVICE_VERSION` / `AMPLIO_REGION`; name falls back to `record.service`).
+The registry ships two ready-made enrichers — scaffold with `amplio add enricher request-metadata` / `service-metadata`: `requestMetadata` (route, IP, user agent, request id — empty strings are treated as unset, and an empty `requestId` never overwrites an existing `request_id`) and `serviceMetadata` (reads `AMPLIO_SERVICE` / `AMPLIO_SERVICE_VERSION` / `AMPLIO_REGION`; name falls back to `record.service`).
 
 ## Redaction
 

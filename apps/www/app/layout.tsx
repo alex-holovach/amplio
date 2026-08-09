@@ -1,10 +1,21 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
 import { Inter } from 'next/font/google';
+import type { Metadata } from 'next';
+import { appName, siteUrl } from '@/lib/shared';
 
 const inter = Inter({
   subsets: ['latin'],
 });
+
+export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: `${appName} — shadcn for observability`,
+    template: `%s — ${appName}`,
+  },
+  description: 'Schema-first wide-event telemetry that installs as open code in your repo.',
+};
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (

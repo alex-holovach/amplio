@@ -17,6 +17,17 @@ npx @useamplio/cli@alpha add middleware hono
 
 > The unscoped npm name `amplio` is blocked by typo-squatting rules. Always use `@useamplio/cli@alpha`.
 
+Prefer shadcn? `npx shadcn@latest add @useamplio/middleware-hono` drops the same files — finish with `npx @useamplio/cli@alpha doctor --fix` to wire barrels ([CLI reference](/docs/cli#shadcn-registry)).
+
+Verify the wiring end to end:
+
+```bash
+npx @useamplio/cli@alpha doctor                                  # wiring checks
+npx @useamplio/cli@alpha smoke http://localhost:3000/api/health  # PASS/FAIL
+```
+
+`smoke` requests the URL and watches `amplio*.jsonl` for the emitted row — it needs the JSON sink (`add sink json`) and your dev server running.
+
 ## Emit a wide event
 
 ```typescript
