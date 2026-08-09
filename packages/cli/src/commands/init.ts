@@ -252,9 +252,33 @@ function resolveEventName(
   return null;
 }
 
-function printNoStarterEventHint(): void {
+function printNoStarterEventHint(packageManager: string): void {
   console.log("\nNo starter event scaffolded (no auth dependency detected). Add your first domain event:");
-  console.log("  npx @useamplio/cli@alpha add event post.created");
+  console.log(`  ${scriptRunCommand(packageManager, "amplio add event post.created")}`);
+}
+
+/** Any real event file (not a barrel) under telemetry/events/? */
+async function hasExistingEvents(eventsDir: string): Promise<boolean> {
+  if (!(await pathExists(eventsDir))) {
+    return false;
+  }
+
+  async function walk(current: string): Promise<boolean> {
+    const entries = await fs.readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (await walk(full)) {
+          return true;
+        }
+      } else if (entry.isFile() && entry.name.endsWith(".ts") && entry.name !== "index.ts") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return walk(eventsDir);
 }
 
 function scriptRunCommand(packageManager: string, script: string): string {
@@ -354,10 +378,21 @@ async function scaffoldNextInstrumentation(
   const instrumentationTs = path.join(cwd, base, "instrumentation.ts");
   const instrumentationJs = path.join(cwd, base, "instrumentation.js");
 
-  if ((await pathExists(instrumentationTs)) || (await pathExists(instrumentationJs))) {
-    console.log(
-      "\nNext.js: ensure instrumentation.ts imports your telemetry/logger so init() runs at boot.",
-    );
+  const existing = (await pathExists(instrumentationTs))
+    ? instrumentationTs
+    : (await pathExists(instrumentationJs))
+      ? instrumentationJs
+      : null;
+  if (existing) {
+    // Re-runs should read like the first run: `·` when wired, hint when not.
+    const content = await fs.readFile(existing, "utf8");
+    if (/telemetry\/logger/.test(content)) {
+      console.log(`  · ${path.relative(cwd, existing)} already wired`);
+    } else {
+      console.log(
+        "\nNext.js: ensure instrumentation.ts imports your telemetry/logger so init() runs at boot.",
+      );
+    }
     return "exists";
   }
 
@@ -396,7 +431,7 @@ export async function runInit(options: InitOptions): Promise<void> {
 
   const loggerResult = await writeFileIfMissing(
     paths.logger,
-    renderLoggerTemplate(service),
+    renderLoggerTemplate(service, scriptRunCommand(packageManager, "amplio doctor")),
   );
 
   console.log("amplio init");
@@ -550,7 +585,7 @@ export async function runInit(options: InitOptions): Promise<void> {
       "  2. curl any route wrapped with amplio middleware — confirm the port Next actually bound (it moves to 3001+ if 3000 is busy; a wrong-port curl looks identical to dropped events)",
     );
     console.log("  3. Expect one JSON line on stdout (console sink)");
-    console.log("  4. npx @useamplio/cli@alpha doctor");
+    console.log(`  4. ${scriptRunCommand(packageManager, "amplio doctor")}`);
   }
 
   if (t3LayoutDetected) {
@@ -559,8 +594,16 @@ export async function runInit(options: InitOptions): Promise<void> {
     );
   }
 
-  if (!eventName && auto && middlewareName && !hasAuth && explicitEvent !== "none" && !explicitEvent) {
-    printNoStarterEventHint();
+  if (
+    !eventName &&
+    auto &&
+    middlewareName &&
+    !hasAuth &&
+    explicitEvent !== "none" &&
+    !explicitEvent &&
+    !(await hasExistingEvents(paths.events))
+  ) {
+    printNoStarterEventHint(packageManager);
   }
 
   if (

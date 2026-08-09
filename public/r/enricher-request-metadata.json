@@ -5,7 +5,7 @@
   "description": "Enricher that adds request id / HTTP metadata.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.11"
+    "@useamplio/amplio@^0.1.0-alpha.12"
   ],
   "files": [
     {

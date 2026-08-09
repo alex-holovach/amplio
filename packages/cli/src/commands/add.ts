@@ -23,7 +23,11 @@ import { renderAuthUserSignedUpEvent, renderEventTemplate } from "../templates/e
 
 const MIDDLEWARE_IDS = new Set(["hono", "express", "next", "fastify", "trpc"]);
 const SINK_IDS = new Set(["console", "otlp", "json"]);
-const ENRICHER_REGISTRY_IDS = new Set(["service-metadata", "request-metadata"]);
+const ENRICHER_REGISTRY_IDS = new Set([
+  "service-metadata",
+  "request-metadata",
+  "query-allowlist",
+]);
 const ENRICHER_ALIASES: Record<string, string> = { request: "request-metadata" };
 
 function resolveEnricherId(id: string): string {
@@ -228,8 +232,44 @@ export async function updateEventBarrels(
   console.log(`  ✓ ${path.relative(cwd, rootBarrel)}`);
 }
 
-export async function runAddEvent(eventName: string, options: AddOptions): Promise<void> {
-  assertValidEventName(eventName);
+const DEFINE_EVENT_NAME_RE = /defineEvent\s*\(\s*["']([^"']+)["']/;
+
+/**
+ * `list` shows hyphenated registry ids alongside events; accept those as
+ * `add event` input by mapping the id back to the dot name in the item's
+ * defineEvent call (hyphen→dot is ambiguous with underscores, so read it
+ * from the template instead of guessing).
+ */
+async function resolveEventNameArg(name: string, cwd: string): Promise<string> {
+  try {
+    assertValidEventName(name);
+    return name;
+  } catch (error) {
+    if (!name.includes("-") || !/^[a-z][a-z0-9-]*$/.test(name)) {
+      throw error;
+    }
+    try {
+      const registryPath = await resolveRegistryPath(cwd);
+      const manifest = await loadRegistry(registryPath);
+      const item = findRegistryItem(
+        manifest,
+        name.startsWith("event-") ? name : `event-${name}`,
+      );
+      for (const file of item?.files ?? []) {
+        const match = file.content ? DEFINE_EVENT_NAME_RE.exec(file.content) : null;
+        if (match) {
+          return match[1]!;
+        }
+      }
+    } catch {
+      // fall through to the original validation error
+    }
+    throw error;
+  }
+}
+
+export async function runAddEvent(rawEventName: string, options: AddOptions): Promise<void> {
+  const eventName = await resolveEventNameArg(rawEventName, options.cwd);
   const telemetryDir = await getTelemetryDir(options.cwd);
   const paths = resolveProjectPaths(options.cwd, telemetryDir);
   const exportName = eventNameToExport(eventName);
@@ -238,6 +278,9 @@ export async function runAddEvent(eventName: string, options: AddOptions): Promi
 
   await ensureDir(path.dirname(targetPath));
   console.log(`amplio add event ${eventName}`);
+  if (eventName !== rawEventName) {
+    console.log(`  (registry id ${rawEventName} → event ${eventName})`);
+  }
 
   try {
     const registryPath = await resolveRegistryPath(options.cwd);
@@ -364,6 +407,11 @@ export async function runAddEnricher(id: string, options: AddOptions): Promise<v
   const loggerUpdated = await updateLoggerWithEnricher(paths.logger, registryId);
   if (loggerUpdated) {
     console.log(`  ✓ ${path.relative(options.cwd, paths.logger)}`);
+  }
+  if (registryId === "query-allowlist") {
+    console.log(
+      '  queryAllowlist() drops http.search entirely — pass { allow: ["page", "sort"] } in logger.ts to keep specific params (others become [REDACTED])',
+    );
   }
   await formatTelemetry(options.cwd);
 }

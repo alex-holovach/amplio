@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "docs": "Wire into your procedure bases: `const amplioMiddleware = t.middleware(amplioTrpcMiddleware())` then `.use(amplioMiddleware)` on publicProcedure/protectedProcedure. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/server/api/trpc.ts for you.",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.11"
+    "@useamplio/amplio@^0.1.0-alpha.12"
   ],
   "files": [
     {

@@ -136,6 +136,16 @@
       ]
     },
     {
+      "name": "enricher-query-allowlist",
+      "title": "Query Allowlist Enricher",
+      "description": "Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.",
+      "source": "enrichers/query-allowlist.ts",
+      "target": "telemetry/enrichers/query-allowlist.ts",
+      "dependencies": [
+        "@useamplio/amplio"
+      ]
+    },
+    {
       "name": "enricher-request-metadata",
       "description": "Enricher that adds request id / HTTP metadata.",
       "source": "enrichers/request-metadata.ts",

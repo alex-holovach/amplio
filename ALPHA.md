@@ -93,15 +93,15 @@ To annotate the spine only: `getLogger().set({ user: { id: "u_123" } })`.
 
 ### Turbopack / `next dev --turbo`
 
-Before `0.1.0-alpha.8`, Turbopack could compile `instrumentation.ts` and route handlers into **separate module graphs**. Each graph got its own copy of `@useamplio/amplio`, so `init()` in instrumentation was invisible to middleware — `.emit()` returned `null` with no obvious error.
-
-Fixes in alpha.8:
+Turbopack can compile `instrumentation.ts` and route handlers into **separate module graphs**. amplio handles this in three layers:
 
 1. **Runtime** — `init()` and ALS state live on `globalThis[Symbol.for('amplio.state.v1')]` so duplicated bundles share config.
-2. **Templates** — `telemetry/middleware/next.ts` and `trpc.ts` begin with a side-effect `import "../logger";` so that graph runs `init()` even when instrumentation is unreachable.
-3. **`amplio doctor`** — warns when those middleware files lack the `../logger` import (stale scaffolds from before alpha.8).
+2. **Templates** — `telemetry/middleware/next.ts` and `trpc.ts` begin with a side-effect `import "../logger";` so each graph runs `init()` even when instrumentation is unreachable.
+3. **`amplio doctor`** — warns when those middleware files lack the `../logger` import (stale scaffolds from older CLI versions).
 
-Run `npx @useamplio/cli@alpha doctor` after upgrading; regenerate with `amplio add middleware next --force` (or `trpc --force`) if needed.
+Separately, Next compiles `instrumentation.ts` for the **Edge runtime** too — the generated file guards its import with `if (process.env.NEXT_RUNTIME === "nodejs")` so Edge compiles never try to bundle `node:` builtins from `telemetry/` (doctor warns when the guard is missing).
+
+After upgrading the CLI, run `amplio doctor`; regenerate middleware with `amplio add middleware next --force` (or `trpc --force`) if flagged. Historical details live in [CHANGELOG.md](./CHANGELOG.md).
 
 ### Server-only runtime vs client-safe event defs
 
@@ -147,11 +147,7 @@ getLogger().child(PostCreated).set({ post: { id } }).emit();
 // spine: http.request (middleware) + domain: post.created
 ```
 
-> **Wrong spellings (pre-alpha.8 footguns):**
->
-> - `logger.event(Def).emit()` **before alpha.8** inside a request — lost `request_id` correlation.
-> - `getLogger().event(Def).emit()` — **rebinds** the spine to the domain schema and seals it on emit (no separate `http.request` row). Dev now warns loudly when you emit a rebind of an already-named spine.
-> - `.create().event(Def)` — duplicated transport fields on the domain row; `.create()` forks inherited the parent's start time before alpha.8 (fixed: fresh start time).
+> **The one wrong spelling to avoid:** `getLogger().event(Def).emit()` — this **rebinds** the request spine to the domain schema and seals it on emit, so you lose the separate `http.request` row. Use `.child(Def)` instead; dev builds warn loudly when you emit a rebind of an already-named spine. (Older-alpha correlation quirks are in [CHANGELOG.md](./CHANGELOG.md).)
 
 ## tRPC (v11)
 
@@ -248,11 +244,12 @@ Files land under `telemetry/…`.
 
 - `amplio init --paths` — writes the `~telemetry/*` tsconfig path alias (JSONC-comment-safe).
 - `amplio add <badkind> …` — errors with `Unknown add kind "…". Valid kinds: event, middleware, sink, enricher, integration.` (no silent fallthrough).
-- `amplio add event <name>` — prints `matched registry event` or `generated starter schema`. Names need two+ segments (`post.created`, `auth.user.signed_up`).
-- `amplio list --json` — machine-readable registry listing.
-- `amplio doctor` — wiring checks (middleware exports, event schemas, tsconfig paths, Turbopack `../logger` import on `telemetry/middleware/next.ts` and `trpc.ts`, event barrel exports including shadcn-installed events).
+- `amplio add event <name>` — prints `matched registry event` or `generated starter schema`. Names need two+ segments (`post.created`, `auth.user.signed_up`); hyphenated registry ids from `list` (e.g. `auth-user-signed-in`) are accepted and mapped to the dot name.
+- `amplio add enricher query-allowlist` — wires an enricher that drops `http.search` by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.
+- `amplio list --json` — machine-readable registry listing (events listed by dot name).
+- `amplio doctor` — wiring checks (middleware exports, event schemas, tsconfig paths, Turbopack `../logger` import on `telemetry/middleware/next.ts` and `trpc.ts`, `NEXT_RUNTIME` guard in instrumentation.ts, event barrel exports including shadcn-installed events).
 - `amplio doctor --fix` — regenerates missing event barrel `index.ts` exports.
-- `amplio doctor --strict` — exit non-zero on warnings (CI gate).
+- `amplio doctor --strict` — exit non-zero on warnings (CI gate); without it, doctor prints an explicit `(exit 0 with warnings …)` note so CI pipelines are not silently green.
 - Per-command help: `amplio init --help`, `amplio add --help`, etc.
 
 ### `amplio.json` registry override

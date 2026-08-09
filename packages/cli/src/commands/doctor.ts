@@ -413,6 +413,16 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
           status: "passed",
           message: `${path.relative(cwd, instrumentationPath)} references telemetry/logger`,
         });
+        // Next compiles instrumentation.ts for the Edge runtime too; an
+        // unguarded import of telemetry/ (node:fs via the JSON sink, etc.)
+        // spams "not supported in the Edge Runtime" on every compile.
+        if (!content.includes("NEXT_RUNTIME")) {
+          checks.push({
+            status: "warning",
+            message: `${path.relative(cwd, instrumentationPath)} imports telemetry/logger without a NEXT_RUNTIME guard — Edge-runtime compiles will warn once telemetry/ pulls in node: builtins`,
+            fix: 'Wrap the import: if (process.env.NEXT_RUNTIME === "nodejs") { await import("../telemetry/logger"); }',
+          });
+        }
       } else {
         checks.push({
           status: "warning",
@@ -669,6 +679,9 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
   }
   if (strict && warnings > 0) {
     return 1;
+  }
+  if (warnings > 0) {
+    console.log("\n(exit 0 with warnings — use --strict to fail on warnings, e.g. in CI)");
   }
   return 0;
 }

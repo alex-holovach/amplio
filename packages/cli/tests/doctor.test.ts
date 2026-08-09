@@ -142,6 +142,42 @@ describe("runDoctor", () => {
     expect(logs.join("\n")).toMatch(/instrumentation/i);
   });
 
+  it("warns when instrumentation.ts lacks the NEXT_RUNTIME guard and prints the exit-0 note", async () => {
+    const cwd = await makeTempDir("amplio-doctor-edge-guard-");
+    await setupDoctorProject(cwd);
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    const output = logs.join("\n");
+    expect(code).toBe(0);
+    expect(output).toContain("NEXT_RUNTIME guard");
+    expect(output).toContain("exit 0 with warnings");
+  });
+
+  it("does not warn when instrumentation.ts has the NEXT_RUNTIME guard", async () => {
+    const cwd = await makeTempDir("amplio-doctor-edge-guard-ok-");
+    await setupDoctorProject(cwd);
+    await writeFile(
+      path.join(cwd, "src/instrumentation.ts"),
+      'export async function register() {\n  if (process.env.NEXT_RUNTIME === "nodejs") {\n    await import("../telemetry/logger");\n  }\n}\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).not.toContain("NEXT_RUNTIME guard");
+  });
+
   it("exits 1 when runtime and logger are missing", async () => {
     const cwd = await makeTempDir("amplio-doctor-fail-");
     const log = vi.spyOn(console, "log").mockImplementation(() => {});

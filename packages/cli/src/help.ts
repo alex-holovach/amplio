@@ -54,7 +54,7 @@ Usage:
   amplio add event <domain.action or domain.entity.action> [more names…]
   amplio add middleware <hono|express|next|fastify|trpc>
   amplio add sink <console|otlp|json>
-  amplio add enricher <service-metadata|request-metadata>
+  amplio add enricher <service-metadata|request-metadata|query-allowlist>
   amplio add integration <better-auth|clerk|resend|polar>
 
 Options:

@@ -12,7 +12,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -32,7 +32,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -52,7 +52,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -72,7 +72,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -90,7 +90,7 @@
       "description": "Hono middleware that attaches request-scoped amplio context.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -108,7 +108,7 @@
       "description": "Express middleware that attaches request-scoped amplio context.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -127,7 +127,7 @@
       "type": "registry:lib",
       "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -145,7 +145,7 @@
       "description": "Fastify plugin that attaches request-scoped amplio context.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11",
+        "@useamplio/amplio@^0.1.0-alpha.12",
         "fastify-plugin@^5.0.0"
       ],
       "files": [
@@ -165,7 +165,7 @@
       "type": "registry:lib",
       "docs": "Wire into your procedure bases: `const amplioMiddleware = t.middleware(amplioTrpcMiddleware())` then `.use(amplioMiddleware)` on publicProcedure/protectedProcedure. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/server/api/trpc.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -184,7 +184,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { consoleSink } from \"./sinks/console\"` to telemetry/logger.ts and append `consoleSink` to the init() sinks array. Prefer `npx @useamplio/cli@alpha add sink console` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -203,7 +203,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio.jsonl to .gitignore. Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -222,7 +222,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (or OTEL_EXPORTER_OTLP_ENDPOINT) in your env. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -240,7 +240,7 @@
       "description": "Enricher that adds service name / environment metadata.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -253,12 +253,30 @@
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "enricher-query-allowlist",
+      "title": "Query Allowlist Enricher",
+      "description": "Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.",
+      "type": "registry:lib",
+      "dependencies": [
+        "@useamplio/amplio@^0.1.0-alpha.12"
+      ],
+      "files": [
+        {
+          "path": "registry/enrichers/query-allowlist.ts",
+          "target": "~/telemetry/enrichers/query-allowlist.ts",
+          "type": "registry:lib",
+          "content": "/**\n * Global enricher for init({ enrichers }) that scrubs `http.search`.\n *\n * Request middleware records the query string verbatim, and field-level\n * redaction does not parse it — tokens or PII in `?…` params can leak.\n * This enricher drops `http.search` entirely by default; pass an allowlist\n * to keep specific params and redact the rest.\n *\n * @example\n * init({\n *   // …\n *   enrichers: [queryAllowlist()],                          // drop http.search\n *   // enrichers: [queryAllowlist({ allow: [\"page\", \"sort\"] })], // keep page/sort, redact the rest\n * });\n */\nimport type { JsonValue, LogRecord } from \"@useamplio/amplio\";\n\nexport interface QueryAllowlistOptions {\n  /** Query params to keep verbatim. Everything else becomes `[REDACTED]`. */\n  allow?: string[];\n}\n\nfunction isRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {\n  return typeof value === \"object\" && value !== null && !Array.isArray(value);\n}\n\nexport function queryAllowlist(options: QueryAllowlistOptions = {}) {\n  const allow = new Set(options.allow ?? []);\n\n  return (record: LogRecord): LogRecord => {\n    const http = record.http;\n    if (!isRecord(http) || typeof http.search !== \"string\" || http.search === \"\") {\n      return record;\n    }\n\n    if (allow.size === 0) {\n      const { search: _search, ...rest } = http;\n      return { ...record, http: rest };\n    }\n\n    let params: URLSearchParams;\n    try {\n      params = new URLSearchParams(http.search.replace(/^\\?/, \"\"));\n    } catch {\n      // Unparseable query string — safer to drop it than to pass it through.\n      const { search: _search, ...rest } = http;\n      return { ...record, http: rest };\n    }\n\n    const parts: string[] = [];\n    for (const [key, value] of params) {\n      parts.push(\n        allow.has(key)\n          ? `${encodeURIComponent(key)}=${encodeURIComponent(value)}`\n          : `${encodeURIComponent(key)}=[REDACTED]`,\n      );\n    }\n\n    const search = parts.join(\"&\");\n    return { ...record, http: { ...http, search: search ? `?${search}` : \"\" } };\n  };\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
       "name": "enricher-request-metadata",
       "title": "Request Metadata Enricher",
       "description": "Enricher that adds request id / HTTP metadata.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "files": [
         {
@@ -277,7 +295,7 @@
       "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.11",
+        "@useamplio/amplio@^0.1.0-alpha.12",
         "better-auth@^1.2.0"
       ],
       "registryDependencies": [
@@ -301,7 +319,7 @@
       "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.11",
+        "@useamplio/amplio@^0.1.0-alpha.12",
         "@clerk/backend@^1.25.0"
       ],
       "registryDependencies": [
@@ -325,7 +343,7 @@
       "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "registryDependencies": [
         "@useamplio/event-email-sent"
@@ -347,7 +365,7 @@
       "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.11"
+        "@useamplio/amplio@^0.1.0-alpha.12"
       ],
       "registryDependencies": [
         "@useamplio/event-payment-order-paid"

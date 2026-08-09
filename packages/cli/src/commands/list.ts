@@ -17,6 +17,26 @@ function shortId(name: string, kind: Kind | "other"): string {
   return name.slice(kind.length + 1);
 }
 
+const DEFINE_EVENT_NAME_RE = /defineEvent\s*\(\s*["']([^"']+)["']/;
+
+/**
+ * Events are added by dot name (`amplio add event auth.user.signed_in`), not
+ * by hyphenated registry id — print the dot name so the "Add with" hint works
+ * verbatim. Read it from the item's defineEvent call (hyphen→dot mapping is
+ * ambiguous with underscores).
+ */
+function listId(item: RegistryItem, kind: Kind | "other"): string {
+  if (kind === "event") {
+    for (const file of item.files) {
+      const match = file.content ? DEFINE_EVENT_NAME_RE.exec(file.content) : null;
+      if (match) {
+        return match[1]!;
+      }
+    }
+  }
+  return shortId(item.name, kind);
+}
+
 export interface ListItem {
   id: string;
   kind: Kind | "other";
@@ -47,7 +67,7 @@ function collectListItems(
     const kind = kindOf(item.name);
     if (normalizedKind && kind !== normalizedKind) continue;
     items.push({
-      id: shortId(item.name, kind),
+      id: listId(item, kind),
       kind,
       name: item.name,
       ...(item.title ? { title: item.title } : {}),
@@ -97,7 +117,7 @@ export async function runList(options: ListOptions): Promise<void> {
     list.sort((a, b) => a.name.localeCompare(b.name));
     console.log(`${kind}s:`);
     for (const item of list) {
-      const id = shortId(item.name, kind);
+      const id = listId(item, kind);
       const desc = item.description ? ` — ${item.description}` : "";
       if (item.title) {
         console.log(`  ${id} — ${item.title} (${item.name})${desc}`);

@@ -1,8 +1,8 @@
-export function renderLoggerTemplate(service = "my-app"): string {
+export function renderLoggerTemplate(service = "my-app", doctorCommand = "npx @useamplio/cli@alpha doctor"): string {
   return `// Import this module for side effects before any request handling
 // (e.g. \`import "./telemetry/logger"\` or via Next.js instrumentation.ts).
 // emit() before init() is a silent no-op (dev builds warn once).
-// Run \`npx @useamplio/cli@alpha doctor\` to verify wiring.
+// Run \`${doctorCommand}\` to verify wiring.
 import { init, logger } from "@useamplio/amplio";
 import type { LogRecord, Sink } from "@useamplio/amplio";
 
@@ -47,7 +47,12 @@ export function renderInstrumentationTemplate(loggerImportPath: string): string 
 // Importing telemetry/logger here runs amplio init() before any request;
 // without it, emit() calls are silent no-ops.
 export async function register() {
-  await import("${loggerImportPath}");
+  // Next also compiles this file for the Edge runtime. telemetry/ may pull in
+  // node: builtins (e.g. the JSON sink uses node:fs), so only load it on the
+  // Node.js runtime — otherwise Turbopack/webpack warn on every compile.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("${loggerImportPath}");
+  }
 }
 `;
 }

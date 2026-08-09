@@ -602,9 +602,8 @@ describe("cli list", () => {
     );
     expect(signedUp).toBeDefined();
     expect(signedUp!.title).toBe("Auth User Signed Up");
-    const shortId = signedUp!.name.slice("event-".length);
-    expect(shortId).toBe("auth-user-signed-up");
-    const formattedLine = `${shortId} — ${signedUp!.title} (${signedUp!.name})`;
+    // Events list by dot name (what `amplio add event` accepts), not registry id.
+    const formattedLine = `auth.user.signed_up — ${signedUp!.title} (${signedUp!.name})`;
 
     const result = runCli(["list", "event", "--cwd", cwd]);
     expect(result.status).toBe(0);
@@ -630,7 +629,7 @@ describe("cli list", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("events:");
     expect(result.stdout).toContain(
-      "auth-user-signed-up — Auth User Signed Up (event-auth-user-signed-up)",
+      "auth.user.signed_up — Auth User Signed Up (event-auth-user-signed-up)",
     );
     expect(result.stdout).not.toContain("middlewares:");
     expect(result.stdout).not.toContain("middleware-hono");

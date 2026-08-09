@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.12] - 2026-08-09
+
+Dogfood iter 7 — Edge-runtime instrumentation guard, webpack build-noise fix, list/add event grammar, query-allowlist enricher.
+
+### Runtime
+
+- **Webpack "Critical dependency" warning fixed** — the `next/server` `after()` probe's dynamic import now carries `/* webpackIgnore: true */ /* @vite-ignore */` in the published dist (re-injected after minification by `scripts/annotate-dynamic-import.mjs`), so `next build` no longer prints `Critical dependency: the request of a dependency is an expression` for every route that imports the runtime.
+
+### CLI
+
+- **`init` scaffolds instrumentation.ts with a `NEXT_RUNTIME` guard** — Next compiles `instrumentation.ts` for the Edge runtime too; the unguarded `await import("../telemetry/logger")` made Turbopack warn `'node:fs' is not supported in the Edge Runtime` on every compile once a sink pulled in `node:` builtins. The template now wraps the import in `if (process.env.NEXT_RUNTIME === "nodejs")`, and `doctor` warns when an existing instrumentation file lacks the guard.
+- **`add event` accepts hyphenated registry ids** — `amplio add event auth-user-signed-in` (the id `list` prints) now maps to `auth.user.signed_in` via the registry template instead of erroring; `list` also prints events by dot name, so its `Add with: amplio add <kind> <id>` hint works verbatim for every kind.
+- **Starter event schema namespaces by entity** — `add event ui.feedback.submitted` now generates `feedback: z.object({ … })` (second-to-last segment) instead of `ui: …`; 2-segment names keep the domain (`post.created` → `post`). The header comment flags the guess and repeats the create-the-child-before-the-work `duration_ms` idiom plus the `.child()` / `.event()` / `.create()` one-liner.
+- **`init` re-runs are honest** — an existing wired `instrumentation.ts` prints `· … already wired` (instead of a wall-of-text hint), and the "No starter event scaffolded" hint is suppressed when `telemetry/events/` already contains events.
+- **Epilogues use the package script** — Verify step 4 and the starter-event hint print `pnpm amplio doctor` / `npm run amplio …` (the package manager init already detected) instead of a fresh `npx @useamplio/cli@alpha` resolve; the generated `logger.ts` header does the same.
+- **`doctor` prints `(exit 0 with warnings — use --strict …)`** when warnings are present without `--strict`, so a CI pipe is never silently green.
+
+### Registry
+
+- **New `enricher-query-allowlist`** — `amplio add enricher query-allowlist` scaffolds and auto-wires an enricher that drops `http.search` by default (or keeps only allowlisted params, redacting the rest) — the scaffolded answer to the query-string PII caveat.
+
+### Docs
+
+- **`NEXT_RUNTIME` guard documented** in docs/t3.md (scaffold section + Turbopack section, with the upgrade path for pre-fix scaffolds) and ALPHA.md.
+- **ALPHA.md is present-tense** — Turbopack fix archaeology and pre-alpha.8 "wrong spellings" moved to this changelog; the one still-relevant footgun (`getLogger().event(Def)` rebind) stays.
+- **Value-level redaction documented** — emails/JWTs/bearer tokens/card numbers are masked inside free-text string values, not just on well-known field names.
+- **`amplio add` positioned as primary, shadcn as interop** (README + t3.md); t3.md notes that `AMPLIO_JSON_SINK_PATH` bypasses T3's `src/env.js` validation by design.
+
 ## [0.1.0-alpha.11] - 2026-08-09
 
 Dogfood iter 6 — dependency hygiene, doctor reverse barrel checks, init script/output fixes, npm README.

@@ -163,6 +163,49 @@ describe("runAddEvent", () => {
     expect(after).toContain("signup");
   });
 
+  it("accepts hyphenated registry ids from list output (auth-user-signed-in)", async () => {
+    const cwd = await makeTempDir("amplio-add-hyphen-id-");
+    await initWithRegistry(cwd);
+    await runAddEvent("auth-user-signed-in", { cwd });
+
+    const eventPath = path.join(cwd, "telemetry/events/auth/user-signed-in.ts");
+    await access(eventPath);
+    const eventSource = await readFile(eventPath, "utf8");
+    expect(eventSource).toContain('"auth.user.signed_in"');
+  });
+
+  it("still rejects hyphen names with no registry match", async () => {
+    const cwd = await makeTempDir("amplio-add-hyphen-miss-");
+    await initWithRegistry(cwd);
+    await expect(runAddEvent("no-such-event", { cwd })).rejects.toThrow(/Invalid event name/);
+  });
+
+  it("starter schema namespaces payload by entity segment for 3+-segment names", async () => {
+    const cwd = await makeTempDir("amplio-add-entity-");
+    await runInit({ cwd, skipInstall: true });
+    await runAddEvent("ui.feedback.submitted", { cwd });
+
+    const eventSource = await readFile(
+      path.join(cwd, "telemetry/events/ui/feedback-submitted.ts"),
+      "utf8",
+    );
+    // The entity is `feedback` (second-to-last segment), not the `ui` domain.
+    expect(eventSource).toContain("feedback: z.object({");
+    expect(eventSource).not.toContain("ui: z.object({");
+  });
+
+  it("starter schema keeps the domain namespace for 2-segment names", async () => {
+    const cwd = await makeTempDir("amplio-add-two-seg-");
+    await runInit({ cwd, skipInstall: true });
+    await runAddEvent("post.created", { cwd });
+
+    const eventSource = await readFile(
+      path.join(cwd, "telemetry/events/post/created.ts"),
+      "utf8",
+    );
+    expect(eventSource).toContain("post: z.object({");
+  });
+
   it("installs email.sent from registry with barrels", async () => {
     const cwd = await makeTempDir("amplio-add-email-");
     await initWithRegistry(cwd);
@@ -507,6 +550,25 @@ describe("runAddEnricher", () => {
     expect(loggerSource).not.toContain("composeSinks");
   });
 
+  it("scaffolds query-allowlist enricher and wires it into init()", async () => {
+    const cwd = await makeTempDir("amplio-enricher-query-allowlist-");
+    await initWithRegistry(cwd);
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    await runAddEnricher("query-allowlist", { cwd });
+    logSpy.mockRestore();
+
+    const enricherPath = path.join(cwd, "telemetry/enrichers/query-allowlist.ts");
+    await access(enricherPath);
+
+    const source = await readFile(enricherPath, "utf8");
+    expect(source).toContain("queryAllowlist");
+
+    const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
+    expect(loggerSource).toContain('from "./enrichers/query-allowlist"');
+    expect(loggerSource).toMatch(/enrichers:\s*\[[^\]]*queryAllowlist\(\)/);
+  });
+
   it("second add request preserves existing enricher file", async () => {
     const cwd = await makeTempDir("amplio-enricher-idempotent-");
     await initWithRegistry(cwd);
@@ -740,8 +802,34 @@ describe("runInit framework detect", () => {
     const instrumentation = await readFile(path.join(cwd, "src/instrumentation.ts"), "utf8");
     expect(instrumentation).toContain("telemetry/logger");
     expect(instrumentation).toContain("register");
+    // Edge-runtime guard: Next compiles instrumentation.ts for Edge too, and
+    // telemetry/ may import node: builtins (JSON sink).
+    expect(instrumentation).toContain('process.env.NEXT_RUNTIME === "nodejs"');
     expect(logs.join("\n")).toContain("withAmplio");
     expect(logs.join("\n")).toContain("~telemetry/*");
+  });
+
+  it("re-run init reports wired instrumentation and skips the starter-event hint when events exist", async () => {
+    const cwd = await makeTempDir("amplio-init-rerun-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ dependencies: { next: "^15.0.0" } }),
+    );
+    await mkdir(path.join(cwd, "src/app"), { recursive: true });
+    await runInit({ cwd, yes: true, skipInstall: true });
+    await runAddEvent("post.created", { cwd });
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    await runInit({ cwd, yes: true, skipInstall: true });
+    logSpy.mockRestore();
+
+    const output = logs.join("\n");
+    expect(output).toContain("src/instrumentation.ts already wired");
+    expect(output).not.toContain("ensure instrumentation.ts imports");
+    expect(output).not.toContain("No starter event scaffolded");
   });
 
   it("defaults service name from package.json when --service omitted", async () => {

@@ -20,6 +20,8 @@ npx @useamplio/cli@alpha add middleware hono
 
 `amplio init` detects your framework from `package.json` (Next.js, Hono, Express, Fastify) and can scaffold middleware plus a starter event in one shot (`--yes` or non-interactive).
 
+Using Next.js + tRPC (create-t3-app)? That's the most polished path — `init --yes` auto-wires both T3 files. Follow [docs/t3.md](./docs/t3.md).
+
 Or pull registry items directly with shadcn:
 
 ```bash
@@ -27,7 +29,7 @@ npx shadcn@latest add @useamplio/event-auth-user-signed-up
 npx shadcn@latest add @useamplio/middleware-hono
 ```
 
-Registry items are published as shadcn-compatible JSON under `public/r/` (e.g. `event-auth-user-signed-up.json` with `telemetry/events/...` targets).
+Registry items are published as shadcn-compatible JSON under `public/r/` (e.g. `event-auth-user-signed-up.json` with `telemetry/events/...` targets). Treat the shadcn path as interop: it drops files but does not wire barrels or `logger.ts` — `amplio add` does both in one command (after a shadcn install, `amplio doctor --fix` completes the wiring).
 
 ### Emit
 
@@ -182,7 +184,8 @@ The JSON file sink writes to `AMPLIO_JSON_SINK_PATH` (or `options.path`) and cre
 - Sampling `rate` 0 drops events that do not match a `keep` rule (`keep` rules are OR'd — any match keeps); `rate` 1 always samples.
 - Sampling `keep.field` supports dotted paths (e.g. `user.plan`) with `equals`, `matches`, `gte`, or `lte`; `gte` and `lte` on the same rule form an inclusive AND range.
 - Redaction runs on every emit by default; pass `redact: false` to `init()` to disable it.
-- **Query strings:** request middleware records `http.search` verbatim (URL-encoded query text). Field-level redaction does not parse query strings — tokens or PII in `?…` params may leak. Drop or allowlist `http.search` in an enricher if that matters for your app.
+- **Redaction is value-level, not just field-name matching:** sensitive patterns (emails, JWTs, bearer tokens, card numbers) are masked *inside* free-text string values too — `"email me at a@b.co please"` emits as `"email me at [REDACTED] please"` — in addition to masking well-known field names outright. URL-decoded copies of percent-encoded strings are scanned as well.
+- **Query strings:** request middleware records `http.search` verbatim (URL-encoded query text). Field-level redaction does not parse query strings — tokens or PII in `?…` params may leak. Run `amplio add enricher query-allowlist` to scaffold the fix: it drops `http.search` by default, or keeps only the params you allowlist (`queryAllowlist({ allow: ["page"] })`).
 - `serviceMetadata` uses `AMPLIO_SERVICE` / `AMPLIO_SERVICE_VERSION` / `AMPLIO_REGION` (name falls back to `record.service`; unset or empty version/region omitted — empty env strings are treated as unset).
 - `requestMetadata` optional fields (`route` / `ip` / `userAgent` / `requestId`): empty strings are treated as unset (omitted from `http`); empty `requestId` does not overwrite an existing `request_id`.
 

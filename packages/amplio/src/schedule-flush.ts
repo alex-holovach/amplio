@@ -6,8 +6,12 @@ export interface ScheduleFlushOptions {
 }
 
 let afterFn: ((task: () => unknown) => void) | undefined;
+// Runtime probe for Next's after(). The specifier must stay out of static
+// analysis (non-Next apps cannot resolve "next/server" at bundle time), and
+// webpackIgnore/vite-ignore stop webpack's "Critical dependency: the request
+// of a dependency is an expression" warning on every `next build`.
 const nextServerSpec = "next/server";
-void import(nextServerSpec)
+void import(/* webpackIgnore: true */ /* @vite-ignore */ nextServerSpec)
   .then((m) => {
     const a = (m as { after?: unknown }).after;
     if (typeof a === "function") {

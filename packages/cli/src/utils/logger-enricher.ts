@@ -22,6 +22,14 @@ const ENRICHER_META: Record<string, EnricherMeta> = {
     importPath: "./enrichers/request-metadata",
     wireIntoInit: false,
   },
+  // Factory call — no allowlist drops http.search entirely (the safe default);
+  // users edit the call to keep specific params.
+  "query-allowlist": {
+    exportName: "queryAllowlist",
+    enricherExpression: "queryAllowlist()",
+    importPath: "./enrichers/query-allowlist",
+    wireIntoInit: true,
+  },
 };
 
 const COMPOSE_SINKS_HELPER = `type Enricher = (record: LogRecord) => LogRecord;

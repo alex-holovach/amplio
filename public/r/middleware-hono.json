@@ -5,7 +5,7 @@
   "description": "Hono middleware that attaches request-scoped amplio context.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.11"
+    "@useamplio/amplio@^0.1.0-alpha.12"
   ],
   "files": [
     {

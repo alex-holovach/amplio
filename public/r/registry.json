@@ -82,6 +82,12 @@
       "description": "Enricher that adds service name / environment metadata."
     },
     {
+      "name": "enricher-query-allowlist",
+      "type": "registry:lib",
+      "title": "Query Allowlist Enricher",
+      "description": "Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks."
+    },
+    {
       "name": "enricher-request-metadata",
       "type": "registry:lib",
       "title": "Request Metadata Enricher",

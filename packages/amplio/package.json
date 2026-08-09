@@ -1,6 +1,6 @@
 {
   "name": "@useamplio/amplio",
-  "version": "0.1.0-alpha.11",
+  "version": "0.1.0-alpha.12",
   "description": "Tiny schema-first wide-event telemetry runtime",
   "type": "module",
   "license": "MIT",
@@ -46,7 +46,7 @@
     "docs"
   ],
   "scripts": {
-    "build": "tsup && node ../../scripts/copy-docs.mjs .",
+    "build": "tsup && node scripts/annotate-dynamic-import.mjs && node ../../scripts/copy-docs.mjs .",
     "pretest": "node ../../scripts/copy-docs.mjs .",
     "test": "vitest run",
     "test:watch": "vitest",
