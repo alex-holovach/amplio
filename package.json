@@ -1,7 +1,7 @@
 {
   "name": "amplio",
   "private": true,
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Schema-first wide-event telemetry that lives in your repo \u2014 shadcn for observability",
   "license": "MIT",
   "type": "module",
