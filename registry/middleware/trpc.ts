@@ -1,5 +1,9 @@
 /**
- * Amplio tRPC middleware — product stance:
+ * Amplio tRPC middleware. Like create-t3-app's own trpc.ts, you likely never
+ * need to read or modify this file — wire amplioTrpcMiddleware() into your
+ * procedure bases and you're done.
+ *
+ * Product stance:
  * ONE wide event per unit of work: the HTTP wrapper (withAmplio) owns the request
  * wide event (the spine). This middleware ANNOTATES that event with trpc.* fields
  * instead of emitting a sibling record. Domain events emitted in procedures are
@@ -72,6 +76,54 @@ function annotateTrpcProcedure(
   });
 }
 
+type ValidationIssue = { path: Array<string | number>; message: string };
+
+// TRPCError wraps input-validation failures in a ZodError cause whose message
+// is the full pretty-printed issue list — a multiline JSON blob that is hostile
+// to columnar stores and log search. Detect that shape so the event can carry
+// structured error.issues plus a short error.message instead.
+function zodValidationIssues(error: unknown): ValidationIssue[] | null {
+  if (error === null || typeof error !== "object") {
+    return null;
+  }
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause === null || typeof cause !== "object") {
+    return null;
+  }
+  const issues = (cause as { issues?: unknown }).issues;
+  if (!Array.isArray(issues) || issues.length === 0) {
+    return null;
+  }
+  const mapped: ValidationIssue[] = [];
+  for (const issue of issues) {
+    if (issue === null || typeof issue !== "object") {
+      return null;
+    }
+    const { path, message } = issue as { path?: unknown; message?: unknown };
+    if (typeof message !== "string" || !Array.isArray(path)) {
+      return null;
+    }
+    mapped.push({
+      path: path.filter(
+        (segment): segment is string | number =>
+          typeof segment === "string" || typeof segment === "number",
+      ),
+      message,
+    });
+  }
+  return mapped;
+}
+
+function shortValidationMessage(issues: ValidationIssue[]): string {
+  const parts = issues
+    .slice(0, 3)
+    .map((issue) =>
+      issue.path.length > 0 ? `${issue.path.join(".")}: ${issue.message}` : issue.message,
+    );
+  const suffix = issues.length > 3 ? ` (+${issues.length - 3} more)` : "";
+  return `input validation failed: ${parts.join("; ")}${suffix}`;
+}
+
 function annotateTrpcError(
   logger: Logger,
   path: string,
@@ -82,6 +134,10 @@ function annotateTrpcError(
   const status = trpcErrorHttpStatus(error);
   if (!logger.sealed) {
     logger.error(error, { status });
+    const issues = zodValidationIssues(error);
+    if (issues) {
+      logger.set({ error: { message: shortValidationMessage(issues), issues } });
+    }
     const patch: Record<string, unknown> = {
       trpc: { path, type },
       status,

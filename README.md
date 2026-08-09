@@ -82,9 +82,30 @@ getLogger()
 
 `logger.event(Def).emit()` outside a request is unchanged. Inside request scope (since `0.1.0-alpha.8`) it also copies `request_id` — but `.child()` is the canonical API for separate domain rows without touching the spine. See [ALPHA.md](./ALPHA.md#correlated-domain-events).
 
+**`duration_ms` on domain events:** a child logger's clock starts at `.child()` creation, so the typical `child().set().emit()` chain reports `duration_ms: 0` — it does **not** measure the surrounding operation. Create the child *before* the work if you want the work timed:
+
+```typescript
+const ev = getLogger().child(AuthUserSignedUp); // clock starts here
+await doTheWork();
+ev.set({ user: { id } }).emit();                // duration_ms = work time
+```
+
 ## After init
 
 `@useamplio/cli` is a scaffolder. Once `telemetry/` exists, you can remove the CLI and keep editing events/middleware/sinks with only `@useamplio/amplio` installed.
+
+## amplio.json
+
+`amplio init` writes `amplio.json` at the project root. It is plain JSON, safe to hand-edit, and only read by the CLI (the runtime never loads it):
+
+| Field | Default | Purpose |
+|---|---|---|
+| `telemetryDir` | `"telemetry"` | Directory the CLI scaffolds into and `doctor` validates |
+| `packageManager` | detected | Used for install commands and printed tips (`pnpm`, `npm`, `yarn`, `bun`) |
+| `typescript` | `true` | TypeScript defaults for generated files |
+| `registry` | *(unset)* | Optional path to a local registry checkout — overrides the CLI's bundled registry |
+
+Regeneration semantics: `amplio add …` never overwrites an existing file under `telemetry/` (it prints `· skipped existing … file`); re-run with `--force` to overwrite a file with the current registry template. `amplio init` is idempotent — re-running it leaves existing files unchanged.
 
 ## Philosophy
 
@@ -222,7 +243,9 @@ pnpm registry:build   # regenerate public/r/*.json
 pnpm registry:serve   # local HTTP server for shadcn
 ```
 
-**Hosted registry:** [`https://amplio-ruddy.vercel.app`](https://amplio-ruddy.vercel.app) serves `public/r` at `/r/{name}.json` (CORS `*`).
+**Hosted registry:** [`https://amplio-ruddy.vercel.app`](https://amplio-ruddy.vercel.app) serves `public/r` at `/r/{name}.json` (CORS `*`). This Vercel preview domain is temporary — it will move to a stable branded domain before beta. When it does, re-running `amplio init` updates the `registries["@useamplio"]` entry in `components.json` in place; no other migration is needed.
+
+**components.json:** when the file does not exist, `amplio init` writes a full shadcn-compatible `components.json` (style `new-york`, baseColor `neutral`, aliases derived from your tsconfig paths) because `npx shadcn add` refuses to run without one. If you adopt shadcn/ui later, run `npx shadcn init` and review those defaults — they were chosen by amplio, not by you. When `components.json` already exists, `amplio init` only upserts the `registries["@useamplio"]` key and leaves everything else untouched.
 
 ```json
 {
@@ -362,7 +385,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md); for the first npm publish, follow **Fi
 - `--service`, `--package-manager`, and `--no-typescript` are only valid with `init` (rejected on `add` / `list`). Whitespace-only `--service` / `--package-manager` on non-init commands are ignored (not rejected).
 - `init --cwd <path>` and `add --cwd <path>` create missing directories (`mkdir -p`).
 - `amplio init --paths` writes the `~telemetry/*` tsconfig path alias (JSONC-comment-safe).
-- `amplio doctor` checks wiring (middleware, barrels, Turbopack `../logger` import); `amplio doctor --fix` regenerates missing event barrel exports.
+- `amplio doctor` checks wiring (middleware, barrels, Turbopack `../logger` import) in both directions: event files missing from barrels *and* barrel exports whose target files no longer exist. `amplio doctor --fix` regenerates missing event barrel exports and prunes stale ones. `--verbose` always prints the end-to-end verification epilogue (otherwise it only appears after `--fix` or when something needs attention).
 - `amplio add <badkind> …` errors with valid kinds (`event`, `middleware`, `sink`, `enricher`, `integration`).
 - Event names must be lowercase dot-separated segments (e.g. `auth.user.signed_up`); no leading/trailing dots or uppercase.
 - `amplio add event …` and other `add` kinds can scaffold from the registry without running `init` first — the telemetry tree is created as needed.

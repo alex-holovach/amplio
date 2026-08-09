@@ -85,7 +85,7 @@
       "name": "enricher-request-metadata",
       "type": "registry:lib",
       "title": "Request Metadata Enricher",
-      "description": "Enricher that adds request id / HTTP metadata. (CLI alias: amplio add enricher request)"
+      "description": "Enricher that adds request id / HTTP metadata."
     },
     {
       "name": "integration-better-auth",
@@ -103,13 +103,13 @@
       "name": "integration-resend",
       "type": "registry:lib",
       "title": "Resend Integration",
-      "description": "Resend email helpers that emit amplio events."
+      "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed)."
     },
     {
       "name": "integration-polar",
       "type": "registry:lib",
       "title": "Polar Integration",
-      "description": "Polar payment helpers that emit amplio order-paid events."
+      "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed)."
     }
   ]
 }

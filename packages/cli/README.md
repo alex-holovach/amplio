@@ -19,7 +19,7 @@ The published package exposes the `amplio` bin (`dist/cli.js`). Run `amplio <com
 | `amplio init` | Scaffold `telemetry/`, `amplio.json`, `components.json`; auto-detect framework |
 | `amplio add <kind> <id>` | Install registry item (event, middleware, sink, enricher, integration) |
 | `amplio list [kind]` | List registry items (human-readable; `--json` for machine output) |
-| `amplio doctor` | Validate wiring; `--fix` regenerates missing event barrel exports; `--strict` exits non-zero on warnings (CI gate) |
+| `amplio doctor` | Validate wiring; `--fix` regenerates missing event barrel exports and prunes stale ones (targets that no longer resolve); `--strict` exits non-zero on warnings (CI gate); `--verbose` always prints the verification epilogue |
 
 ### `init` highlights
 
@@ -56,6 +56,8 @@ Example `amplio.json` override:
   "typescript": true
 }
 ```
+
+`amplio.json` is plain JSON, safe to hand-edit, and read only by the CLI (never by the runtime). Fields: `telemetryDir` (scaffold/validate target, default `telemetry`), `packageManager` (used for install commands and tips), `typescript` (generated-file defaults), `registry` (optional local registry path, see above).
 
 Run `pnpm registry:build` from the monorepo root to refresh hosted `public/r/` JSON; `pnpm --filter @useamplio/cli build` refreshes the CLI bundle.
 

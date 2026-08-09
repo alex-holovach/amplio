@@ -57,6 +57,11 @@ export function withAmplio<
   return wrapped;
 }
 
-export function useRequestLogger(): Logger {
+// Server-side accessor for the ambient request logger. Named get*, not use*:
+// this is not a React hook and never runs on the client.
+export function getRequestLogger(): Logger {
   return getLogger();
 }
+
+/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */
+export const useRequestLogger = getRequestLogger;

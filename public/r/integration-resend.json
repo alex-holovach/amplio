@@ -2,12 +2,11 @@
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "integration-resend",
   "title": "Resend Integration",
-  "description": "Resend email helpers that emit amplio events.",
+  "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).",
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.10",
-    "resend@^4.0.0"
+    "@useamplio/amplio@^0.1.0-alpha.11"
   ],
   "registryDependencies": [
     "@useamplio/event-email-sent"

@@ -129,6 +129,7 @@ async function installByName(
 
   const mergedDeps = new Set<string>();
   const mergedDevDeps = new Set<string>();
+  const installedEventFiles: string[] = [];
 
   for (const entry of items) {
     const result = await installRegistryItem(entry, {
@@ -146,6 +147,9 @@ async function installByName(
           ? "↻"
           : "·";
       console.log(`  ${marker} ${rel}`);
+      if (rel.replace(/\\/g, "/").includes("/events/")) {
+        installedEventFiles.push(file);
+      }
     }
 
     for (const dep of entry.dependencies ?? []) {
@@ -156,7 +160,41 @@ async function installByName(
     }
   }
 
+  // Registry-dependency events (e.g. an integration pulling in its event)
+  // must be wired into the barrels like a direct `add event`, or the install
+  // is only half done and tsc/doctor complain immediately after.
+  for (const file of installedEventFiles) {
+    await wireInstalledEventBarrels(cwd, telemetryDir, file);
+  }
+
   await mergePackageDependencies(cwd, [...mergedDeps], [...mergedDevDeps]);
+}
+
+const DEFINE_EVENT_EXPORT_RE =
+  /export\s+const\s+([A-Za-z0-9_$]+)\s*=\s*defineEvent\s*\(\s*["']([^"']+)["']/;
+
+async function wireInstalledEventBarrels(
+  cwd: string,
+  telemetryDir: string,
+  eventFile: string,
+): Promise<void> {
+  try {
+    const source = await fs.readFile(eventFile, "utf8");
+    const match = DEFINE_EVENT_EXPORT_RE.exec(source);
+    if (!match) {
+      return;
+    }
+    const [, exportName, eventName] = match;
+    const relativePath = path
+      .relative(path.join(cwd, telemetryDir), eventFile)
+      .replace(/\\/g, "/");
+    if (relativePath !== eventNameToRelativePath(eventName!)) {
+      return;
+    }
+    await updateEventBarrels(cwd, telemetryDir, relativePath, exportName!);
+  } catch {
+    // best effort — doctor --fix covers anything missed here
+  }
 }
 
 export async function updateEventBarrels(
@@ -178,7 +216,9 @@ export async function updateEventBarrels(
     `export { ${exportName} } from "${importPath}";`,
   );
 
-  const domainExportPath = `./${domainDir.split("/").slice(1).join("/")}/index`;
+  // Same extensionless, index-implicit style as the domain barrel ("./sent",
+  // "./post") so generator and doctor --fix produce identical diffs.
+  const domainExportPath = `./${domainDir.split("/").slice(1).join("/")}`;
   await upsertBarrelExport(
     rootBarrel,
     `export { ${exportName} } from "${domainExportPath}";`,
@@ -207,8 +247,8 @@ export async function runAddEvent(eventName: string, options: AddOptions): Promi
     if (item) {
       console.log(`  matched registry event ${registryId}`);
       const eventExists = await pathExists(targetPath);
+      // installByName wires barrels for every installed event file.
       await installByName(options.cwd, registryId, options);
-      await updateEventBarrels(options.cwd, telemetryDir, relativePath, exportName);
       if (eventExists && !(options.force ?? false)) {
         console.log("  · skipped existing event file");
       }
@@ -295,7 +335,7 @@ export async function runAddEnricher(id: string, options: AddOptions): Promise<v
   const registryId = resolveEnricherId(id);
   if (!ENRICHER_REGISTRY_IDS.has(registryId)) {
     throw new Error(
-      `Unknown enricher "${id}". Choose: ${[...ENRICHER_REGISTRY_IDS].join(", ")}, request`,
+      `Unknown enricher "${id}". Choose: ${[...ENRICHER_REGISTRY_IDS].join(", ")}`,
     );
   }
   const telemetryDir = await getTelemetryDir(options.cwd);

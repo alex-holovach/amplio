@@ -51,6 +51,10 @@ const plugin: FastifyPluginAsync = async (app) => {
 
 export const amplioPlugin = fp(plugin, { name: "amplio" });
 
-export function useRequestLogger(request: FastifyRequest): Logger {
+// Accessor for the request logger. Named get*, not use*: this is not a React hook.
+export function getRequestLogger(request: FastifyRequest): Logger {
   return request.amplio ?? getLogger();
 }
+
+/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */
+export const useRequestLogger = getRequestLogger;

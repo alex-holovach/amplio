@@ -44,6 +44,7 @@ function parseCliArgs() {
         wire: { type: "boolean", default: false },
         fix: { type: "boolean", default: false },
         strict: { type: "boolean", default: false },
+        verbose: { type: "boolean", default: false },
         force: { type: "boolean", default: false },
         json: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
@@ -104,6 +105,11 @@ async function main(): Promise<void> {
 
   if (values.strict && command !== "doctor") {
     console.error("error: --strict is only valid with doctor");
+    process.exit(1);
+  }
+
+  if (values.verbose && command !== "doctor") {
+    console.error("error: --verbose is only valid with doctor");
     process.exit(1);
   }
 
@@ -255,6 +261,7 @@ async function main(): Promise<void> {
         cwd,
         ...(values.fix ? { fix: true } : {}),
         ...(values.strict ? { strict: true } : {}),
+        ...(values.verbose ? { verbose: true } : {}),
       });
       process.exit(exitCode);
     }

@@ -7,13 +7,15 @@ export function renderEventTemplate(eventName: string, exportName?: string): str
   return `import { defineEvent } from "@useamplio/amplio";
 import { z } from "zod";
 
-// Starter shape — edit this schema to match your domain (e.g. numeric ids, extra fields).
+// Starter shape — edit this schema to match your domain (e.g. extra fields).
 // 'amplio add event' will not overwrite your edits; re-run with --force to regenerate.
 export const ${exportSymbol} = defineEvent(
   "${eventName}",
   z.object({
     ${domain}: z.object({
-      id: z.string(),
+      // Tighten to z.string() or z.number() once you know your id type
+      // (e.g. Drizzle/Prisma integer PKs are numbers).
+      id: z.union([z.string(), z.number()]),
     }),
     // Optional so the obvious first call — .set({ ${domain}: { id } }).emit() —
     // validates clean without a context wrapper.

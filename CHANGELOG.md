@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.11] - 2026-08-09
+
+Dogfood iter 6 — dependency hygiene, doctor reverse barrel checks, init script/output fixes, npm README.
+
+### CLI
+
+- **`add integration resend` / `polar` no longer add unused npm dependencies** — the generated integrations use local webhook types only; the `resend` / `@polar-sh/sdk` entries are gone from their registry items (Clerk and Better Auth keep theirs — their generated code imports the SDK).
+- **`doctor` checks barrels in both directions** — a barrel `export … from "./x"` whose target file no longer exists (or no longer exports the name) is now a warning, and `doctor --fix` prunes it (deepest barrels first, so a pruned domain barrel cascades to the root barrel). Previously `rm -rf telemetry/events/email` left `doctor --fix` green while `tsc` failed with TS2307.
+- **`init` installs `@useamplio/cli` as a devDependency** alongside the `"amplio": "amplio"` script, so `npm run amplio doctor` works out of the box; the printed tip now uses `npm run amplio doctor` / `npm install -D` (was the invalid `npm amplio doctor` and `npm add --save-dev`).
+- **`init` output regrouped** scaffold → wire → verify → tips: `instrumentation.ts` and the package.json script print with the scaffold block, the Verify checklist prints after wiring, and hints (starter event, `~telemetry/*`) print last.
+- **npm installs run with `--no-audit --no-fund`** so the inner install no longer dumps audit noise mid-checklist.
+- **`init` points at the bundled T3 guide** (`node_modules/@useamplio/amplio/docs/t3.md` + GitHub URL) when it detects a create-t3-app layout.
+- **`doctor` epilogue is quieter** — the "Verify an event end-to-end" block prints only after `--fix`, when something needs attention, or with the new `--verbose` flag.
+- **Registry-dependency events are barrel-wired on install** — `add integration resend` now wires `email.sent` into the barrels instead of leaving a half-install for doctor to flag.
+- **Starter event schema** — `id` is `z.union([z.string(), z.number()])` with a "tighten me" comment (T3+Drizzle integer PKs no longer force `String(post.id)`).
+- **Barrel path style unified** — root barrels now use `./domain` (was `./domain/index`), matching the `./file` style in domain barrels; existing `./domain/index` lines are recognized and never duplicated.
+- **Enricher listing cleaned up** — `request-metadata` is the one listed id; the `request` alias is still accepted silently.
+
+### Registry templates
+
+- **tRPC middleware emits structured validation errors** — a `TRPCError` with a ZodError cause produces `error.issues` (`[{ path, message }]`) and a short `error.message` (`input validation failed: …`) instead of a ~400-char pretty-printed JSON blob in `error.message`.
+- **`useRequestLogger()` → `getRequestLogger()`** in next/hono/express/fastify middleware (it is not a React hook and never runs on the client); `useRequestLogger` remains as a deprecated alias.
+- **tRPC middleware header** now says up front you don't need to read the file (mirrors create-t3-app's own trpc.ts).
+- **Event registry items carry shadcn post-install docs** ("run `amplio doctor --fix` to wire barrel exports").
+
+### Docs / distribution
+
+- **npm package pages fixed** — publish now lands the `latest` tag directly (then adds the prerelease channel tag), which is what makes npm populate the package README; `@useamplio/amplio` also ships `README.md` explicitly in `files`.
+- **`amplio.json` documented** (fields, hand-editing, CLI-only) and `--force` regeneration semantics, in README + CLI README.
+- **`duration_ms` on domain events documented** (clock starts at `.child()`; create the child before the work to time the work) in README, runtime README, and t3.md.
+- **components.json interaction documented** — what `init` writes when the file is absent and how a later `npx shadcn init` interacts with it; hosted-registry domain flagged as temporary with the migration story (re-run `amplio init`).
+- Generated logger.ts ships the canonical sampling example (keep all errors — `success: false` *and* `status gte 400` — sample 10% of the rest).
+
 ## [0.1.0-alpha.10] - 2026-08-09
 
 Dogfood iter 5 — close the init → first-event gap (T3 auto-wiring), lint-clean generated code, `getLogger` rename.

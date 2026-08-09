@@ -257,9 +257,30 @@ function printNoStarterEventHint(): void {
   console.log("  npx @useamplio/cli@alpha add event post.created");
 }
 
+function scriptRunCommand(packageManager: string, script: string): string {
+  // npm and bun need `run` to invoke package scripts; pnpm and yarn run them directly.
+  if (packageManager === "npm" || packageManager === "bun") {
+    return `${packageManager} run ${script}`;
+  }
+  return `${packageManager} ${script}`;
+}
+
+function devInstallCommand(packageManager: string, pkg: string): string {
+  if (packageManager === "npm") {
+    return `npm install -D ${pkg}`;
+  }
+  if (packageManager === "bun") {
+    return `bun add -d ${pkg}`;
+  }
+  return `${packageManager} add -D ${pkg}`;
+}
+
 /**
- * Add an `"amplio": "amplio"` script (and suggest a devDependency install) so
- * follow-up commands are `pnpm amplio doctor` instead of a fresh npx resolve.
+ * Add an `"amplio": "amplio"` script so follow-up commands are e.g.
+ * `pnpm amplio doctor` / `npm run amplio doctor` instead of a fresh npx
+ * resolve. The CLI itself is installed as a devDependency by
+ * ensureRuntimeDependencies; when that was skipped, print the install command
+ * so the script is not broken out of the box.
  */
 async function ensureAmplioScript(cwd: string, packageManager: string): Promise<void> {
   const pkgPath = path.join(cwd, "package.json");
@@ -283,15 +304,16 @@ async function ensureAmplioScript(cwd: string, packageManager: string): Promise<
       pkg.scripts = { ...pkg.scripts, amplio: "amplio" };
       const trailing = raw.endsWith("\n") ? "\n" : "";
       await fs.writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}${trailing}`, "utf8");
-      console.log('  ✓ package.json ("amplio" script)');
+      console.log(
+        `  ✓ package.json ("amplio" script — run \`${scriptRunCommand(packageManager, "amplio doctor")}\`)`,
+      );
     }
 
     if (!hasCliDep) {
-      const addDevFlag = packageManager === "npm" ? "--save-dev" : "-D";
       console.log(
-        `\nTip: install the CLI once as a devDependency so \`${packageManager} amplio doctor\` skips the npx resolve:`,
+        `\nThe "amplio" script needs the CLI as a devDependency (install was skipped):`,
       );
-      console.log(`  ${packageManager} add ${addDevFlag} @useamplio/cli@alpha`);
+      console.log(`  ${devInstallCommand(packageManager, "@useamplio/cli@alpha")}`);
     }
   } catch {
     // best effort — leave package.json alone if it does not parse
@@ -398,6 +420,7 @@ export async function runInit(options: InitOptions): Promise<void> {
     cwd: options.cwd,
     packageManager,
     skipInstall: options.skipInstall,
+    withCliDevDependency: true,
   });
 
   // Apply the tsconfig alias before wiring so wired imports can use ~telemetry/*.
@@ -430,12 +453,42 @@ export async function runInit(options: InitOptions): Promise<void> {
     await runAddMiddleware("trpc", { cwd: options.cwd });
   }
 
+  if (eventName) {
+    await runAddEvent(eventName, { cwd: options.cwd });
+  }
+
+  // Scaffolding continues (instrumentation, package.json script) before the
+  // wiring/verify sections so the output reads scaffold → wire → verify → tips.
+  const instrumentationCreated: string[] = [];
+  const isNext =
+    detected === "next" || middlewareName === "next" || (await hasDependency(options.cwd, "next"));
+  if (isNext) {
+    const config = await readAmplioConfig(options.cwd);
+    const telemetryDir = config?.telemetryDir ?? "telemetry";
+    const loggerPath = path.join(options.cwd, telemetryDir, "logger.ts");
+    const instrumentationResult = await scaffoldNextInstrumentation(
+      options.cwd,
+      telemetryDir,
+      loggerPath,
+    );
+    if (instrumentationResult === "created") {
+      const base = await resolveNextInstrumentationBase(options.cwd);
+      instrumentationCreated.push(
+        base ? `${base}/instrumentation.ts` : "instrumentation.ts",
+      );
+    }
+  }
+
+  await ensureAmplioScript(options.cwd, packageManager);
+
   const wiredFiles: string[] = [];
+  let t3LayoutDetected = false;
   {
     const config = await readAmplioConfig(options.cwd);
     const telemetryDir = config?.telemetryDir ?? "telemetry";
     const srcLayout = (await resolveNextInstrumentationBase(options.cwd)) === "src";
     const layout = await detectT3Layout(options.cwd);
+    t3LayoutDetected = Boolean(layout.routeFile || layout.trpcFile);
     const wantWire = options.wire === true || auto;
     const nextMiddlewarePresent = await pathExists(
       path.join(options.cwd, telemetryDir, "middleware", "next.ts"),
@@ -490,31 +543,7 @@ export async function runInit(options: InitOptions): Promise<void> {
     }
   }
 
-  if (eventName) {
-    await runAddEvent(eventName, { cwd: options.cwd });
-  } else if (auto && middlewareName && !hasAuth && explicitEvent !== "none" && !explicitEvent) {
-    printNoStarterEventHint();
-  }
-
-  const instrumentationCreated: string[] = [];
-  const isNext =
-    detected === "next" || middlewareName === "next" || (await hasDependency(options.cwd, "next"));
   if (isNext) {
-    const config = await readAmplioConfig(options.cwd);
-    const telemetryDir = config?.telemetryDir ?? "telemetry";
-    const loggerPath = path.join(options.cwd, telemetryDir, "logger.ts");
-    const instrumentationResult = await scaffoldNextInstrumentation(
-      options.cwd,
-      telemetryDir,
-      loggerPath,
-    );
-    if (instrumentationResult === "created") {
-      const base = await resolveNextInstrumentationBase(options.cwd);
-      instrumentationCreated.push(
-        base ? `${base}/instrumentation.ts` : "instrumentation.ts",
-      );
-    }
-
     console.log("\nVerify:");
     console.log("  1. Start your dev server");
     console.log(
@@ -522,10 +551,24 @@ export async function runInit(options: InitOptions): Promise<void> {
     );
     console.log("  3. Expect one JSON line on stdout (console sink)");
     console.log("  4. npx @useamplio/cli@alpha doctor");
+  }
 
-    if ((await resolveNextInstrumentationBase(options.cwd)) === "src" && !options.paths) {
-      printTsconfigPathsHint();
-    }
+  if (t3LayoutDetected) {
+    console.log(
+      `\nT3 / create-t3-app guide: node_modules/@useamplio/amplio/docs/t3.md (also ${T3_MD_URL})`,
+    );
+  }
+
+  if (!eventName && auto && middlewareName && !hasAuth && explicitEvent !== "none" && !explicitEvent) {
+    printNoStarterEventHint();
+  }
+
+  if (
+    isNext &&
+    (await resolveNextInstrumentationBase(options.cwd)) === "src" &&
+    !options.paths
+  ) {
+    printTsconfigPathsHint();
   }
 
   if (!middlewareName && !eventName) {
@@ -540,8 +583,6 @@ export async function runInit(options: InitOptions): Promise<void> {
       );
     }
   }
-
-  await ensureAmplioScript(options.cwd, packageManager);
 
   {
     const config = await readAmplioConfig(options.cwd);

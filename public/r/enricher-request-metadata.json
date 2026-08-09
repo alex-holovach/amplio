@@ -2,10 +2,10 @@
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "enricher-request-metadata",
   "title": "Request Metadata Enricher",
-  "description": "Enricher that adds request id / HTTP metadata. (CLI alias: amplio add enricher request)",
+  "description": "Enricher that adds request id / HTTP metadata.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.10"
+    "@useamplio/amplio@^0.1.0-alpha.11"
   ],
   "files": [
     {

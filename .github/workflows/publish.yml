@@ -61,13 +61,19 @@ jobs:
           export NPM_CONFIG_PROVENANCE=true
 
           tag="${{ steps.dist-tag.outputs.tag }}"
-          pnpm --filter @useamplio/amplio publish --access public --tag "$tag" --no-git-checks
-          pnpm --filter @useamplio/cli publish --access public --tag "$tag" --no-git-checks
+          # Publish with --tag latest: npm only populates the package page /
+          # `npm view readme` from a publish that lands the latest tag, and we
+          # keep latest on the newest release (including alpha) anyway so
+          # installs without a tag work. The prerelease channel tag (e.g.
+          # alpha) is added afterwards.
+          pnpm --filter @useamplio/amplio publish --access public --tag latest --no-git-checks
+          pnpm --filter @useamplio/cli publish --access public --tag latest --no-git-checks
 
           version="${GITHUB_REF_NAME#v}"
-          # Keep latest on the newest release (including alpha) so installs without a tag work.
-          npm dist-tag add "@useamplio/amplio@$version" latest
-          npm dist-tag add "@useamplio/cli@$version" latest
+          if [ "$tag" != "latest" ]; then
+            npm dist-tag add "@useamplio/amplio@$version" "$tag"
+            npm dist-tag add "@useamplio/cli@$version" "$tag"
+          fi
 
           npm deprecate @useamplio/core "Use @useamplio/amplio — the core package was renamed." || true
 

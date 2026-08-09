@@ -2,12 +2,11 @@
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "integration-polar",
   "title": "Polar Integration",
-  "description": "Polar payment helpers that emit amplio order-paid events.",
+  "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed).",
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.10",
-    "@polar-sh/sdk@^0.32.0"
+    "@useamplio/amplio@^0.1.0-alpha.11"
   ],
   "registryDependencies": [
     "@useamplio/event-payment-order-paid"

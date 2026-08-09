@@ -7,6 +7,7 @@
       "description": "Wide event when a user completes sign-up.",
       "source": "events/auth/user-signed-up.ts",
       "target": "telemetry/events/auth/user-signed-up.ts",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
         "@useamplio/amplio"
@@ -17,6 +18,7 @@
       "description": "Wide event when a user signs in.",
       "source": "events/auth/user-signed-in.ts",
       "target": "telemetry/events/auth/user-signed-in.ts",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
         "@useamplio/amplio"
@@ -27,6 +29,7 @@
       "description": "Wide event when an email is sent.",
       "source": "events/email/sent.ts",
       "target": "telemetry/events/email/sent.ts",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
         "@useamplio/amplio"
@@ -37,6 +40,7 @@
       "description": "Wide event when a payment order is paid.",
       "source": "events/payment/order-paid.ts",
       "target": "telemetry/events/payment/order-paid.ts",
+      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
         "@useamplio/amplio"
@@ -133,7 +137,7 @@
     },
     {
       "name": "enricher-request-metadata",
-      "description": "Enricher that adds request id / HTTP metadata. (CLI alias: amplio add enricher request)",
+      "description": "Enricher that adds request id / HTTP metadata.",
       "source": "enrichers/request-metadata.ts",
       "target": "telemetry/enrichers/request-metadata.ts",
       "dependencies": [
@@ -172,13 +176,12 @@
     },
     {
       "name": "integration-resend",
-      "description": "Resend email helpers that emit amplio events.",
+      "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).",
       "source": "integrations/resend.ts",
       "target": "telemetry/integrations/resend.ts",
       "dependencies": [
         "zod",
-        "@useamplio/amplio",
-        "resend@^4.0.0"
+        "@useamplio/amplio"
       ],
       "registryDependencies": [
         "event-email-sent"
@@ -186,13 +189,12 @@
     },
     {
       "name": "integration-polar",
-      "description": "Polar payment helpers that emit amplio order-paid events.",
+      "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed).",
       "source": "integrations/polar.ts",
       "target": "telemetry/integrations/polar.ts",
       "dependencies": [
         "zod",
-        "@useamplio/amplio",
-        "@polar-sh/sdk@^0.32.0"
+        "@useamplio/amplio"
       ],
       "registryDependencies": [
         "event-payment-order-paid"

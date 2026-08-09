@@ -15,6 +15,7 @@ export interface DoctorOptions {
   cwd: string;
   fix?: boolean;
   strict?: boolean;
+  verbose?: boolean;
 }
 
 type CheckStatus = "passed" | "warning" | "failed";
@@ -126,6 +127,128 @@ function barrelExportsName(barrelContent: string, exportName: string): boolean {
   return new RegExp(`export\\s*\\{[^}]*\\b${exportName}\\b`).test(barrelContent);
 }
 
+const BARREL_EXPORT_FROM_RE =
+  /^\s*export\s*(\{[^}]*\}|\*)\s*from\s*["'](\.[^"']*)["'];?\s*$/;
+
+async function collectBarrelFiles(eventsDir: string): Promise<string[]> {
+  const barrels: string[] = [];
+  if (!(await pathExists(eventsDir))) {
+    return barrels;
+  }
+
+  async function walk(current: string): Promise<void> {
+    const entries = await fs.readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (entry.isFile() && entry.name === "index.ts") {
+        barrels.push(full);
+      }
+    }
+  }
+
+  await walk(eventsDir);
+  return barrels;
+}
+
+async function resolveBarrelSpecifier(
+  baseDir: string,
+  specifier: string,
+): Promise<string | null> {
+  const resolved = path.resolve(baseDir, specifier);
+  const candidates = [`${resolved}.ts`, `${resolved}.tsx`, path.join(resolved, "index.ts")];
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/** Raw entries of an `export { A, B as C }` clause; empty for `export *`. */
+function exportClauseEntries(clause: string): string[] {
+  if (clause === "*") {
+    return [];
+  }
+  return clause
+    .replace(/[{}]/g, "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function sourceNameOfEntry(entry: string): string {
+  return entry.split(/\s+as\s+/)[0]!.trim();
+}
+
+interface StaleBarrelResult {
+  content: string;
+  stale: string[];
+}
+
+/**
+ * Reverse-direction barrel check: every `export … from "./x"` must resolve to
+ * a file that still exists and still exports the referenced names. Returns the
+ * pruned content plus a description of each stale export found.
+ */
+async function pruneStaleBarrelExports(barrelPath: string): Promise<StaleBarrelResult> {
+  const baseDir = path.dirname(barrelPath);
+  const original = await fs.readFile(barrelPath, "utf8");
+  const lines = original.split("\n");
+  const kept: string[] = [];
+  const stale: string[] = [];
+
+  for (const line of lines) {
+    const match = BARREL_EXPORT_FROM_RE.exec(line);
+    if (!match) {
+      kept.push(line);
+      continue;
+    }
+
+    const specifier = match[2]!;
+    const target = await resolveBarrelSpecifier(baseDir, specifier);
+    if (!target) {
+      stale.push(`"${specifier}" does not resolve to a file`);
+      continue;
+    }
+
+    const entries = exportClauseEntries(match[1]!);
+    if (entries.length === 0) {
+      kept.push(line);
+      continue;
+    }
+
+    const targetContent = await fs.readFile(target, "utf8");
+    const liveEntries = entries.filter((entry) =>
+      new RegExp(`export[^;]*\\b${sourceNameOfEntry(entry)}\\b`).test(targetContent),
+    );
+
+    if (liveEntries.length === entries.length) {
+      kept.push(line);
+      continue;
+    }
+
+    const missing = entries
+      .filter((entry) => !liveEntries.includes(entry))
+      .map(sourceNameOfEntry);
+    stale.push(`"${specifier}" no longer exports ${missing.join(", ")}`);
+    if (liveEntries.length > 0) {
+      kept.push(`export { ${liveEntries.join(", ")} } from "${specifier}";`);
+    }
+  }
+
+  let content = kept.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "");
+  if (!/\S/.test(content)) {
+    // An empty file is not a module under isolatedModules — keep it importable.
+    content = "export {};\n";
+  } else if (!content.endsWith("\n")) {
+    content = `${content}\n`;
+  }
+
+  return { content, stale };
+}
+
 function devScriptUsesTurbo(pkg: { scripts?: Record<string, string> }): boolean {
   const dev = pkg.scripts?.dev ?? "";
   return /--turbo\b|--turbopack\b/.test(dev);
@@ -156,7 +279,7 @@ function printCheck(check: Check): void {
 }
 
 export async function runDoctor(options: DoctorOptions): Promise<number> {
-  const { cwd, fix = false, strict = false } = options;
+  const { cwd, fix = false, strict = false, verbose = false } = options;
   const checks: Check[] = [];
   let hardFailures = 0;
   let warnings = 0;
@@ -391,6 +514,35 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
     });
   }
 
+  // Reverse direction: barrels must not export files that no longer exist
+  // (e.g. an event directory was deleted but the root barrel line remains —
+  // tsc fails with TS2307 while the forward check stays green).
+  // Deepest barrels first so a pruned domain barrel is what the root barrel
+  // is validated (and re-pruned) against.
+  const barrelFiles = (await collectBarrelFiles(paths.events)).sort(
+    (a, b) => b.split(path.sep).length - a.split(path.sep).length,
+  );
+  for (const barrelPath of barrelFiles) {
+    const relBarrel = path.relative(cwd, barrelPath).replace(/\\/g, "/");
+    const { content, stale } = await pruneStaleBarrelExports(barrelPath);
+    if (stale.length === 0) {
+      continue;
+    }
+    if (fix) {
+      await fs.writeFile(barrelPath, content, "utf8");
+      checks.push({
+        status: "passed",
+        message: `Pruned stale export(s) from ${relBarrel}: ${stale.join("; ")}`,
+      });
+    } else {
+      checks.push({
+        status: "warning",
+        message: `${relBarrel} has stale export(s): ${stale.join("; ")} — tsc will fail with TS2307/TS2305`,
+        fix: "Run: amplio doctor --fix (prunes exports whose targets no longer resolve).",
+      });
+    }
+  }
+
   const eventsIndex = path.join(paths.events, "index.ts");
   if (await pathExists(eventsIndex)) {
     const barrel = (await fs.readFile(eventsIndex, "utf8")).trim();
@@ -500,12 +652,17 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
     }
   }
 
-  console.log("\nVerify an event end-to-end:");
-  console.log(
-    "  Hit a wrapped route and look for one JSON object with service, env, timestamp, duration_ms, request_id, success, and your event fields.",
-  );
-  console.log("  Console sink: stdout (one line per emit).");
-  console.log("  JSON sink: amplio.jsonl in the project root (or AMPLIO_JSON_SINK_PATH).");
+  // Print the end-to-end epilogue only when it is likely to be read: after a
+  // fix, when something needs attention, or on request. All-green runs stay
+  // quiet so the epilogue doesn't train users to skim past it.
+  if (fix || warnings > 0 || hardFailures > 0 || verbose) {
+    console.log("\nVerify an event end-to-end:");
+    console.log(
+      "  Hit a wrapped route and look for one JSON object with service, env, timestamp, duration_ms, request_id, success, and your event fields.",
+    );
+    console.log("  Console sink: stdout (one line per emit).");
+    console.log("  JSON sink: amplio.jsonl in the project root (or AMPLIO_JSON_SINK_PATH).");
+  }
 
   if (hardFailures > 0) {
     return 1;

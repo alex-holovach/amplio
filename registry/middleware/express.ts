@@ -41,6 +41,10 @@ export function amplioMiddleware() {
   };
 }
 
-export function useRequestLogger(req: Request): Logger {
+// Accessor for the request logger. Named get*, not use*: this is not a React hook.
+export function getRequestLogger(req: Request): Logger {
   return req.amplio ?? getLogger();
 }
+
+/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */
+export const useRequestLogger = getRequestLogger;

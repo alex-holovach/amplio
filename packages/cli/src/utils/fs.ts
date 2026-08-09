@@ -48,6 +48,20 @@ function stripEmptyBarrelExport(content: string): string {
     .replace(/\n+$/, "");
 }
 
+function barrelAlreadyExports(content: string, exportLine: string): boolean {
+  if (content.includes(exportLine)) {
+    return true;
+  }
+  // Treat any existing re-export of the same symbol as equivalent, so path
+  // style changes (e.g. "./email/index" vs "./email") never create duplicates.
+  const nameMatch = /export\s*\{\s*([A-Za-z0-9_$]+)\s*\}/.exec(exportLine);
+  const exportedName = nameMatch?.[1];
+  if (!exportedName) {
+    return false;
+  }
+  return new RegExp(`export\\s*\\{[^}]*\\b${exportedName}\\b`).test(content);
+}
+
 export async function upsertBarrelExport(
   barrelPath: string,
   exportLine: string,
@@ -60,7 +74,7 @@ export async function upsertBarrelExport(
   }
 
   const current = await fs.readFile(barrelPath, "utf8");
-  if (current.includes(exportLine)) {
+  if (barrelAlreadyExports(current, exportLine)) {
     return "skipped";
   }
 

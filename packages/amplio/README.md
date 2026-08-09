@@ -66,7 +66,7 @@ createLogger()
 - **`getLogger()`** returns a no-op logger outside AsyncLocalStorage (does not throw). **`useLogger()`** is a deprecated alias with identical behavior.
 - **Validation** soft-fails outside `NODE_ENV=test` unless `init({ strict: true })`; failed emits attach `validation.issues` and set `success: false`.
 - **`.error(err)`** on `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when `err.code` is a string or number (Node-style `ENOENT`, etc.) — plain `Error` omits `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field.
-- **Auto fields** on emit: `timestamp`, `duration_ms`, `request_id` (when set), `success` (derived from `status` or set explicitly via `.set()` / `.error()` — omitted when neither applies), `service`, `env`. Schema events set `event` and `@event` to the declared name; `@event` is canonical, `event` is a duplicate for `@`-averse sinks. Pass `init({ canonicalKeyOnly: true })` to emit only `@event`. `createRequestLogger` seeds `http.request` on both keys.
+- **Auto fields** on emit: `timestamp`, `duration_ms` (time since the logger was created — a `.child()` created right before `.emit()` reports `~0`; create the child before the work to time the work), `request_id` (when set), `success` (derived from `status` or set explicitly via `.set()` / `.error()` — omitted when neither applies), `service`, `env`. Schema events set `event` and `@event` to the declared name; `@event` is canonical, `event` is a duplicate for `@`-averse sinks. Pass `init({ canonicalKeyOnly: true })` to emit only `@event`. `createRequestLogger` seeds `http.request` on both keys.
 - **Redaction**: emails, JWTs, Bearer tokens, credit cards, and sensitive field names (on by default; pass `redact: false` to `init()` to opt out). Redaction runs at emit time — fields derived before redaction (e.g. a length computed from a raw value) can look inconsistent next to `[REDACTED]`; that is expected.
 
 ## Sampling
@@ -98,6 +98,14 @@ getLogger()
   .set({ order: { id: "ord_1" } })
   .emit();
 // spine row (http.request) + domain row — same request_id
+```
+
+`duration_ms` on the domain row measures time since `.child()` was called — the chain above reports `~0`. To time an operation, create the child first:
+
+```ts
+const ev = getLogger().child(OrderPlaced); // clock starts here
+const order = await placeOrder();
+ev.set({ order: { id: order.id } }).emit(); // duration_ms = placeOrder() time
 ```
 
 ### Job / cron scope

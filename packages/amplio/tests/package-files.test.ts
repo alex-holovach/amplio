@@ -30,7 +30,7 @@ describe("package files", () => {
   });
 
   it("ships dist for published installs", async () => {
-    expect(pkg.files).toEqual(["dist", "LICENSE", "ALPHA.md", "docs"]);
+    expect(pkg.files).toEqual(["dist", "README.md", "LICENSE", "ALPHA.md", "docs"]);
 
     for (const entry of pkg.files) {
       await access(path.join(packageRoot, entry));

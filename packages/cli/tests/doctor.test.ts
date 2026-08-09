@@ -372,6 +372,128 @@ describe("runDoctor", () => {
 
     const rootBarrel = await readFile(path.join(cwd, "telemetry/events/index.ts"), "utf8");
     expect(rootBarrel).toContain("PaymentOrderPaid");
-    expect(rootBarrel).toContain('./payment/index"');
+    expect(rootBarrel).toContain('./payment"');
+  });
+
+  it("warns about stale barrel exports after an event directory is deleted", async () => {
+    const cwd = await makeTempDir("amplio-doctor-stale-barrel-warn-");
+    await setupDoctorProject(cwd);
+    await mkdir(path.join(cwd, "telemetry/events"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/events/index.ts"),
+      'export { EmailSent } from "./email/index";\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    const output = logs.join("\n");
+    expect(output).toContain("stale export(s)");
+    expect(output).toContain('"./email/index" does not resolve');
+    expect(output).toContain("amplio doctor --fix");
+  });
+
+  it("--fix prunes stale barrel exports whose targets no longer resolve", async () => {
+    const cwd = await makeTempDir("amplio-doctor-stale-barrel-fix-");
+    await setupDoctorProject(cwd);
+    await mkdir(path.join(cwd, "telemetry/events/payment"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/events/payment/order-paid.ts"),
+      'import { defineEvent } from "@useamplio/amplio";\nexport const PaymentOrderPaid = defineEvent("payment.order.paid", {} as never);\n',
+    );
+    await writeFile(
+      path.join(cwd, "telemetry/events/payment/index.ts"),
+      'export { PaymentOrderPaid } from "./order-paid";\n',
+    );
+    // Simulate `rm -rf telemetry/events/email` after `amplio add event email.sent`:
+    // the email/ directory is gone but the root barrel line remains.
+    await writeFile(
+      path.join(cwd, "telemetry/events/index.ts"),
+      'export { PaymentOrderPaid } from "./payment";\nexport { EmailSent } from "./email/index";\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd, fix: true });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).toContain("Pruned stale export(s)");
+
+    const rootBarrel = await readFile(path.join(cwd, "telemetry/events/index.ts"), "utf8");
+    expect(rootBarrel).toContain("PaymentOrderPaid");
+    expect(rootBarrel).not.toContain("EmailSent");
+  });
+
+  it("--fix prunes a root barrel export whose domain barrel lost the name", async () => {
+    const cwd = await makeTempDir("amplio-doctor-stale-chain-fix-");
+    await setupDoctorProject(cwd);
+    // email/sent.ts was deleted but email/index.ts and the root barrel remain.
+    await mkdir(path.join(cwd, "telemetry/events/email"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/events/email/index.ts"),
+      'export { EmailSent } from "./sent";\n',
+    );
+    await writeFile(
+      path.join(cwd, "telemetry/events/index.ts"),
+      'export { EmailSent } from "./email";\n',
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await runDoctor({ cwd, fix: true });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    const domainBarrel = await readFile(
+      path.join(cwd, "telemetry/events/email/index.ts"),
+      "utf8",
+    );
+    expect(domainBarrel.trim()).toBe("export {};");
+    const rootBarrel = await readFile(path.join(cwd, "telemetry/events/index.ts"), "utf8");
+    expect(rootBarrel).not.toContain("EmailSent");
+  });
+
+  it("suppresses the end-to-end epilogue on all-green runs and prints it with --verbose", async () => {
+    const cwd = await makeTempDir("amplio-doctor-epilogue-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { "@useamplio/amplio": "^0.1.0-alpha.9", zod: "^3.24.0" },
+      }),
+    );
+    await writeFile(
+      path.join(cwd, "amplio.json"),
+      JSON.stringify({ telemetryDir: "telemetry", packageManager: "pnpm" }),
+    );
+    await mkdir(path.join(cwd, "telemetry"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/logger.ts"),
+      'import { init } from "@useamplio/amplio";\ninit({ service: "test", env: "test", sinks: [], enrichers: [] });\n',
+    );
+
+    const quietLogs: string[] = [];
+    let log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      quietLogs.push(args.join(" "));
+    });
+    const quietCode = await runDoctor({ cwd });
+    log.mockRestore();
+    expect(quietCode).toBe(0);
+    expect(quietLogs.join("\n")).not.toContain("Verify an event end-to-end");
+
+    const verboseLogs: string[] = [];
+    log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      verboseLogs.push(args.join(" "));
+    });
+    const verboseCode = await runDoctor({ cwd, verbose: true });
+    log.mockRestore();
+    expect(verboseCode).toBe(0);
+    expect(verboseLogs.join("\n")).toContain("Verify an event end-to-end");
   });
 });

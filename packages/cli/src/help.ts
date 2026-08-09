@@ -54,7 +54,7 @@ Usage:
   amplio add event <domain.action or domain.entity.action> [more names…]
   amplio add middleware <hono|express|next|fastify|trpc>
   amplio add sink <console|otlp|json>
-  amplio add enricher <service-metadata|request|request-metadata>
+  amplio add enricher <service-metadata|request-metadata>
   amplio add integration <better-auth|clerk|resend|polar>
 
 Options:
@@ -78,8 +78,9 @@ Usage:
 
 Options:
   --cwd <path>                 Project directory (default: .)
-  --fix                        Regenerate missing event barrel exports
+  --fix                        Regenerate missing barrel exports and prune stale ones
   --strict                     Exit non-zero on warnings (CI gate)
+  --verbose                    Always print the end-to-end verification epilogue
   -h, --help                   Show this help
 
 Example:

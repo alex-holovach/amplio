@@ -14,7 +14,8 @@ init({
   service: "${service}",
   env: process.env.NODE_ENV ?? "development",
   enrichers: [],
-  // sampling: { rate: 0.1, keep: [{ field: "success", equals: false }] },
+  // Canonical sampling config — keep all errors, sample 10% of the rest:
+  // sampling: { rate: 0.1, keep: [{ field: "success", equals: false }, { field: "status", gte: 400 }] },
   // see @useamplio/amplio README ## Sampling
   sinks: [consoleJsonSink],
 });

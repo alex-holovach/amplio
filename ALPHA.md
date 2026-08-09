@@ -41,11 +41,11 @@ app.use("*", amplioMiddleware());
 Emit in a route:
 
 ```ts
-import { useRequestLogger } from "./telemetry/middleware/hono";
+import { getRequestLogger } from "./telemetry/middleware/hono";
 import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
 
 app.post("/signup", async (c) => {
-  const log = useRequestLogger(c);
+  const log = getRequestLogger(c);
   log.child(AuthUserSignedUp).set({
     user: { id: "u_123" },
     signup: { method: "email" },

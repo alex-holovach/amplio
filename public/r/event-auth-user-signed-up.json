@@ -4,9 +4,10 @@
   "title": "Auth User Signed Up",
   "description": "Wide event when a user completes sign-up.",
   "type": "registry:lib",
+  "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.10"
+    "@useamplio/amplio@^0.1.0-alpha.11"
   ],
   "files": [
     {
