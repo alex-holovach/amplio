@@ -6,7 +6,7 @@ description: Hono, Next.js, Express, and Fastify middleware wiring.
 ## Hono
 
 ```bash
-npx @useamplio/cli@alpha init --service my-app --middleware hono --yes
+npx @useamplio/cli@alpha init --service my-app --middleware hono --event auth.user.signed_up --yes
 ```
 
 ```typescript
@@ -36,7 +36,7 @@ To add fields to the request row itself (no separate row): `getRequestLogger(c).
 ## Next.js App Router
 
 ```bash
-npx @useamplio/cli@alpha init --service my-app --middleware next --yes
+npx @useamplio/cli@alpha init --service my-app --middleware next --event auth.user.signed_up --yes
 ```
 
 ```typescript
@@ -58,6 +58,11 @@ The runtime imports `node:async_hooks` at module top level — never import `tel
 
 ## Express
 
+```bash
+npx @useamplio/cli@alpha add middleware express
+npx @useamplio/cli@alpha add event auth.user.signed_up
+```
+
 ```typescript
 import { amplioMiddleware, getRequestLogger } from "./telemetry/middleware/express";
 import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
@@ -74,6 +79,11 @@ app.post("/signup", (req, res) => {
 ```
 
 ## Fastify
+
+```bash
+npx @useamplio/cli@alpha add middleware fastify
+npx @useamplio/cli@alpha add event auth.user.signed_up
+```
 
 ```typescript
 import { amplioPlugin, getRequestLogger } from "./telemetry/middleware/fastify";

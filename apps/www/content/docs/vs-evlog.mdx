@@ -5,14 +5,17 @@ description: How amplio differs from evlog and traditional loggers.
 
 ## evlog
 
+**Same wide-event model. Different ownership model.**
+
 | | evlog | amplio |
 |---|---|---|
 | Code location | Closed npm runtime + optional augmentation | Open `telemetry/` in your repo |
 | Event model | Logger methods + modules | Schema-first `defineEvent` + wide events |
 | Install | npm package | CLI scaffolds editable files (shadcn-style) |
-| API surface | `log.info`, plugins, etc. | Frozen: `defineEvent`, `init`, `.set()` / `.error()` / `.emit()`, `flush()` |
+| API surface | `log.info`, plugins, etc. | Frozen: `defineEvent`, `init`, `getLogger`, `.child()`, `.set()` / `.error()` / `.emit()`, `flush()` |
+| After setup | Runtime dependency you update via npm | CLI is removable — only `@useamplio/amplio` stays installed; you keep editing `telemetry/` |
 
-amplio is **not** evlog. You own the schemas, middleware, sinks, and integrations — they scaffold as readable, typed files under `telemetry/` that you can diff in PRs. The runtime (`@useamplio/amplio`) is ~4.5 KB gzipped with zero runtime dependencies (optional `zod` peer).
+amplio is **not** evlog. You own the schemas, middleware, sinks, and integrations — they scaffold as readable, typed files under `telemetry/` that you can diff in PRs. The runtime (`@useamplio/amplio`) is ~4.5 KB gzipped with zero runtime dependencies (optional `zod` peer). If you'd rather have telemetry logic updated for you through npm than own it in your repo, a closed runtime is the simpler trade — amplio optimizes for the opposite: telemetry changes go through your code review.
 
 ## vs printf logging
 

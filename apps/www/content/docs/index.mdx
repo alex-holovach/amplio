@@ -20,8 +20,8 @@ npx @useamplio/cli@alpha add middleware hono
 ## Emit a wide event
 
 ```typescript
-import { logger } from "./telemetry/logger.js";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up.js";
+import { logger } from "./telemetry/logger";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
 
 logger
   .event(AuthUserSignedUp)
@@ -55,7 +55,7 @@ Inside request middleware scope, `.child()` emits a separate row that shares the
 
 ```typescript
 import { getLogger } from "@useamplio/amplio";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up.js";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
 
 // inside withAmplio / hono middleware:
 getLogger()

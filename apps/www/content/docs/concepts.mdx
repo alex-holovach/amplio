@@ -45,6 +45,7 @@ HTTP middleware emits one **spine** row (`http.request` or `trpc.request`). Doma
 
 ```typescript
 import { getLogger } from "@useamplio/amplio";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
 
 // inside request scope:
 getLogger()
@@ -53,6 +54,17 @@ getLogger()
   .emit();
 // → spine row + domain row, same request_id
 ```
+
+What lands in the sink — two rows, one `request_id` (abridged):
+
+```json
+{ "@event": "http.request", "request_id": "req_m1x_a4f", "http": { "method": "POST", "path": "/signup", "status": 200 }, "status": 200, "success": true, "duration_ms": 38 }
+{ "@event": "auth.user.signed_up", "request_id": "req_m1x_a4f", "user": { "id": "u_123" }, "signup": { "method": "email" }, "duration_ms": 0 }
+```
+
+The domain row copies `request_id` only — no `http.*` duplication, and no `success` key
+(it has no `status`), which is why domain events are filtered with `success != false`,
+never `success = true`.
 
 | API | Use when |
 |---|---|

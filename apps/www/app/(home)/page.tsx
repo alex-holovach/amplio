@@ -5,7 +5,7 @@ export default function HomePage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-1 flex-col items-center justify-center px-6 py-16 text-center">
       <p className="mb-3 text-sm font-medium tracking-wide text-fd-muted-foreground uppercase">
-        {appName}
+        {appName} — shadcn for observability
       </p>
       <h1 className="mb-4 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
         Schema-first telemetry you own

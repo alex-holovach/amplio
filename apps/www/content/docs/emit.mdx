@@ -6,6 +6,9 @@ description: set, error, emit, child, sealing, and sampling behavior.
 ## Lifecycle
 
 ```typescript
+import { logger } from "./telemetry/logger";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
+
 const log = logger.event(AuthUserSignedUp);
 
 log.set({ user: { id: "u_1" } });
