@@ -49,7 +49,13 @@ function toRegistryTarget(target) {
   return target;
 }
 
-async function buildItem(item) {
+function pinAmplioDependencies(deps, amplioVersion) {
+  return (deps ?? ["@useamplio/amplio"]).map((dep) =>
+    dep === "@useamplio/amplio" ? `@useamplio/amplio@^${amplioVersion}` : dep,
+  );
+}
+
+async function buildItem(item, amplioVersion) {
   const sourcePath = path.join(registryRoot, item.source);
   const content = await readFile(sourcePath, "utf8");
   const fileType = item.source.endsWith(".json") ? "registry:file" : "registry:lib";
@@ -60,7 +66,7 @@ async function buildItem(item) {
     title: item.title ?? titleFromName(item.name),
     description: item.description ?? `amplio registry item: ${item.name}`,
     type: "registry:lib",
-    dependencies: item.dependencies ?? ["@useamplio/amplio"],
+    dependencies: pinAmplioDependencies(item.dependencies, amplioVersion),
     ...(item.devDependencies ? { devDependencies: item.devDependencies } : {}),
     ...(item.registryDependencies ? { registryDependencies: item.registryDependencies } : {}),
     files: [
@@ -92,6 +98,9 @@ async function cleanOrphanedPublicItems(manifestItemNames) {
 }
 
 async function main() {
+  const rootPkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+  const amplioVersion = rootPkg.version;
+
   const manifest = JSON.parse(
     await readFile(path.join(registryRoot, "registry.manifest.json"), "utf8"),
   );
@@ -101,7 +110,7 @@ async function main() {
 
   const builtItems = [];
   for (const item of manifest.items) {
-    const payload = await buildItem(item);
+    const payload = await buildItem(item, amplioVersion);
     builtItems.push(payload);
     await writeFile(
       path.join(publicDir, `${item.name}.json`),

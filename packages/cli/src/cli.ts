@@ -13,15 +13,17 @@ import {
   runAddSink,
 } from "./commands/add.js";
 import { runList } from "./commands/list.js";
+import { runDoctor } from "./commands/doctor.js";
 
 function printHelp(): void {
   console.log(`amplio — schema-first wide-event telemetry scaffolding
 
 Usage:
   amplio init [options]
+  amplio doctor [options]
   amplio list [kind]   List registry items (id, title, description)
   amplio add event <domain.entity.action>
-  amplio add middleware <hono|express|next|fastify>
+  amplio add middleware <hono|express|next|fastify|trpc>
   amplio add sink <console|otlp|json>
   amplio add enricher <service-metadata|request|request-metadata>
   amplio add integration <better-auth|clerk|resend|polar>
@@ -210,6 +212,11 @@ async function main(): Promise<void> {
         default:
           throw new Error(`Unknown add kind "${kind}".`);
       }
+    }
+
+    if (command === "doctor") {
+      const exitCode = await runDoctor({ cwd });
+      process.exit(exitCode);
     }
 
     throw new Error(`Unknown command "${command}".`);

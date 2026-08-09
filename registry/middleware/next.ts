@@ -5,11 +5,21 @@ import {
   useLogger,
   type Logger,
 } from "@useamplio/amplio";
-import type { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export interface WithAmplioOptions {
   waitUntil?: (promise: Promise<unknown>) => void;
 }
+
+let afterFn: ((task: () => unknown) => void) | undefined;
+void import("next/server")
+  .then((m) => {
+    const a = (m as { after?: unknown }).after;
+    if (typeof a === "function") {
+      afterFn = a as typeof afterFn;
+    }
+  })
+  .catch(() => {});
 
 let warnedNoWaitUntil = false;
 
@@ -19,15 +29,9 @@ function scheduleFlush(options?: WithAmplioOptions): void {
     return;
   }
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { after } = require("next/server") as typeof import("next/server");
-    if (typeof after === "function") {
-      after(() => flush());
-      return;
-    }
-  } catch {
-    // next/server not available
+  if (afterFn) {
+    afterFn(() => flush());
+    return;
   }
 
   void flush();
@@ -41,18 +45,18 @@ function scheduleFlush(options?: WithAmplioOptions): void {
   }
 }
 
-export function withAmplio<T extends (request: NextRequest, ...args: never[]) => Promise<NextResponse>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withAmplio<T extends (request: NextRequest, ...args: any[]) => Promise<Response>>(
   handler: T,
   options?: WithAmplioOptions,
 ): T {
-  const wrapped = (async (request: NextRequest, ...rest: never[]) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wrapped = (async (request: NextRequest, ...rest: any[]) => {
     const requestLogger = createRequestLogger({
       method: request.method,
       path: request.nextUrl.pathname,
     }).set({
       http: {
-        method: request.method,
-        path: request.nextUrl.pathname,
         search: request.nextUrl.search || undefined,
       },
     });

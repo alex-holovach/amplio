@@ -1,5 +1,5 @@
 import { logger } from "../logger";
-import { EmailSent } from "../events/email/email-sent";
+import { EmailSent } from "../events/email/sent";
 
 type ResendEmailEventData = {
   email_id: string;

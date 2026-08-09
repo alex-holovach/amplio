@@ -1,4 +1,9 @@
-import { resolveAlwaysSample, resolveConfig } from "./config.js";
+import {
+  isInitialized,
+  resolveAlwaysSample,
+  resolveConfig,
+  warnEmitBeforeInitOnce,
+} from "./config.js";
 import { createError } from "./error.js";
 import { isDevelopment, isTest } from "./env.js";
 import { getSealedNoopLogger } from "./noop-logger.js";
@@ -257,6 +262,16 @@ class InternalLoggerImpl implements InternalLogger {
   emit(): LogRecord | null {
     if (this._seal.sealed) {
       warnSealed("emit");
+      return null;
+    }
+    if (!isInitialized()) {
+      if (isDevelopment()) {
+        warnEmitBeforeInitOnce(() => {
+          console.warn(
+            "[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup - in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. See ALPHA.md.",
+          );
+        });
+      }
       return null;
     }
     const record = emitInternal(this);

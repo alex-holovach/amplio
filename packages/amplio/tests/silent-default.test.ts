@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createLogger, resetConfigForTests } from "../src/index.js";
 
 beforeEach(() => {
@@ -12,17 +12,26 @@ describe("library-first silence", () => {
     ).not.toThrow();
   });
 
-  it("emit() returns a record with auto fields and user context", () => {
+  it("emit() before init drops the record", () => {
     const record = createLogger()
       .set({ feature: "checkout", user_id: "u_1" })
       .emit();
 
-    expect(record.service).toBe("");
-    expect(record.env).toBe("");
-    expect(record.feature).toBe("checkout");
-    expect(record.user_id).toBe("u_1");
-    expect(typeof record.timestamp).toBe("string");
-    expect(typeof record.duration_ms).toBe("number");
-    expect(record.success).toBe(true);
+    expect(record).toBeNull();
+  });
+
+  it("emit() before init is silent in production", () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const record = createLogger().set({ feature: "checkout" }).emit();
+      expect(record).toBeNull();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      process.env.NODE_ENV = originalNodeEnv;
+    }
   });
 });

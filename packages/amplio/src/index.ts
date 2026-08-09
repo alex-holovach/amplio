@@ -1,9 +1,20 @@
 export { defineEvent } from "./define-event.js";
-export { init, getConfig, resetConfigForTests } from "./config.js";
+export {
+  init,
+  getConfig,
+  isInitialized,
+  resetConfigForTests,
+  resetEmitBeforeInitWarningForTests,
+} from "./config.js";
 export { createLogger, logger } from "./logger.js";
 export type { LoggerFacade } from "./logger.js";
 export { createRequestLogger } from "./request-logger.js";
-export { runWithLogger, useLogger } from "./context.js";
+export {
+  runWithLogger,
+  useLogger,
+  hasAmbientLogger,
+  resetUseLoggerOutsideScopeWarningForTests,
+} from "./context.js";
 export { createError } from "./error.js";
 export { deepMerge } from "./deep-merge.js";
 export { redactRecord } from "./redact.js";

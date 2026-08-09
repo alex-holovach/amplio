@@ -56,11 +56,14 @@ export async function resolveRegistryPath(cwd: string): Promise<string> {
   return bundled;
 }
 
-export function defaultAmplioConfig(registryPath: string): AmplioConfig {
+export function defaultAmplioConfig(
+  registryPath: string,
+  packageManager?: AmplioConfig["packageManager"],
+): AmplioConfig {
   return {
     telemetryDir: "telemetry",
     registry: registryPath,
     typescript: true,
-    packageManager: "pnpm",
+    ...(packageManager ? { packageManager } : {}),
   };
 }

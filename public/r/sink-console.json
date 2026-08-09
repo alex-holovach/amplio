@@ -5,7 +5,7 @@
   "description": "Console sink that prints wide events as JSON.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio"
+    "@useamplio/amplio@^0.1.0-alpha.5"
   ],
   "files": [
     {

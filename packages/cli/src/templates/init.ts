@@ -1,5 +1,9 @@
 export function renderLoggerTemplate(service = "my-app"): string {
-  return `import { init, logger } from "@useamplio/amplio";
+  return `// Import this module for side effects before any request handling
+// (e.g. \`import "./telemetry/logger"\` or via Next.js instrumentation.ts).
+// emit() before init() is a silent no-op (dev builds warn once).
+// Run \`npx @useamplio/cli@alpha doctor\` to verify wiring.
+import { init, logger } from "@useamplio/amplio";
 import type { LogRecord, Sink } from "@useamplio/amplio";
 
 const consoleJsonSink: Sink = (record: LogRecord) => {
@@ -35,30 +39,12 @@ export function renderAmplioConfig(options: {
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
-/** shadcn components.json so @useamplio/* installs into telemetry/ */
-export function renderComponentsJson(registryUrl: string): string {
-  const config = {
-    $schema: "https://ui.shadcn.com/schema.json",
-    style: "new-york",
-    rsc: false,
-    tsx: true,
-    tailwind: {
-      config: "",
-      css: "",
-      baseColor: "neutral",
-      cssVariables: true,
-    },
-    aliases: {
-      components: "@/components",
-      utils: "@/lib/utils",
-      ui: "@/components/ui",
-      lib: "@/lib",
-      hooks: "@/hooks",
-    },
-    registries: {
-      "@useamplio": registryUrl,
-    },
-  };
-
-  return `${JSON.stringify(config, null, 2)}\n`;
+export function renderInstrumentationTemplate(loggerImportPath: string): string {
+  return `// Next.js instrumentation hook - runs once when the server boots.
+// Importing telemetry/logger here runs amplio init() before any request;
+// without it, emit() calls are silent no-ops.
+export async function register() {
+  await import("${loggerImportPath}");
+}
+`;
 }

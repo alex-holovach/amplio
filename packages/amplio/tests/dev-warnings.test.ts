@@ -1,0 +1,98 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createLogger,
+  createRequestLogger,
+  hasAmbientLogger,
+  init,
+  resetConfigForTests,
+  resetEmitBeforeInitWarningForTests,
+  resetUseLoggerOutsideScopeWarningForTests,
+  runWithLogger,
+  useLogger,
+  type LogRecord,
+  type Sink,
+} from "../src/index.js";
+import { getContextNoopLogger } from "../src/noop-logger.js";
+
+const EMIT_BEFORE_INIT_WARNING =
+  "[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup - in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. See ALPHA.md.";
+const USE_LOGGER_OUTSIDE_SCOPE_WARNING =
+  "[amplio] useLogger() called outside runWithLogger(); fields will be dropped. Establish request scope with middleware (runWithLogger), or use the logger facade for one-shot scripts.";
+
+const capture = (): { records: LogRecord[]; sink: Sink } => {
+  const records: LogRecord[] = [];
+  return {
+    records,
+    sink: (record) => {
+      records.push(record);
+    },
+  };
+};
+
+beforeEach(() => {
+  resetConfigForTests();
+  resetEmitBeforeInitWarningForTests();
+  resetUseLoggerOutsideScopeWarningForTests();
+});
+
+describe("dev warnings", () => {
+  it("emit before init warns exactly once in dev-mode and drops the record without throwing", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(() => createLogger().set({ a: 1 }).emit()).not.toThrow();
+    expect(() => createLogger().set({ b: 2 }).emit()).not.toThrow();
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(EMIT_BEFORE_INIT_WARNING);
+
+    warn.mockRestore();
+  });
+
+  it("useLogger outside ALS warns once in dev and returns a noop", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const first = useLogger();
+    const second = useLogger();
+
+    expect(first).toBe(getContextNoopLogger());
+    expect(second).toBe(getContextNoopLogger());
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(USE_LOGGER_OUTSIDE_SCOPE_WARNING);
+
+    warn.mockRestore();
+  });
+
+  it("hasAmbientLogger is false outside runWithLogger, true inside, and does not warn", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(hasAmbientLogger()).toBe(false);
+
+    runWithLogger(createLogger(), () => {
+      expect(hasAmbientLogger()).toBe(true);
+    });
+
+    expect(hasAmbientLogger()).toBe(false);
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+  });
+
+  it("createRequestLogger record contains request_id and http.method/http.path but no top-level method/path", () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+
+    const record = createRequestLogger({
+      method: "POST",
+      path: "/users",
+      requestId: "req_123",
+    })
+      .set({ status: 201 })
+      .emit();
+
+    expect(record?.request_id).toBe("req_123");
+    expect(record?.http).toEqual({ method: "POST", path: "/users" });
+    expect(record?.method).toBeUndefined();
+    expect(record?.path).toBeUndefined();
+    expect(records).toHaveLength(1);
+  });
+});

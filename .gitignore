@@ -17,3 +17,4 @@ packages/cli/.registry-staging-*/
 .vercel
 .vercelignore.local
 .env*
+amplio.jsonl

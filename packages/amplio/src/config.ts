@@ -2,9 +2,11 @@ import type { AmplioConfig, SamplingConfig } from "./types.js";
 import { logger, type LoggerFacade } from "./logger.js";
 import { resetCompiledRedactForTests, setCompiledRedactFromConfig } from "./redact.js";
 import { resetPendingSinksForTests } from "./sinks.js";
+import { resetUseLoggerOutsideScopeWarningForTests } from "./context.js";
 
 let activeConfig: AmplioConfig | null = null;
 let alwaysSample = true;
+let warnedEmitBeforeInit = false;
 
 const computeAlwaysSample = (sampling?: SamplingConfig): boolean => {
   if (!sampling) {
@@ -81,13 +83,31 @@ export function getConfig(): AmplioConfig {
   };
 }
 
+export function isInitialized(): boolean {
+  return activeConfig !== null;
+}
+
 export function resolveConfig(): AmplioConfig {
-  return activeConfig ?? { service: "", env: "", sinks: [], enrichers: [] };
+  return activeConfig ?? { service: "", env: "", sinks: [] };
+}
+
+export function warnEmitBeforeInitOnce(warn: () => void): void {
+  if (warnedEmitBeforeInit) {
+    return;
+  }
+  warnedEmitBeforeInit = true;
+  warn();
+}
+
+export function resetEmitBeforeInitWarningForTests(): void {
+  warnedEmitBeforeInit = false;
 }
 
 export function resetConfigForTests(): void {
   activeConfig = null;
   alwaysSample = true;
+  warnedEmitBeforeInit = false;
+  resetUseLoggerOutsideScopeWarningForTests();
   resetCompiledRedactForTests();
   resetPendingSinksForTests();
 }

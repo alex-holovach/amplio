@@ -1,3 +1,8 @@
+/**
+ * Dev-grade JSONL sink — appendFileSync blocks the event loop.
+ * Use sink-otlp for production. Path from AMPLIO_JSON_SINK_PATH env or option;
+ * defaults to amplio.jsonl (add to .gitignore).
+ */
 import fs from "node:fs";
 import path from "node:path";
 import type { LogRecord, Sink } from "@useamplio/amplio";

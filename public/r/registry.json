@@ -42,14 +42,20 @@
     {
       "name": "middleware-next",
       "type": "registry:lib",
-      "title": "Next.js Middleware",
-      "description": "Next.js middleware that attaches request-scoped amplio context."
+      "title": "Next.js Route Handler Wrapper",
+      "description": "Route-handler wrapper (withAmplio) that owns the request wide event - this is not Next.js middleware.ts."
     },
     {
       "name": "middleware-fastify",
       "type": "registry:lib",
       "title": "Fastify Middleware",
       "description": "Fastify plugin that attaches request-scoped amplio context."
+    },
+    {
+      "name": "middleware-trpc",
+      "type": "registry:lib",
+      "title": "tRPC Middleware",
+      "description": "tRPC middleware that annotates the ambient request wide event with trpc fields (pair with the Next.js route-handler wrapper)."
     },
     {
       "name": "sink-console",

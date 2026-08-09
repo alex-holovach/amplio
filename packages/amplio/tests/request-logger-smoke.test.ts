@@ -21,8 +21,9 @@ describe("request logger smoke", () => {
     expect(records).toHaveLength(1);
     expect(records[0]).toBe(record);
     expect(record.service).toBe("smoke");
-    expect(record.method).toBe("GET");
-    expect(record.path).toBe("/health");
+    expect(record.http).toEqual({ method: "GET", path: "/health" });
+    expect(record.method).toBeUndefined();
+    expect(record.path).toBeUndefined();
     expect(record.route).toEqual({ name: "health" });
     expect(record.status).toBe(200);
   });

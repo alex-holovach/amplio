@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile, access } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, access } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -31,21 +31,19 @@ async function initWithRegistry(cwd: string, service?: string): Promise<void> {
 }
 
 describe("runInit", () => {
-  it("creates amplio.json, telemetry/logger.ts, and telemetry tree dirs", async () => {
+  it("creates amplio.json, telemetry/logger.ts, and telemetry/events only", async () => {
     const cwd = await makeTempDir("amplio-init-");
     await runInit({ cwd, service: "test-app" , skipInstall: true });
 
     await access(path.join(cwd, "amplio.json"));
     await access(path.join(cwd, "telemetry/logger.ts"));
     await access(path.join(cwd, "telemetry/events"));
-    await access(path.join(cwd, "telemetry/middleware"));
-    await access(path.join(cwd, "telemetry/sinks"));
-    await access(path.join(cwd, "telemetry/enrichers"));
-    await access(path.join(cwd, "telemetry/integrations"));
-    await access(path.join(cwd, "telemetry/events/index.ts"));
 
-    const eventsIndex = await readFile(path.join(cwd, "telemetry/events/index.ts"), "utf8");
-    expect(eventsIndex.trim()).toBe("export {};");
+    await expect(access(path.join(cwd, "telemetry/middleware"))).rejects.toThrow();
+    await expect(access(path.join(cwd, "telemetry/sinks"))).rejects.toThrow();
+    await expect(access(path.join(cwd, "telemetry/enrichers"))).rejects.toThrow();
+    await expect(access(path.join(cwd, "telemetry/integrations"))).rejects.toThrow();
+    await expect(access(path.join(cwd, "telemetry/events/index.ts"))).rejects.toThrow();
 
     const config = JSON.parse(await readFile(path.join(cwd, "amplio.json"), "utf8"));
     expect(config.telemetryDir).toBe("telemetry");
@@ -168,7 +166,7 @@ describe("runAddEvent", () => {
     await initWithRegistry(cwd);
     await runAddEvent("email.sent", { cwd });
 
-    const eventPath = path.join(cwd, "telemetry/events/email/email-sent.ts");
+    const eventPath = path.join(cwd, "telemetry/events/email/sent.ts");
     await access(eventPath);
 
     const eventSource = await readFile(eventPath, "utf8");
@@ -258,6 +256,19 @@ describe("runAddMiddleware", () => {
     expect(source).toContain("useRequestLogger");
   });
 
+
+
+  it("scaffolds trpc middleware after init", async () => {
+    const cwd = await makeTempDir("amplio-mw-trpc-");
+    await initWithRegistry(cwd);
+    await runAddMiddleware("trpc", { cwd });
+
+    const middlewarePath = path.join(cwd, "telemetry/middleware/trpc.ts");
+    await access(middlewarePath);
+
+    const source = await readFile(middlewarePath, "utf8");
+    expect(source).toContain("hasAmbientLogger");
+  });
 
   it("add middleware next without init creates telemetry/middleware/next.ts", async () => {
     const cwd = await makeTempDir("amplio-mw-next-no-init-");
@@ -387,6 +398,20 @@ export { logger };
     expect(source).toContain("jsonFileSink");
   });
 
+
+  it("add sink json updates .gitignore and .env.example", async () => {
+    const cwd = await makeTempDir("amplio-sink-json-gitignore-");
+    await initWithRegistry(cwd);
+    await writeFile(path.join(cwd, ".env.example"), "FOO=bar\n");
+    await runAddSink("json", { cwd });
+
+    const gitignore = await readFile(path.join(cwd, ".gitignore"), "utf8");
+    expect(gitignore).toContain("amplio.jsonl");
+
+    const envExample = await readFile(path.join(cwd, ".env.example"), "utf8");
+    expect(envExample).toContain("AMPLIO_JSON_SINK_PATH");
+  });
+
   it("add sink json without init creates telemetry/sinks/json.ts", async () => {
     const cwd = await makeTempDir("amplio-sink-json-no-init-");
     await expect(runAddSink("json", { cwd })).resolves.toBeUndefined();
@@ -494,7 +519,7 @@ describe("runAddIntegration", () => {
     const integrationPath = path.join(cwd, "telemetry/integrations/resend.ts");
     await access(integrationPath);
 
-    const eventPath = path.join(cwd, "telemetry/events/email/email-sent.ts");
+    const eventPath = path.join(cwd, "telemetry/events/email/sent.ts");
     await access(eventPath);
 
     const integrationSource = await readFile(integrationPath, "utf8");
@@ -649,5 +674,28 @@ describe("runInit framework detect", () => {
     const middlewarePath = path.join(cwd, "telemetry/middleware/hono.ts");
     await access(middlewarePath);
     await expect(access(path.join(cwd, "telemetry/events/auth/user-signed-up.ts"))).rejects.toThrow();
+  });
+
+  it("detects npm from package-lock.json in amplio.json", async () => {
+    const cwd = await makeTempDir("amplio-init-pm-detect-");
+    await writeFile(path.join(cwd, "package-lock.json"), "{}");
+    await runInit({ cwd, skipInstall: true });
+
+    const config = JSON.parse(await readFile(path.join(cwd, "amplio.json"), "utf8"));
+    expect(config.packageManager).toBe("npm");
+  });
+
+  it("creates instrumentation.ts for Next.js projects", async () => {
+    const cwd = await makeTempDir("amplio-init-next-instrumentation-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ dependencies: { next: "^15.0.0" } }),
+    );
+    await mkdir(path.join(cwd, "src/app"), { recursive: true });
+    await runInit({ cwd, yes: true, skipInstall: true });
+
+    const instrumentation = await readFile(path.join(cwd, "src/instrumentation.ts"), "utf8");
+    expect(instrumentation).toContain("telemetry/logger");
+    expect(instrumentation).toContain("register");
   });
 });

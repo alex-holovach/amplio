@@ -62,4 +62,36 @@ describe("registry build", () => {
     expect(sinkConsoleIndex).toBeDefined();
     expect(sinkConsoleIndex.title).toBe("Console Sink");
   });
+
+  it("pins @useamplio/amplio dependency to monorepo version", async () => {
+    const itemPath = path.join(repoRoot, "public/r/middleware-hono.json");
+    const item = JSON.parse(await readFile(itemPath, "utf8"));
+    const rootPkg = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
+    expect(item.dependencies).toContain(`@useamplio/amplio@^${rootPkg.version}`);
+  });
+
+  it("middleware items omit framework devDependencies", async () => {
+    for (const name of ["middleware-hono", "middleware-express", "middleware-next", "middleware-fastify"]) {
+      const item = JSON.parse(
+        await readFile(path.join(repoRoot, "public/r", `${name}.json`), "utf8"),
+      );
+      expect(item.devDependencies, `${name} devDependencies`).toBeUndefined();
+    }
+  });
+
+  it("includes middleware-trpc with pinned amplio dependency", async () => {
+    const registry = JSON.parse(
+      await readFile(path.join(repoRoot, "public/r/registry.json"), "utf8"),
+    );
+    const names = registry.items.map((item: { name: string }) => item.name);
+    expect(names).toContain("middleware-trpc");
+
+    const item = JSON.parse(
+      await readFile(path.join(repoRoot, "public/r/middleware-trpc.json"), "utf8"),
+    );
+    const rootPkg = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
+    expect(item.title).toBe("tRPC Middleware");
+    expect(item.dependencies).toContain(`@useamplio/amplio@^${rootPkg.version}`);
+    expect(item.files?.[0]?.content).toContain("amplioTrpcMiddleware");
+  });
 });

@@ -1,13 +1,12 @@
 import path from "node:path";
 import { runAddEvent, runAddMiddleware } from "./add.js";
-import {
-  renderAmplioConfig,
-  renderComponentsJson,
-  renderLoggerTemplate,
-} from "../templates/init.js";
+import { renderAmplioConfig, renderInstrumentationTemplate, renderLoggerTemplate } from "../templates/init.js";
+import { upsertComponentsJson } from "../utils/components-json.js";
 import { detectFramework, shouldAutoScaffold } from "../utils/detect-framework.js";
-import { ensureDir, writeFileIfMissing } from "../utils/fs.js";
-import { resolveRegistryPath } from "../utils/config.js";
+import { detectPackageManager } from "../utils/detect-package-manager.js";
+import { ensureDir, pathExists, writeFileIfMissing } from "../utils/fs.js";
+import { hasDependency } from "../utils/has-dep.js";
+import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
 import { ensureRuntimeDependencies } from "../utils/install-deps.js";
 import { resolveProjectPaths } from "../utils/paths.js";
 import { registryPathForConfig } from "../utils/registry-path.js";
@@ -59,23 +58,65 @@ function resolveEventName(
   return null;
 }
 
+async function resolveNextInstrumentationBase(cwd: string): Promise<"src" | ""> {
+  if (
+    (await pathExists(path.join(cwd, "src/app"))) ||
+    (await pathExists(path.join(cwd, "src/pages")))
+  ) {
+    return "src";
+  }
+  return "";
+}
+
+function loggerImportForInstrumentation(
+  cwd: string,
+  instrumentationBase: "src" | "",
+  loggerPath: string,
+): string {
+  const instrumentationDir = instrumentationBase
+    ? path.join(cwd, instrumentationBase)
+    : cwd;
+  const relative = path
+    .relative(instrumentationDir, loggerPath)
+    .replace(/\\/g, "/")
+    .replace(/\.ts$/, "");
+  return relative.startsWith(".") ? relative : `./${relative}`;
+}
+
+async function scaffoldNextInstrumentation(
+  cwd: string,
+  telemetryDir: string,
+  loggerPath: string,
+): Promise<"created" | "exists"> {
+  const base = await resolveNextInstrumentationBase(cwd);
+  const instrumentationTs = path.join(cwd, base, "instrumentation.ts");
+  const instrumentationJs = path.join(cwd, base, "instrumentation.js");
+
+  if ((await pathExists(instrumentationTs)) || (await pathExists(instrumentationJs))) {
+    console.log(
+      "\nNext.js: ensure instrumentation.ts imports your telemetry/logger so init() runs at boot.",
+    );
+    return "exists";
+  }
+
+  const importPath = loggerImportForInstrumentation(cwd, base, loggerPath);
+  await writeFileIfMissing(
+    instrumentationTs,
+    renderInstrumentationTemplate(importPath),
+  );
+  console.log(`  ✓ ${path.relative(cwd, instrumentationTs)}`);
+  return "created";
+}
+
 export async function runInit(options: InitOptions): Promise<void> {
   const registryPath = await resolveRegistryPath(options.cwd);
   const paths = resolveProjectPaths(options.cwd, "telemetry");
   const registry = registryPathForConfig(options.cwd, registryPath);
-  const packageManager = options.packageManager ?? "pnpm";
+  const packageManager =
+    options.packageManager ?? (await detectPackageManager(options.cwd));
 
-  const scaffoldDirs = [
-    paths.events,
-    paths.middleware,
-    paths.sinks,
-    paths.enrichers,
-    paths.integrations,
-  ] as const;
-
-  for (const dir of scaffoldDirs) {
-    await ensureDir(dir);
-  }
+  await ensureDir(paths.telemetry);
+  await ensureDir(paths.events);
 
   const configResult = await writeFileIfMissing(
     paths.config,
@@ -87,40 +128,26 @@ export async function runInit(options: InitOptions): Promise<void> {
   );
 
   const componentsPath = path.join(options.cwd, "components.json");
-  const componentsResult = await writeFileIfMissing(
-    componentsPath,
-    renderComponentsJson(DEFAULT_REGISTRY_URL),
-  );
+  const componentsResult = await upsertComponentsJson(options.cwd, DEFAULT_REGISTRY_URL);
 
   const loggerResult = await writeFileIfMissing(
     paths.logger,
     renderLoggerTemplate(options.service),
   );
 
-  const eventsIndexPath = path.join(paths.events, "index.ts");
-  const eventsIndexResult = await writeFileIfMissing(
-    eventsIndexPath,
-    "export {};\n",
-  );
-
   console.log("amplio init");
   console.log(`  ${configResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, paths.config)}`);
   console.log(
-    `  ${componentsResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, componentsPath)}`,
+    `  ${componentsResult === "created" ? "✓" : componentsResult === "updated" ? "↻" : "·"} ${path.relative(options.cwd, componentsPath)}`,
   );
   console.log(`  ${loggerResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, paths.logger)}`);
-  for (const dir of scaffoldDirs) {
-    console.log(`  ✓ ${path.relative(options.cwd, dir)}/`);
-  }
-  console.log(
-    `  ${eventsIndexResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, eventsIndexPath)}`,
-  );
+  console.log(`  ✓ ${path.relative(options.cwd, paths.telemetry)}/`);
+  console.log(`  ✓ ${path.relative(options.cwd, paths.events)}/`);
 
   if (
     configResult === "skipped" ||
     componentsResult === "skipped" ||
-    loggerResult === "skipped" ||
-    eventsIndexResult === "skipped"
+    loggerResult === "skipped"
   ) {
     console.log("\nExisting files were left unchanged.");
   }
@@ -144,8 +171,34 @@ export async function runInit(options: InitOptions): Promise<void> {
     await runAddMiddleware(middlewareName, { cwd: options.cwd });
   }
 
+  if (
+    auto &&
+    middlewareName === "next" &&
+    (await hasDependency(options.cwd, "@trpc/server"))
+  ) {
+    await runAddMiddleware("trpc", { cwd: options.cwd });
+    console.log(
+      "\ntRPC detected: see ALPHA.md for wiring tRPC middleware with the Next.js route-handler wrapper.",
+    );
+  }
+
   if (eventName) {
     await runAddEvent(eventName, { cwd: options.cwd });
+  }
+
+  const isNext =
+    detected === "next" || middlewareName === "next" || (await hasDependency(options.cwd, "next"));
+  if (isNext) {
+    const config = await readAmplioConfig(options.cwd);
+    const telemetryDir = config?.telemetryDir ?? "telemetry";
+    const loggerPath = path.join(options.cwd, telemetryDir, "logger.ts");
+    await scaffoldNextInstrumentation(options.cwd, telemetryDir, loggerPath);
+
+    console.log("\nVerify:");
+    console.log("  1. Start your dev server");
+    console.log("  2. curl any route wrapped with amplio middleware");
+    console.log("  3. Expect one JSON line on stdout (console sink)");
+    console.log("  4. npx @useamplio/cli@alpha doctor");
   }
 
   if (!middlewareName && !eventName) {

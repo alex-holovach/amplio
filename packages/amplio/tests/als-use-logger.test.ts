@@ -43,11 +43,13 @@ describe("ALS useLogger", () => {
     expect(noop.sealed).toBe(true);
   });
 
-  it("useLogger() outside runWithLogger warns on set in development/test", () => {
+  it("useLogger() outside runWithLogger warns once on call in development/test", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     useLogger().set({ a: 1 });
+    useLogger().set({ b: 2 });
+    expect(warn).toHaveBeenCalledOnce();
     expect(warn).toHaveBeenCalledWith(
-      expect.stringMatching(/useLogger\(\) has no request context.*set\(\)/),
+      "[amplio] useLogger() called outside runWithLogger(); fields will be dropped. Establish request scope with middleware (runWithLogger), or use the logger facade for one-shot scripts.",
     );
     warn.mockRestore();
   });

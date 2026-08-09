@@ -40,6 +40,14 @@ export async function writeFileOrSkip(
   return exists ? "updated" : "created";
 }
 
+function stripEmptyBarrelExport(content: string): string {
+  return content
+    .split("\n")
+    .filter((line) => line.trim() !== "export {};")
+    .join("\n")
+    .replace(/\n+$/, "");
+}
+
 export async function upsertBarrelExport(
   barrelPath: string,
   exportLine: string,
@@ -56,7 +64,12 @@ export async function upsertBarrelExport(
     return "skipped";
   }
 
-  const next = current.endsWith("\n") ? `${current}${exportLine}\n` : `${current}\n${exportLine}\n`;
+  const cleaned = stripEmptyBarrelExport(current);
+  const next = cleaned
+    ? cleaned.endsWith("\n")
+      ? `${cleaned}${exportLine}\n`
+      : `${cleaned}\n${exportLine}\n`
+    : `${exportLine}\n`;
   await fs.writeFile(barrelPath, next, "utf8");
   return "updated";
 }

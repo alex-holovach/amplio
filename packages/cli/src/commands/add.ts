@@ -6,6 +6,7 @@ import {
   eventNameToRelativePath,
 } from "../utils/event-name.js";
 import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
+import fs from "node:fs/promises";
 import { ensureDir, pathExists, upsertBarrelExport, writeFileOrSkip } from "../utils/fs.js";
 import { updateLoggerWithEnricher } from "../utils/logger-enricher.js";
 import { updateLoggerWithSink } from "../utils/logger-sink.js";
@@ -19,7 +20,7 @@ import {
 import { installRegistryItem, mergePackageDependencies } from "../registry/install.js";
 import { renderAuthUserSignedUpEvent, renderEventTemplate } from "../templates/event.js";
 
-const MIDDLEWARE_IDS = new Set(["hono", "express", "next", "fastify"]);
+const MIDDLEWARE_IDS = new Set(["hono", "express", "next", "fastify", "trpc"]);
 const SINK_IDS = new Set(["console", "otlp", "json"]);
 const ENRICHER_REGISTRY_IDS = new Set(["service-metadata", "request-metadata"]);
 const ENRICHER_ALIASES: Record<string, string> = { request: "request-metadata" };
@@ -27,6 +28,44 @@ const ENRICHER_ALIASES: Record<string, string> = { request: "request-metadata" }
 function resolveEnricherId(id: string): string {
   return ENRICHER_ALIASES[id] ?? id;
 }
+
+async function appendGitignoreJsonSink(cwd: string): Promise<"created" | "updated" | "skipped"> {
+  const gitignorePath = path.join(cwd, ".gitignore");
+  const entry = "amplio.jsonl";
+  const block = "# amplio JSON sink output\namplio.jsonl\n";
+
+  if (await pathExists(gitignorePath)) {
+    const current = await fs.readFile(gitignorePath, "utf8");
+    if (/(^|\n)\s*amplio\.jsonl(\s|$)/m.test(current)) {
+      return "skipped";
+    }
+    const next = current.endsWith("\n") ? `${current}${block}` : `${current}\n${block}`;
+    await fs.writeFile(gitignorePath, next, "utf8");
+    return "updated";
+  }
+
+  await fs.writeFile(gitignorePath, block, "utf8");
+  return "created";
+}
+
+async function appendEnvExampleJsonSink(cwd: string): Promise<"updated" | "skipped"> {
+  const envExamplePath = path.join(cwd, ".env.example");
+  if (!(await pathExists(envExamplePath))) {
+    return "skipped";
+  }
+
+  const current = await fs.readFile(envExamplePath, "utf8");
+  if (current.includes("AMPLIO_JSON_SINK_PATH")) {
+    return "skipped";
+  }
+
+  const block =
+    "\n# Path for the amplio JSON file sink (defaults to amplio.jsonl)\n# AMPLIO_JSON_SINK_PATH=amplio.jsonl\n";
+  const next = current.endsWith("\n") ? `${current}${block.slice(1)}` : `${current}${block}`;
+  await fs.writeFile(envExamplePath, next, "utf8");
+  return "updated";
+}
+
 const INTEGRATION_IDS = new Set(["better-auth", "clerk", "resend", "polar"]);
 
 export interface AddOptions {
@@ -220,6 +259,17 @@ export async function runAddSink(id: string, options: AddOptions): Promise<void>
   const loggerUpdated = await updateLoggerWithSink(paths.logger, id);
   if (loggerUpdated) {
     console.log(`  ✓ ${path.relative(options.cwd, paths.logger)}`);
+  }
+
+  if (id === "json") {
+    const gitignoreResult = await appendGitignoreJsonSink(options.cwd);
+    if (gitignoreResult !== "skipped") {
+      console.log(`  ✓ .gitignore (${gitignoreResult})`);
+    }
+    const envResult = await appendEnvExampleJsonSink(options.cwd);
+    if (envResult === "updated") {
+      console.log("  ✓ .env.example");
+    }
   }
 }
 

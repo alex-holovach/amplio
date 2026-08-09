@@ -3,7 +3,6 @@ import { createRequestLogger, runWithLogger, useLogger, type Logger } from "@use
 
 const AMPLIO_KEY = "amplio";
 
-
 export function amplioMiddleware(): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     const requestLogger = createRequestLogger({
@@ -11,8 +10,6 @@ export function amplioMiddleware(): MiddlewareHandler {
       path: c.req.path,
     }).set({
       http: {
-        method: c.req.method,
-        path: c.req.path,
         route: c.req.routePath,
       },
     });

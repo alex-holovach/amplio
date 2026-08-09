@@ -100,6 +100,8 @@ describe("cli --help", () => {
     expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("add");
     expect(result.stdout).toContain("list");
+    expect(result.stdout).toContain("doctor");
+    expect(result.stdout).toContain("trpc");
   });
 
   it("list usage mentions title", () => {
@@ -541,7 +543,7 @@ describe("cli list", () => {
     expect(result.stdout).not.toContain("sinks:");
     expect(result.stdout).not.toContain("sink-console");
     expect(result.stdout).toContain(`Total: ${middlewareCount}`);
-    expect(middlewareCount).toBe(4);
+    expect(middlewareCount).toBe(5);
   });
 
   it("fails clearly for unknown kind", async () => {

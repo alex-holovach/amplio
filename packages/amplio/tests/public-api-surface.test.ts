@@ -23,6 +23,7 @@ describe("public API surface", () => {
       "createRequestLogger",
       "runWithLogger",
       "useLogger",
+      "hasAmbientLogger",
       "createError",
       "AmplioValidationError",
       "flush",

@@ -25,8 +25,8 @@
     {
       "name": "event-email-sent",
       "description": "Wide event when an email is sent.",
-      "source": "events/email/email-sent.ts",
-      "target": "telemetry/events/email/email-sent.ts",
+      "source": "events/email/sent.ts",
+      "target": "telemetry/events/email/sent.ts",
       "dependencies": [
         "zod",
         "@useamplio/amplio"
@@ -49,9 +49,6 @@
       "target": "telemetry/middleware/hono.ts",
       "dependencies": [
         "@useamplio/amplio"
-      ],
-      "devDependencies": [
-        "hono"
       ]
     },
     {
@@ -61,22 +58,16 @@
       "target": "telemetry/middleware/express.ts",
       "dependencies": [
         "@useamplio/amplio"
-      ],
-      "devDependencies": [
-        "@types/express",
-        "express"
       ]
     },
     {
       "name": "middleware-next",
-      "description": "Next.js middleware that attaches request-scoped amplio context.",
+      "title": "Next.js Route Handler Wrapper",
+      "description": "Route-handler wrapper (withAmplio) that owns the request wide event - this is not Next.js middleware.ts.",
       "source": "middleware/next.ts",
       "target": "telemetry/middleware/next.ts",
       "dependencies": [
         "@useamplio/amplio"
-      ],
-      "devDependencies": [
-        "next"
       ]
     },
     {
@@ -86,10 +77,17 @@
       "target": "telemetry/middleware/fastify.ts",
       "dependencies": [
         "@useamplio/amplio",
-        "fastify-plugin"
-      ],
-      "devDependencies": [
-        "fastify"
+        "fastify-plugin@^5.0.0"
+      ]
+    },
+    {
+      "name": "middleware-trpc",
+      "title": "tRPC Middleware",
+      "description": "tRPC middleware that annotates the ambient request wide event with trpc fields (pair with the Next.js route-handler wrapper).",
+      "source": "middleware/trpc.ts",
+      "target": "telemetry/middleware/trpc.ts",
+      "dependencies": [
+        "@useamplio/amplio"
       ]
     },
     {

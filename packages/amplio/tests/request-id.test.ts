@@ -6,7 +6,7 @@ beforeEach(() => {
 });
 
 describe("request id", () => {
-  it("createRequestLogger({ method, path }) emit includes method, path, request_id", () => {
+  it("createRequestLogger({ method, path }) emit includes http.method, http.path, request_id", () => {
     const records: LogRecord[] = [];
     const sink: Sink = (record) => {
       records.push(record);
@@ -19,8 +19,9 @@ describe("request id", () => {
       .emit();
 
     expect(records).toHaveLength(1);
-    expect(record.method).toBe("POST");
-    expect(record.path).toBe("/users");
+    expect(record.http).toEqual({ method: "POST", path: "/users" });
+    expect(record.method).toBeUndefined();
+    expect(record.path).toBeUndefined();
     expect(record.request_id).toBeDefined();
     expect(typeof record.request_id).toBe("string");
     expect(record.request_id!.length).toBeGreaterThan(0);
@@ -39,8 +40,9 @@ describe("request id", () => {
       requestId: "custom-id",
     }).emit();
     expect(record?.request_id).toBe("custom-id");
-    expect(record?.method).toBe("GET");
-    expect(record?.path).toBe("/x");
+    expect(record?.http).toEqual({ method: "GET", path: "/x" });
+    expect(record?.method).toBeUndefined();
+    expect(record?.path).toBeUndefined();
   });
 
   it("two loggers get different request_ids", () => {

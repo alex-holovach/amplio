@@ -50,7 +50,7 @@ describe("registry item metadata", () => {
       { name: "sink-json", title: "JSON Sink" },
       { name: "sink-otlp", title: "OTLP Sink" },
       { name: "middleware-hono", title: "Hono Middleware" },
-      { name: "middleware-next", title: "Next.js Middleware" },
+      { name: "middleware-next", title: "Next.js Route Handler Wrapper" },
       { name: "enricher-request-metadata", title: "Request Metadata Enricher" },
       { name: "integration-resend", title: "Resend Integration" },
       { name: "event-auth-user-signed-up", title: "Auth User Signed Up" },

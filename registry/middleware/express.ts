@@ -1,6 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@useamplio/amplio";
-
+import { createRequestLogger, runWithLogger, type Logger, useLogger } from "@useamplio/amplio";
 
 declare global {
   namespace Express {
@@ -10,7 +9,6 @@ declare global {
   }
 }
 
-
 export function amplioMiddleware() {
   return (req: Request, res: Response, next: NextFunction) => {
     const requestLogger = createRequestLogger({
@@ -18,8 +16,6 @@ export function amplioMiddleware() {
       path: req.path,
     }).set({
       http: {
-        method: req.method,
-        path: req.path,
         route: req.route?.path,
         ip: req.ip,
         user_agent: req.get("user-agent") ?? undefined,

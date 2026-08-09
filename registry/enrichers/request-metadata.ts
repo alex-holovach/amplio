@@ -1,3 +1,11 @@
+/**
+ * Per-request enricher factory for middleware and custom wrappers — NOT for global init().
+ * Register the returned function inside your request scope, not via init({ enrichers }).
+ *
+ * @example
+ * const enrich = requestMetadata({ method: req.method, path: req.path, ip: req.ip });
+ * requestLogger.set(enrich(requestLogger.snapshot?.() ?? {})); // or merge at emit time
+ */
 import type { LogRecord } from "@useamplio/amplio";
 
 export interface RequestContext {

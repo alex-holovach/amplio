@@ -17,12 +17,6 @@ export function eventNameToRelativePath(name: string): string {
   assertValidEventName(name);
   const segments = name.split(".");
   const domain = segments[0]!;
-
-  if (segments.length === 2) {
-    const action = segments[1]!.replace(/_/g, "-");
-    return `events/${domain}/${domain}-${action}.ts`;
-  }
-
   const fileName = `${segments.slice(1).join("-").replace(/_/g, "-")}.ts`;
   return `events/${domain}/${fileName}`;
 }

@@ -7,16 +7,10 @@ const warnNoop = (
   action: "set" | "error" | "emit" | "create" | "event",
   reason: NoopReason,
 ): void => {
-  if (!isDevelopment()) {
+  if (!isDevelopment() || reason !== "sealed") {
     return;
   }
-  if (reason === "sealed") {
-    console.warn(`[amplio] logger.${action}() ignored: logger is sealed after emit()`);
-    return;
-  }
-  console.warn(
-    `[amplio] useLogger() has no request context; logger.${action}() is a no-op (wire middleware / runWithLogger)`,
-  );
+  console.warn(`[amplio] logger.${action}() ignored: logger is sealed after emit()`);
 };
 
 const createNoopEventLogger = <T extends Record<string, unknown>>(

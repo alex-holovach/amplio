@@ -194,7 +194,7 @@ describe("context", () => {
 });
 
 describe("createRequestLogger", () => {
-  it("adds method, path, request_id", () => {
+  it("adds http.method, http.path, request_id", () => {
     const { sink } = capture();
     init({ service: "api", env: "test", sinks: [sink] });
 
@@ -202,8 +202,9 @@ describe("createRequestLogger", () => {
       .set({ status: 200 })
       .emit();
 
-    expect(record.method).toBe("GET");
-    expect(record.path).toBe("/health");
+    expect(record.http).toEqual({ method: "GET", path: "/health" });
+    expect(record.method).toBeUndefined();
+    expect(record.path).toBeUndefined();
     expect(record.request_id).toBe("req_fixed");
   });
 });

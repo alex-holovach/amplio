@@ -1,14 +1,12 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@useamplio/amplio";
-
+import { createRequestLogger, runWithLogger, type Logger, useLogger } from "@useamplio/amplio";
 
 declare module "fastify" {
   interface FastifyRequest {
     amplio?: Logger;
   }
 }
-
 
 const plugin: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", (request, _reply, done) => {
@@ -17,8 +15,6 @@ const plugin: FastifyPluginAsync = async (app) => {
       path: request.url,
     }).set({
       http: {
-        method: request.method,
-        path: request.url,
         route: request.routeOptions?.url,
         ip: request.ip,
         user_agent: request.headers["user-agent"],
