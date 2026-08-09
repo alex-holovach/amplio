@@ -14,7 +14,9 @@ export const PageViewed = defineEvent(
     visitor: z
       .object({
         // Authenticated user id or anonymous visitor id — whichever you have.
-        id: z.string(),
+        // Optional so "anonymous, but I know it's unauthenticated" is valid:
+        //   visitor: { authenticated: false }
+        id: z.string().optional(),
         authenticated: z.boolean().optional(),
       })
       .optional(),

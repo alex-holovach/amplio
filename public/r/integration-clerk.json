@@ -7,7 +7,7 @@
   "docs": "Call handleClerkWebhook from your Clerk webhook route (user.created / session.created). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.14",
+    "@useamplio/amplio@^0.1.0-alpha.15",
     "@clerk/backend@^1.25.0"
   ],
   "registryDependencies": [

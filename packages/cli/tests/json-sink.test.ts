@@ -82,19 +82,41 @@ describe("jsonFileSink", () => {
     expect(existsSync(envPath)).toBe(false);
   });
 
-  it("defaults to amplio.jsonl in cwd when path and env are unset", () => {
+  it("defaults to amplio.<env>.jsonl in cwd when path and env var are unset", () => {
     root = mkdtempSync(path.join(tmpdir(), "amplio-json-sink-"));
     delete process.env.AMPLIO_JSON_SINK_PATH;
     process.chdir(root);
     const sink = jsonFileSink();
-    const record: LogRecord = { event: "test.cwd-default", service: "json-sink" };
+    const record: LogRecord = {
+      event: "test.cwd-default",
+      service: "json-sink",
+      env: "development",
+    };
 
     sink(record);
 
-    const filePath = path.join(root, "amplio.jsonl");
+    const filePath = path.join(root, "amplio.development.jsonl");
     expect(readFileSync(filePath, "utf8")).toBe(`${JSON.stringify(record)}\n`);
   });
-  it("defaults to amplio.jsonl in cwd when AMPLIO_JSON_SINK_PATH is empty", () => {
+  it("splits files per env so dev and build/production rows never interleave", () => {
+    root = mkdtempSync(path.join(tmpdir(), "amplio-json-sink-"));
+    delete process.env.AMPLIO_JSON_SINK_PATH;
+    process.chdir(root);
+    const sink = jsonFileSink();
+    const dev: LogRecord = { event: "test.dev", service: "json-sink", env: "development" };
+    const prod: LogRecord = { event: "test.prod", service: "json-sink", env: "production" };
+
+    sink(dev);
+    sink(prod);
+
+    expect(readFileSync(path.join(root, "amplio.development.jsonl"), "utf8")).toBe(
+      `${JSON.stringify(dev)}\n`,
+    );
+    expect(readFileSync(path.join(root, "amplio.production.jsonl"), "utf8")).toBe(
+      `${JSON.stringify(prod)}\n`,
+    );
+  });
+  it("falls back to amplio.dev.jsonl when the record has no env", () => {
     root = mkdtempSync(path.join(tmpdir(), "amplio-json-sink-"));
     process.env.AMPLIO_JSON_SINK_PATH = "";
     process.chdir(root);
@@ -103,19 +125,23 @@ describe("jsonFileSink", () => {
 
     sink(record);
 
-    const filePath = path.join(root, "amplio.jsonl");
+    const filePath = path.join(root, "amplio.dev.jsonl");
     expect(readFileSync(filePath, "utf8")).toBe(`${JSON.stringify(record)}\n`);
   });
-  it("defaults to amplio.jsonl in cwd when AMPLIO_JSON_SINK_PATH is whitespace-only", () => {
+  it("whitespace-only AMPLIO_JSON_SINK_PATH is treated as unset", () => {
     root = mkdtempSync(path.join(tmpdir(), "amplio-json-sink-"));
     process.env.AMPLIO_JSON_SINK_PATH = "   ";
     process.chdir(root);
     const sink = jsonFileSink();
-    const record: LogRecord = { event: "test.cwd-whitespace-env", service: "json-sink" };
+    const record: LogRecord = {
+      event: "test.cwd-whitespace-env",
+      service: "json-sink",
+      env: "test",
+    };
 
     sink(record);
 
-    const filePath = path.join(root, "amplio.jsonl");
+    const filePath = path.join(root, "amplio.test.jsonl");
     expect(readFileSync(filePath, "utf8")).toBe(`${JSON.stringify(record)}\n`);
   });
 

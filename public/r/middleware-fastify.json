@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "docs": "Wire the plugin: `await app.register(amplioPlugin)` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.14",
+    "@useamplio/amplio@^0.1.0-alpha.15",
     "fastify-plugin@^5.0.0"
   ],
   "files": [

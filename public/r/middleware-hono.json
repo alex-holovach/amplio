@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "docs": "Wire the middleware: `app.use(\"*\", amplioMiddleware())` in your Hono app. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.14"
+    "@useamplio/amplio@^0.1.0-alpha.15"
   ],
   "files": [
     {

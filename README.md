@@ -177,7 +177,7 @@ Enricher errors are isolated — a throwing enricher is skipped; later enrichers
 
 `otlpSink` accepts a base OTLP endpoint or a full `…/v1/logs` URL (no double path). It maps `record.service` → resource `service.name` and `record.env` → `deployment.environment` when those fields are set. `throwOnError: false` swallows export failures.
 
-The JSON file sink writes to `AMPLIO_JSON_SINK_PATH` (or `options.path`) and creates missing parent directories; when neither is set, the default filename is `amplio.jsonl`. Empty or whitespace-only `AMPLIO_JSON_SINK_PATH` is treated as unset (same default). `options.path` overrides `AMPLIO_JSON_SINK_PATH`.
+The JSON file sink writes to `AMPLIO_JSON_SINK_PATH` (or `options.path`) and creates missing parent directories; when neither is set, the default filename is `amplio.<env>.jsonl` (e.g. `amplio.development.jsonl`, from the record's `env`; `amplio.dev.jsonl` when the record has none) so dev traffic and build/production rows never interleave in one file. Empty or whitespace-only `AMPLIO_JSON_SINK_PATH` is treated as unset (same default). `options.path` overrides `AMPLIO_JSON_SINK_PATH`.
 
 ### Sampling and redaction
 
@@ -387,8 +387,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md); for the first npm publish, follow **Fi
 - `amplio init --no-typescript` sets `typescript: false` in `amplio.json`.
 - `--service`, `--package-manager`, and `--no-typescript` are only valid with `init` (rejected on `add` / `list`). Whitespace-only `--service` / `--package-manager` on non-init commands are ignored (not rejected).
 - `init --cwd <path>` and `add --cwd <path>` create missing directories (`mkdir -p`).
-- `amplio init --paths` writes the `~telemetry/*` tsconfig path alias (JSONC-comment-safe).
-- `amplio doctor` checks wiring (middleware, barrels, Turbopack `../logger` import) in both directions: event files missing from barrels *and* barrel exports whose target files no longer exist. `amplio doctor --fix` regenerates missing event barrel exports and prunes stale ones. `--verbose` always prints the end-to-end verification epilogue (otherwise it only appears after `--fix` or when something needs attention).
+- `amplio init --paths` writes the `~telemetry/*` tsconfig path alias (JSONC-comment-safe). Under `--yes` (or non-interactive) the alias is applied by default when a `tsconfig.json` exists, so wired imports use `~telemetry/*` instead of deep relative paths — `--no-paths` opts out.
+- `amplio doctor` checks wiring (middleware, barrels, Turbopack `../logger` import) in both directions: event files missing from barrels *and* barrel exports whose target files no longer exist. On create-t3-app layouts it also re-checks the app-side edits `init --wire` made (`route.ts` still wraps with `withAmplio`, `trpc.ts` still uses `amplioTrpcMiddleware`, the NextAuth route is still wrapped) — the edits most likely to be lost in a merge or T3 upgrade. `amplio doctor --fix` regenerates missing event barrel exports and prunes stale ones. `--verbose` always prints the end-to-end verification epilogue (otherwise it only appears after `--fix` or when something needs attention).
+- `amplio smoke <url>` closes the verification loop: it requests the URL and watches `amplio*.jsonl` for a newly emitted row, reporting PASS/FAIL — a wrong-port curl or unwired middleware becomes an explicit failure. Requires the JSON sink (`amplio add sink json`); `--timeout <seconds>` adjusts the wait (default 10).
+- `amplio add integration <id>` prints the manual wiring steps after installing (e.g. next-auth: wrap the `[...nextauth]` route, add `events: amplioNextAuthEvents()`), and warns when the integration's target package is absent from `package.json`.
 - `amplio add <badkind> …` errors with valid kinds (`event`, `middleware`, `sink`, `enricher`, `integration`).
 - Event names must be lowercase dot-separated segments (e.g. `auth.user.signed_up`); no leading/trailing dots or uppercase.
 - `amplio add event …` and other `add` kinds can scaffold from the registry without running `init` first — the telemetry tree is created as needed.

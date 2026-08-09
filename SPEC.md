@@ -298,7 +298,7 @@ Both are user-editable modules; core only invokes arrays registered in `init()`.
 
 OTLP sink: when present, maps `record.service` → resource `service.name` and `record.env` → `deployment.environment`.
 
-JSON file sink: `AMPLIO_JSON_SINK_PATH` empty or whitespace-only is treated as unset → default `amplio.jsonl`; `options.path` wins when set.
+JSON file sink: `AMPLIO_JSON_SINK_PATH` empty or whitespace-only is treated as unset → default `amplio.<env>.jsonl` from the record's `env` (`amplio.dev.jsonl` when absent); `options.path` wins when set.
 
 ## 10. Anti-slop rules
 

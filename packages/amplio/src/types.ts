@@ -97,6 +97,15 @@ export interface Logger {
   create(initial?: Record<string, unknown>): Logger;
   event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T>;
   child<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T>;
+  /**
+   * Timed correlated row: creates a `.child(def)` before running fn and emits
+   * it after fn settles, so duration_ms measures fn. On throw the child
+   * records the error (success: false) and the error is rethrown.
+   */
+  time<T extends Record<string, unknown>, R>(
+    def: EventDef<T>,
+    fn: (ev: EventLogger<T>) => R | Promise<R>,
+  ): Promise<R>;
 }
 
 export interface EventLogger<T extends Record<string, unknown>> {

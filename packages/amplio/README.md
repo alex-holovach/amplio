@@ -55,7 +55,7 @@ createLogger()
 | `init(config)` | Service metadata, sinks, enrichers, sampling, redaction, `canonicalKeyOnly`; returns `logger` |
 | `defineEvent(name, shape?, options?)` | Typed event schema (Zod 3+ or Standard Schema) |
 | `@useamplio/amplio/events` | Client-safe subpath: `defineEvent`, `createError`, and event types (no `node:async_hooks`) |
-| `createLogger(initial?)` | Wide-event builder: `.set()`, `.emit()`, `.create()`, `.event()`, `.child()` |
+| `createLogger(initial?)` | Wide-event builder: `.set()`, `.emit()`, `.create()`, `.event()`, `.child()`, `.time()` |
 | `createRequestLogger({ method, path })` | HTTP helper with `request_id` |
 | `runWithLogger` / `getLogger` | AsyncLocalStorage context (`getLogger` no-op outside ALS; `useLogger` deprecated alias) |
 | `hasAmbientLogger()` | `true` inside a `runWithLogger` scope — used by middleware to decide between annotating the ambient spine and creating a standalone one |
@@ -81,6 +81,8 @@ createLogger()
 - **Auto fields** on emit: `timestamp`, `duration_ms` (time since the logger was created — a `.child()` created right before `.emit()` reports `~0`; create the child before the work to time the work), `request_id` (when set), `success` (derived from `status` or set explicitly via `.set()` / `.error()` — omitted when neither applies), `service`, `env`. Schema events set `event` and `@event` to the declared name; `@event` is canonical, `event` is a duplicate because some sinks and columnar stores reject or mangle `@`-prefixed keys. Pass `init({ canonicalKeyOnly: true })` to emit only `@event`. `createRequestLogger` seeds `http.request` on both keys.
   **Dashboard implication:** clean domain rows (`.child(Def).emit()` with no `status`) omit `success` entirely, so `success = true` silently excludes them — filter domain events with `success != false` (or on `@event`) instead.
 - **Redaction** is on by default (`redact: false` to opt out) — exact contract in [Redaction](#redaction) below. It runs at emit time, so fields derived before redaction (e.g. a length computed from a raw value) can look inconsistent next to `[REDACTED]`; that is expected.
+- **Facade `logger.event(Def)` starts a fresh row on each call** — two calls emit two rows — and its `duration_ms` measures from that call (≈0 unless you hold the returned logger before emitting). Inside a `runWithLogger` scope it copies the ambient `request_id`; outside one the row has none. This is different from *instance* `.event(Def)`, which binds the schema to the same row (see the table below).
+- **Next.js build-time emission:** `next build` static generation executes RSC pages, so emits fire during CI builds with `env: "production"`. Those records are tagged `build_phase: true` (detected via `NEXT_PHASE`) — filter dashboards with `build_phase != true`. To silence telemetry wholesale (CI, one-off scripts), set `AMPLIO_DISABLED=1`: every `.emit()` drops before sinks run.
 
 ## Redaction
 
@@ -123,8 +125,11 @@ Enrichers and redaction still run on `.emit()` even when sampling skips sink del
 | Method | What you get | Use when |
 |---|---|---|
 | `.child(EventDef)` | **New row** correlated to this one: copies `request_id` only, fresh clock and seal | Domain events inside a request — the canonical spelling |
+| `.time(EventDef, fn)` | `.child()` created **before** `fn` runs, emitted after it settles — `duration_ms` measures `fn`; a throw records the error and rethrows | Timed domain events — the easy path for "how long did this take" |
 | `.create(initial?)` | New independent logger that **copies all current fields**, fresh clock and seal | Forking a job/batch scope that should inherit context |
 | `.event(EventDef)` | **Binds the schema to this same row** (same data, same seal — emitting it consumes this logger) | Naming/typing a spine you own, e.g. `createLogger().event(Def)` |
+
+The module facade's `logger.event(Def)` is a third thing: a **fresh standalone row per call** (with the ambient `request_id` copied when inside request scope). Same method name, different receiver — on an instance it binds; on the facade it creates.
 
 `.event(OtherDef)` on a logger that is already bound to a different event name (e.g. the request spine) behaves as `.child(OtherDef)` — a separate correlated row, spine preserved — with a dev notice. Earlier alphas rebound and sealed the spine (silently losing the request row); that footgun is gone, but spell it `.child()` to make the intent explicit.
 
@@ -149,6 +154,16 @@ getLogger()
 const ev = getLogger().child(OrderPlaced); // clock starts here
 const order = await placeOrder();
 ev.set({ order: { id: order.id } }).emit(); // duration_ms = placeOrder() time
+```
+
+Or use `.time()` — the timed path as the easy path (child created before the work, emitted after; errors are recorded and rethrown):
+
+```ts
+const order = await getLogger().time(OrderPlaced, async (ev) => {
+  const order = await placeOrder();
+  ev.set({ order: { id: order.id } });
+  return order;
+}); // duration_ms = placeOrder() time, row emitted automatically
 ```
 
 ### Job / cron scope

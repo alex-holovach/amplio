@@ -467,10 +467,23 @@ export { logger };
     await runAddSink("json", { cwd });
 
     const gitignore = await readFile(path.join(cwd, ".gitignore"), "utf8");
-    expect(gitignore).toContain("amplio.jsonl");
+    // Glob, not exact — the sink's default file name includes the env.
+    expect(gitignore).toContain("amplio*.jsonl");
 
     const envExample = await readFile(path.join(cwd, ".env.example"), "utf8");
     expect(envExample).toContain("AMPLIO_JSON_SINK_PATH");
+  });
+
+  it("add sink json widens a legacy exact amplio.jsonl gitignore entry to the glob", async () => {
+    const cwd = await makeTempDir("amplio-sink-json-gitignore-legacy-");
+    await initWithRegistry(cwd);
+    await writeFile(path.join(cwd, ".gitignore"), "node_modules\namplio.jsonl\n");
+    await runAddSink("json", { cwd });
+
+    const gitignore = await readFile(path.join(cwd, ".gitignore"), "utf8");
+    expect(gitignore).toContain("amplio*.jsonl");
+    expect(gitignore).not.toMatch(/(^|\n)amplio\.jsonl(\n|$)/);
+    expect(gitignore).toContain("node_modules");
   });
 
   it("add sink json without init creates telemetry/sinks/json.ts", async () => {
@@ -845,5 +858,110 @@ describe("runInit framework detect", () => {
 
     const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
     expect(loggerSource).toContain('service: "my-cool-app"');
+  });
+});
+
+describe("runAddIntegration wiring instructions", () => {
+  it("next-auth prints the two manual wiring steps and a missing-dep heads-up", async () => {
+    const cwd = await makeTempDir("amplio-int-nextauth-hints-");
+    await initWithRegistry(cwd);
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    await runAddIntegration("next-auth", { cwd });
+    logSpy.mockRestore();
+
+    const output = logs.join("\n");
+    expect(output).toContain("Wire it up (2 manual steps):");
+    expect(output).toContain("withAmplio(authGet)");
+    expect(output).toContain("amplioNextAuthEvents");
+    expect(output).toContain("docs/t3.md");
+    // No next-auth in package.json → heads-up, phrased as informational
+    // (the file uses local structural types).
+    expect(output).toContain("next-auth is not in package.json");
+    expect(output).toContain("local structural types");
+  });
+
+  it("no missing-dep heads-up when the target package is present", async () => {
+    const cwd = await makeTempDir("amplio-int-nextauth-dep-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ name: "t3-app", dependencies: { "next-auth": "^5.0.0-beta.25" } }),
+    );
+    await initWithRegistry(cwd);
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    await runAddIntegration("next-auth", { cwd });
+    logSpy.mockRestore();
+
+    const output = logs.join("\n");
+    expect(output).toContain("Wire it up (2 manual steps):");
+    expect(output).not.toContain("is not in package.json");
+  });
+
+  it("better-auth (package imports) warns that typecheck will fail without the dep", async () => {
+    const cwd = await makeTempDir("amplio-int-betterauth-hints-");
+    await initWithRegistry(cwd);
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    await runAddIntegration("better-auth", { cwd });
+    logSpy.mockRestore();
+
+    const output = logs.join("\n");
+    expect(output).toContain("createBetterAuthAmplioPlugin");
+    expect(output).toContain("typecheck/build will fail");
+  });
+
+  it("uses the ~telemetry alias in wiring snippets when tsconfig defines it", async () => {
+    const cwd = await makeTempDir("amplio-int-alias-hints-");
+    await writeFile(
+      path.join(cwd, "tsconfig.json"),
+      '{\n  "compilerOptions": {\n    "paths": {\n      "~telemetry/*": ["./telemetry/*"]\n    }\n  }\n}\n',
+    );
+    await initWithRegistry(cwd);
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    await runAddIntegration("polar", { cwd });
+    logSpy.mockRestore();
+
+    expect(logs.join("\n")).toContain('from "~telemetry/integrations/polar"');
+  });
+});
+
+describe("runInit --yes tsconfig paths default", () => {
+  it("applies the ~telemetry/* alias by default under --yes when tsconfig exists", async () => {
+    const cwd = await makeTempDir("amplio-init-yes-paths-");
+    await writeFile(path.join(cwd, "tsconfig.json"), '{\n  "compilerOptions": {}\n}\n');
+    await runInit({ cwd, skipInstall: true, yes: true, middleware: "none", event: "none" });
+
+    const tsconfig = await readFile(path.join(cwd, "tsconfig.json"), "utf8");
+    expect(tsconfig).toContain('"~telemetry/*"');
+  });
+
+  it("--no-paths (paths: false) opts out under --yes", async () => {
+    const cwd = await makeTempDir("amplio-init-yes-nopaths-");
+    await writeFile(path.join(cwd, "tsconfig.json"), '{\n  "compilerOptions": {}\n}\n');
+    await runInit({
+      cwd,
+      skipInstall: true,
+      yes: true,
+      paths: false,
+      middleware: "none",
+      event: "none",
+    });
+
+    const tsconfig = await readFile(path.join(cwd, "tsconfig.json"), "utf8");
+    expect(tsconfig).not.toContain('"~telemetry/*"');
   });
 });

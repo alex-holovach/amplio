@@ -7,7 +7,7 @@
   "docs": "Wire into your NextAuth config: `events: amplioNextAuthEvents()` (create-t3-app: src/server/auth/config.ts), and wrap src/app/api/auth/[...nextauth]/route.ts with withAmplio so rows share the request spine's request_id (`amplio init --wire` does this). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.14"
+    "@useamplio/amplio@^0.1.0-alpha.15"
   ],
   "registryDependencies": [
     "@useamplio/event-auth-user-signed-up",

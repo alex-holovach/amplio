@@ -1,7 +1,9 @@
 /**
  * Dev-grade JSONL sink — appendFileSync blocks the event loop.
  * Use sink-otlp for production. Path from AMPLIO_JSON_SINK_PATH env or option;
- * defaults to amplio.jsonl (add to .gitignore).
+ * defaults to amplio.<env>.jsonl (e.g. amplio.development.jsonl) so dev rows
+ * and build/production rows never interleave in one file. Add amplio*.jsonl
+ * to .gitignore (amplio add sink json does this).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -12,10 +14,12 @@ export interface JsonFileSinkOptions {
 }
 
 export function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {
-  const filePath =
-    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined) ?? "amplio.jsonl";
+  const explicitPath =
+    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined);
 
   return (record: LogRecord) => {
+    const env = typeof record.env === "string" && record.env ? record.env : "dev";
+    const filePath = explicitPath ?? `amplio.${env}.jsonl`;
     const dir = path.dirname(filePath);
     if (dir && dir !== ".") {
       fs.mkdirSync(dir, { recursive: true });

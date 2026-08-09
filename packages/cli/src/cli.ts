@@ -15,6 +15,7 @@ import {
 import { runList } from "./commands/list.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runPaths } from "./commands/paths.js";
+import { runSmoke } from "./commands/smoke.js";
 import { printCommandHelp, printGlobalHelp } from "./help.js";
 
 const VALID_ADD_KINDS = [
@@ -25,7 +26,7 @@ const VALID_ADD_KINDS = [
   "integration",
 ] as const;
 
-const VALID_COMMANDS = new Set(["init", "add", "list", "doctor", "paths"]);
+const VALID_COMMANDS = new Set(["init", "add", "list", "doctor", "paths", "smoke"]);
 
 function parseCliArgs() {
   try {
@@ -41,10 +42,12 @@ function parseCliArgs() {
         event: { type: "string" },
         yes: { type: "boolean", default: false },
         "skip-install": { type: "boolean", default: false },
-        paths: { type: "boolean", default: false },
+        // Tri-state: undefined = default (on under --yes), --paths = on, --no-paths = off.
+        paths: { type: "boolean" },
         wire: { type: "boolean", default: false },
         fix: { type: "boolean", default: false },
         strict: { type: "boolean", default: false },
+        timeout: { type: "string" },
         verbose: { type: "boolean", default: false },
         force: { type: "boolean", default: false },
         "dry-run": { type: "boolean", default: false },
@@ -115,6 +118,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  if (values.timeout !== undefined && command !== "smoke") {
+    console.error("error: --timeout is only valid with smoke");
+    process.exit(1);
+  }
+
   if (values.verbose && command !== "doctor" && command !== "init") {
     console.error("error: --verbose is only valid with doctor or init");
     process.exit(1);
@@ -125,8 +133,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  if (values.paths && command !== "init") {
-    console.error("error: --paths is only valid with init");
+  if (values.paths !== undefined && command !== "init") {
+    console.error("error: --paths/--no-paths is only valid with init");
     process.exit(1);
   }
 
@@ -193,7 +201,7 @@ async function main(): Promise<void> {
         ...(event ? { event } : {}),
         ...(values.yes ? { yes: true } : {}),
         ...(values["skip-install"] ? { skipInstall: true } : {}),
-        ...(values.paths ? { paths: true } : {}),
+        ...(values.paths !== undefined ? { paths: values.paths } : {}),
         ...(values.wire ? { wire: true } : {}),
         ...(values.verbose ? { verbose: true } : {}),
       });
@@ -271,6 +279,25 @@ async function main(): Promise<void> {
         }
       }
       return;
+    }
+
+    if (command === "smoke") {
+      const url = positionals[1]?.trim();
+      if (!url) {
+        throw new Error(
+          "Missing URL. Example: amplio smoke 'http://localhost:3000/api/trpc/post.hello?batch=1&input=%7B%7D'",
+        );
+      }
+      const timeoutSeconds = values.timeout !== undefined ? Number(values.timeout) : undefined;
+      if (timeoutSeconds !== undefined && (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0)) {
+        throw new Error("--timeout must be a positive number of seconds");
+      }
+      const exitCode = await runSmoke({
+        cwd,
+        url,
+        ...(timeoutSeconds !== undefined ? { timeoutSeconds } : {}),
+      });
+      process.exit(exitCode);
     }
 
     if (command === "doctor") {

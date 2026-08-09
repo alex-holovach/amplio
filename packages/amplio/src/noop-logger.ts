@@ -65,6 +65,15 @@ const createNoopLogger = (reason: NoopReason): Logger => {
       warnNoop("child", reason);
       return createNoopEventLogger<T>(reason);
     },
+    async time<T extends Record<string, unknown>, R>(
+      _def: EventDef<T>,
+      fn: (ev: EventLogger<T>) => R | Promise<R>,
+    ): Promise<R> {
+      // Telemetry must never take down the app: the wrapped work still runs
+      // and its result/throw passes through; only the row is dropped.
+      warnNoop("child", reason);
+      return await fn(createNoopEventLogger<T>(reason));
+    },
   };
   return logger;
 };

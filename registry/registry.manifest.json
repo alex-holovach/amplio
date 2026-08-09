@@ -116,7 +116,7 @@
       "description": "Route-handler wrapper (withAmplio) that owns the request wide event - this is not Next.js middleware.ts.",
       "source": "middleware/next.ts",
       "target": "telemetry/middleware/next.ts",
-      "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you.",
+      "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you. Also exports withAmplioRender(name, fn) to give RSC page renders an ambient page.render spine so server-caller calls and facade events correlate.",
       "dependencies": [
         "@useamplio/amplio"
       ]
@@ -158,7 +158,7 @@
       "description": "JSON sink that serializes wide events for streaming or files.",
       "source": "sinks/json.ts",
       "target": "telemetry/sinks/json.ts",
-      "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio.jsonl to .gitignore. Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
+      "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio*.jsonl to .gitignore (the default file name includes the env, e.g. amplio.development.jsonl). Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
       "dependencies": [
         "@useamplio/amplio"
       ]

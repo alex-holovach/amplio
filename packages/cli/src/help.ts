@@ -12,9 +12,10 @@ Usage:
   amplio list [kind]          List registry items
   amplio doctor [options]     Validate wiring and event layout
   amplio paths                Write the ~telemetry/* tsconfig path alias (nothing else)
+  amplio smoke <url>          Hit a wrapped route and verify an event is emitted (PASS/FAIL)
 
 Commands:
-  init, add, list, doctor, paths   Run amplio <command> --help for command-specific flags
+  init, add, list, doctor, paths, smoke   Run amplio <command> --help for command-specific flags
 
 Global options:
   --cwd <path>                Project directory (default: .)
@@ -36,9 +37,9 @@ Options:
   --no-typescript              Disable TypeScript defaults in amplio.json
   --middleware <name|none>     Scaffold middleware (auto-detect from package.json)
   --event <name|none>          Scaffold starter event (defaults to auth.user.signed_up when auto and an auth dependency is detected)
-  --yes                        Non-interactive: auto-scaffold detected middleware + event (auto-wires create-t3-app layouts)
+  --yes                        Non-interactive: auto-scaffold detected middleware + event (auto-wires create-t3-app layouts, applies ~telemetry/* path alias)
   --skip-install               Skip installing @useamplio/amplio and zod
-  --paths                      Write ~telemetry/* tsconfig path alias (standalone: amplio paths)
+  --paths / --no-paths         Write the ~telemetry/* tsconfig path alias (default: on under --yes; standalone: amplio paths)
   --wire                       Auto-wire create-t3-app files (route handler + tRPC procedures)
   --verbose                    Stream raw package-manager install output
   -h, --help                   Show this help
@@ -126,12 +127,37 @@ Options:
 `);
 }
 
+export function printSmokeHelp(): void {
+  console.log(`amplio smoke — end-to-end verification: request in, event out
+
+Usage:
+  amplio smoke <url> [options]
+
+Makes an HTTP request to <url> (a route wrapped with amplio middleware, dev
+server already running) and watches amplio*.jsonl for a newly emitted row.
+Reports PASS when both the response and an event arrive — a wrong-port curl
+or unwired middleware becomes an explicit FAIL instead of silent nothing.
+
+Requires the JSON file sink (amplio add sink json): the console sink writes to
+the dev server's stdout, which this process cannot observe.
+
+Options:
+  --cwd <path>                 Project directory (default: .)
+  --timeout <seconds>          How long to wait for the response/row (default: 10)
+  -h, --help                   Show this help
+
+Example:
+  amplio smoke 'http://localhost:3000/api/trpc/post.hello?batch=1&input=%7B%7D'
+`);
+}
+
 const COMMAND_HELP: Record<string, () => void> = {
   init: printInitHelp,
   add: printAddHelp,
   doctor: printDoctorHelp,
   list: printListHelp,
   paths: printPathsHelp,
+  smoke: printSmokeHelp,
 };
 
 export function printCommandHelp(command: string): boolean {

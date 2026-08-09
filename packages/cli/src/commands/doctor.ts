@@ -9,6 +9,12 @@ import { detectPackageManager } from "../utils/detect-package-manager.js";
 import { coalesceBarrelExports, pathExists } from "../utils/fs.js";
 import { parseJsonc } from "../utils/jsonc.js";
 import { resolveProjectPaths } from "../utils/paths.js";
+import {
+  detectT3Layout,
+  T3_NEXTAUTH_ROUTE_FILE,
+  T3_ROUTE_FILE,
+  T3_TRPC_FILE,
+} from "../utils/wire-t3.js";
 import { ALPHA_MD_URL } from "../help.js";
 
 export interface DoctorOptions {
@@ -581,20 +587,27 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
     const gitignorePath = path.join(cwd, ".gitignore");
     if (await pathExists(gitignorePath)) {
       const gitignore = await fs.readFile(gitignorePath, "utf8");
-      if (!/(^|\n)\s*amplio\.jsonl(\s|$)/m.test(gitignore)) {
+      if (/(^|\n)\s*amplio\*\.jsonl(\s|$)/m.test(gitignore)) {
+        checks.push({ status: "passed", message: ".gitignore ignores amplio*.jsonl" });
+      } else if (/(^|\n)\s*amplio\.jsonl(\s|$)/m.test(gitignore)) {
         checks.push({
           status: "warning",
-          message: "JSON sink present but amplio.jsonl not in .gitignore",
-          fix: "Add amplio.jsonl to .gitignore (amplio add sink json does this automatically).",
+          message:
+            ".gitignore covers amplio.jsonl only — the JSON sink default file name now includes the env (amplio.development.jsonl, …)",
+          fix: "Widen the entry to amplio*.jsonl (re-running amplio add sink json does this).",
         });
       } else {
-        checks.push({ status: "passed", message: ".gitignore ignores amplio.jsonl" });
+        checks.push({
+          status: "warning",
+          message: "JSON sink present but amplio*.jsonl not in .gitignore",
+          fix: "Add amplio*.jsonl to .gitignore (amplio add sink json does this automatically).",
+        });
       }
     } else {
       checks.push({
         status: "warning",
-        message: "JSON sink present but no .gitignore for amplio.jsonl",
-        fix: "Run: amplio add sink json (or add amplio.jsonl to .gitignore manually).",
+        message: "JSON sink present but no .gitignore for amplio*.jsonl",
+        fix: "Run: amplio add sink json (or add amplio*.jsonl to .gitignore manually).",
       });
     }
   }
@@ -642,6 +655,67 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
     }
   }
 
+  // App-side wiring drift: init wired route.ts / trpc.ts once, but those are
+  // exactly the files most likely to lose the edit in a merge or a T3
+  // upgrade. The generic "export never referenced" check above misses this
+  // when the export survives somewhere else (e.g. another wrapped route).
+  {
+    const layout = await detectT3Layout(cwd);
+    const t3Checks: Array<{
+      present: boolean;
+      middlewareFile: string;
+      appFile: string;
+      marker: string;
+      consequence: string;
+    }> = [
+      {
+        present: layout.routeFile,
+        middlewareFile: "next.ts",
+        appFile: T3_ROUTE_FILE,
+        marker: "withAmplio",
+        consequence: "tRPC HTTP requests emit no spine",
+      },
+      {
+        present: layout.trpcFile,
+        middlewareFile: "trpc.ts",
+        appFile: T3_TRPC_FILE,
+        marker: "amplioTrpcMiddleware",
+        consequence: "procedures no longer annotate the request spine",
+      },
+      {
+        present:
+          layout.nextAuthRouteFile &&
+          (await pathExists(path.join(paths.integrations, "next-auth.ts"))),
+        middlewareFile: "next.ts",
+        appFile: T3_NEXTAUTH_ROUTE_FILE,
+        marker: "withAmplio",
+        consequence: "NextAuth event rows emit outside request scope (no request_id)",
+      },
+    ];
+
+    for (const t3Check of t3Checks) {
+      if (
+        !t3Check.present ||
+        !(await pathExists(path.join(paths.telemetry, "middleware", t3Check.middlewareFile)))
+      ) {
+        continue;
+      }
+      const source = await fs.readFile(path.join(cwd, t3Check.appFile), "utf8");
+      if (source.includes(t3Check.marker)) {
+        checks.push({
+          status: "passed",
+          message: `${t3Check.appFile} references ${t3Check.marker}`,
+        });
+      } else {
+        checks.push({
+          status: "warning",
+          message: `${t3Check.appFile} no longer references ${t3Check.marker} — ${t3Check.consequence}. Wiring is lost most often in a merge or T3 upgrade.`,
+          fix: "Run: amplio init --wire (re-wires the stock create-t3-app shape), or re-add the wrapper manually.",
+        });
+      }
+    }
+  }
+
   const sinksDir = paths.sinks;
   if ((await pathExists(sinksDir)) && (await pathExists(paths.logger))) {
     const loggerSource = await fs.readFile(paths.logger, "utf8");
@@ -682,7 +756,10 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
       "  Hit a wrapped route and look for one JSON object with service, env, timestamp, duration_ms, request_id, success, and your event fields.",
     );
     console.log("  Console sink: stdout (one line per emit).");
-    console.log("  JSON sink: amplio.jsonl in the project root (or AMPLIO_JSON_SINK_PATH).");
+    console.log(
+      "  JSON sink: amplio.<env>.jsonl in the project root (or AMPLIO_JSON_SINK_PATH).",
+    );
+    console.log("  Or let the CLI do it: amplio smoke <url> (requires the JSON sink).");
   }
 
   // Bottom-line summary so warnings above the epilogue are not skimmed past.

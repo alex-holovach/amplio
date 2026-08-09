@@ -7,7 +7,7 @@
   "docs": "Wire the plugin: add `createBetterAuthAmplioPlugin()` to your betterAuth({ plugins: [...] }) config. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.14",
+    "@useamplio/amplio@^0.1.0-alpha.15",
     "better-auth@^1.2.0"
   ],
   "registryDependencies": [

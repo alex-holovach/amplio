@@ -579,3 +579,103 @@ describe("runDoctor", () => {
     expect(rerun).toBe(rootBarrel);
   });
 });
+
+describe("runDoctor T3 app-side wiring drift", () => {
+  async function setupT3Project(cwd: string): Promise<void> {
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: {
+          next: "^15.0.0",
+          "@trpc/server": "^11.0.0",
+          "@useamplio/amplio": "^0.1.0-alpha.14",
+          zod: "^3.24.0",
+        },
+      }),
+    );
+    await writeFile(
+      path.join(cwd, "amplio.json"),
+      JSON.stringify({ telemetryDir: "telemetry", packageManager: "pnpm" }),
+    );
+    await mkdir(path.join(cwd, "telemetry/events"), { recursive: true });
+    await mkdir(path.join(cwd, "telemetry/middleware"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/logger.ts"),
+      'import { init } from "@useamplio/amplio";\ninit({ service: "t", env: "test", sinks: [() => {}] });\n',
+    );
+    await writeFile(
+      path.join(cwd, "telemetry/middleware/next.ts"),
+      'import "../logger";\nexport function withAmplio() {}\n',
+    );
+    await writeFile(
+      path.join(cwd, "telemetry/middleware/trpc.ts"),
+      'import "../logger";\nexport function amplioTrpcMiddleware() {}\n',
+    );
+    await mkdir(path.join(cwd, "src/app/api/trpc/[trpc]"), { recursive: true });
+    await mkdir(path.join(cwd, "src/server/api"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "src/instrumentation.ts"),
+      'export async function register() {\n  if (process.env.NEXT_RUNTIME === "nodejs") {\n    await import("../telemetry/logger");\n  }\n}\n',
+    );
+    await writeFile(
+      path.join(cwd, "src/server/api/trpc.ts"),
+      'import { amplioTrpcMiddleware } from "../../../telemetry/middleware/trpc";\nconst amplioMiddleware = t.middleware(amplioTrpcMiddleware());\nexport const publicProcedure = t.procedure.use(amplioMiddleware);\n',
+    );
+  }
+
+  it("warns when route.ts lost withAmplio even though it survives elsewhere", async () => {
+    const cwd = await makeTempDir("amplio-doctor-t3-drift-");
+    await setupT3Project(cwd);
+    // T3 upgrade regenerated route.ts without the wrapper…
+    await writeFile(
+      path.join(cwd, "src/app/api/trpc/[trpc]/route.ts"),
+      "const handler = () => new Response();\nexport { handler as GET, handler as POST };\n",
+    );
+    // …while another wrapped route keeps the generic "never referenced" check green.
+    await mkdir(path.join(cwd, "src/app/api/other"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "src/app/api/other/route.ts"),
+      'import { withAmplio } from "../../../../telemetry/middleware/next";\nexport const GET = withAmplio(async () => new Response("ok"));\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    const output = logs.join("\n");
+    expect(output).toContain(
+      "src/app/api/trpc/[trpc]/route.ts no longer references withAmplio",
+    );
+    expect(output).toContain("amplio init --wire");
+
+    const strict = vi.spyOn(console, "log").mockImplementation(() => {});
+    expect(await runDoctor({ cwd, strict: true })).toBe(1);
+    strict.mockRestore();
+  });
+
+  it("passes when route.ts and trpc.ts still reference their wrappers", async () => {
+    const cwd = await makeTempDir("amplio-doctor-t3-ok-");
+    await setupT3Project(cwd);
+    await writeFile(
+      path.join(cwd, "src/app/api/trpc/[trpc]/route.ts"),
+      'import { withAmplio } from "../../../../../telemetry/middleware/next";\nconst handler = () => new Response();\nconst wrappedHandler = withAmplio(handler);\nexport { wrappedHandler as GET, wrappedHandler as POST };\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    const output = logs.join("\n");
+    expect(output).toContain("src/app/api/trpc/[trpc]/route.ts references withAmplio");
+    expect(output).toContain("src/server/api/trpc.ts references amplioTrpcMiddleware");
+    expect(output).not.toContain("no longer references");
+  });
+});

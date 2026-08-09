@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.15] - 2026-08-09
+
+Dogfood iter 10 — build-phase tagging, RSC render correlation (`withAmplioRender`), `amplio smoke`, integration wiring output, alias imports by default, env-split JSONL, `.time()` sugar.
+
+### Runtime
+
+- **Build-time emission is tagged, not silent** — `next build` static generation executes RSC pages, so emits fired from CI with `env: "production"` and nothing said so. Records emitted during `NEXT_PHASE=phase-production-build` now carry `build_phase: true`; dashboards filter with `build_phase != true` without hiding real SSG behavior.
+- **`AMPLIO_DISABLED=1` escape hatch** — drops every `.emit()` before sinks run (CI builds, one-off scripts). Documented in the README behavior contract.
+- **`.time(EventDef, fn)` sugar** — creates the `.child()` before `fn` runs and emits after it settles, so `duration_ms` measures the work; a throw records the error (`success: false`, no `status`) and rethrows. The timed path is now the easy path instead of a documented footgun. No-op loggers still run `fn` and pass the result through.
+- **Facade semantics documented** — `logger.event(Def)` starts a fresh row per call (`duration_ms` measures from that call; ambient `request_id` copied inside request scope), vs instance `.event(Def)` binding the same row. One method name, two receivers — now stated in the README instead of left to empirical testing.
+
+### Registry
+
+- **`withAmplioRender(name, fn)`** (middleware/next) — closes the RSC correlation gap: wraps a server-component page in an ambient `page.render` spine so server-caller tRPC calls annotate it (instead of emitting standalone uncorrelated `trpc.request` spines) and facade events share its `request_id`. `redirect()`/`notFound()` digests are recorded as `page.interrupted`, not errors.
+- **JSON sink splits files per env** — default file name is now `amplio.<env>.jsonl` (from the record's `env`; `amplio.dev.jsonl` fallback), so dev rows and build/production rows never interleave in one file. Explicit `options.path` / `AMPLIO_JSON_SINK_PATH` behavior unchanged.
+- **`page.viewed` allows anonymous visitors** — `visitor.id` is now optional inside the optional `visitor` object, so `visitor: { authenticated: false }` validates.
+
+### CLI
+
+- **New `amplio smoke <url>`** — closes the verification loop the init epilogue walks manually: makes the request, watches `amplio*.jsonl` for the emitted row, reports PASS/FAIL with a diagnosis (wrong-port trap, unwired route, init never ran, AMPLIO_DISABLED). Requires the JSON sink and says so; `--timeout <seconds>` adjusts the wait.
+- **`add integration` prints wiring steps** — every integration now ends with its manual steps (next-auth: wrap the `[...nextauth]` route + `events: amplioNextAuthEvents()`, with the t3.md pointer; better-auth: plugin registration; clerk/resend/polar: webhook handler calls), plus a heads-up when the integration's target package is absent from `package.json` (phrased per integration: structural-types files stay tsc-green, package-importing files won't).
+- **`init --yes` applies the `~telemetry/*` alias by default** — wired imports read `~telemetry/middleware/next` instead of a 5-deep `../` chain (tsconfig present required; `--no-paths` opts out, explicit `--paths` still forces it). Fixed `amplio paths` failing on a tsconfig whose `compilerOptions` (or `paths`) object was empty — the inserted entry no longer leaves a trailing comma.
+- **`doctor` re-checks the app-side wiring init created** — on T3 layouts it warns when `route.ts` no longer references `withAmplio`, `trpc.ts` no longer uses `amplioTrpcMiddleware`, or the NextAuth route lost its wrap (checked when the next-auth integration is installed) — the edits most likely to be lost in a merge or T3 upgrade, invisible to the generic "export never referenced" check when the export survives elsewhere.
+- **`.gitignore` entry widened to `amplio*.jsonl`** — `add sink json` writes the glob and upgrades a legacy exact `amplio.jsonl` entry in place; doctor validates the glob and explains the env-aware file name when only the legacy entry is present.
+
+### Docs
+
+- **t3.md added:** "Correlating a page render" section (`withAmplioRender`, plus the honest default: RSC rows do not correlate), "Build-time emission" section (`build_phase` tag + `AMPLIO_DISABLED`), facade per-call semantics on repeat renders, the Drizzle `.returning()` pattern for T3's void-returning `post.create` scaffold, `.time()` recipe, `amplio smoke` in the verify flow, and env-split JSONL naming.
+- **README (runtime):** `.time()` in the API/entry-point tables and recipes, facade-vs-instance `.event()` distinction, build-phase/AMPLIO_DISABLED behavior bullets.
+
 ## [0.1.0-alpha.14] - 2026-08-09
 
 Dogfood iter 9 — form-encoded redaction gap closed, OTLP spec-compliant endpoints + batching + attribute promotion, `add --dry-run`, NextAuth createUser, memorySink, four new registry events.

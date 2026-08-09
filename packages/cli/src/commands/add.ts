@@ -20,6 +20,9 @@ import {
 } from "../registry/resolve.js";
 import { installRegistryItem, mergePackageDependencies } from "../registry/install.js";
 import { renderAuthUserSignedUpEvent, renderEventTemplate } from "../templates/event.js";
+import { findDependency, INTEGRATION_DEP_RULES } from "../utils/has-dep.js";
+import { hasTelemetryPathAlias } from "../utils/wire-t3.js";
+import { T3_MD_URL } from "../help.js";
 
 const MIDDLEWARE_IDS = new Set(["hono", "express", "next", "fastify", "trpc"]);
 const SINK_IDS = new Set(["console", "otlp", "json"]);
@@ -39,12 +42,25 @@ async function appendGitignoreJsonSink(
   dryRun = false,
 ): Promise<"created" | "updated" | "skipped"> {
   const gitignorePath = path.join(cwd, ".gitignore");
-  const block = "# amplio JSON sink output\namplio.jsonl\n";
+  // Glob, not exact: the sink's default file name includes the env
+  // (amplio.development.jsonl, amplio.production.jsonl, …).
+  const block = "# amplio JSON sink output\namplio*.jsonl\n";
 
   if (await pathExists(gitignorePath)) {
     const current = await fs.readFile(gitignorePath, "utf8");
-    if (/(^|\n)\s*amplio\.jsonl(\s|$)/m.test(current)) {
+    if (/(^|\n)\s*amplio\*\.jsonl(\s|$)/m.test(current)) {
       return "skipped";
+    }
+    if (/(^|\n)\s*amplio\.jsonl(\s|$)/m.test(current)) {
+      // Legacy exact entry from older CLIs — widen it to the env-aware glob.
+      if (!dryRun) {
+        const next = current.replace(
+          /(^|\n)(\s*)amplio\.jsonl(?=\s|$)/m,
+          "$1$2amplio*.jsonl",
+        );
+        await fs.writeFile(gitignorePath, next, "utf8");
+      }
+      return "updated";
     }
     if (!dryRun) {
       const next = current.endsWith("\n") ? `${current}${block}` : `${current}\n${block}`;
@@ -75,7 +91,7 @@ async function appendEnvExampleJsonSink(
 
   if (!dryRun) {
     const block =
-      "\n# Path for the amplio JSON file sink (defaults to amplio.jsonl)\n# AMPLIO_JSON_SINK_PATH=amplio.jsonl\n";
+      "\n# Path for the amplio JSON file sink (defaults to amplio.<env>.jsonl, e.g. amplio.development.jsonl)\n# AMPLIO_JSON_SINK_PATH=amplio.dev.jsonl\n";
     const next = current.endsWith("\n") ? `${current}${block.slice(1)}` : `${current}${block}`;
     await fs.writeFile(envExamplePath, next, "utf8");
   }
@@ -83,6 +99,51 @@ async function appendEnvExampleJsonSink(
 }
 
 const INTEGRATION_IDS = new Set(["better-auth", "clerk", "next-auth", "resend", "polar"]);
+
+/** Integrations whose files declare their third-party message shapes locally —
+ * tsc stays green without the target package installed. */
+const INTEGRATION_SELF_CONTAINED_TYPES = new Set(["next-auth", "resend", "polar"]);
+
+/**
+ * Manual wiring steps per integration — installing the files is only half the
+ * job, and stopping silently after "5 files created" leaves the other half in
+ * the docs where nobody is looking. importBase is `~telemetry` when the
+ * tsconfig alias exists, else the telemetry dir.
+ */
+const INTEGRATION_WIRING: Record<string, (importBase: string) => string[]> = {
+  "next-auth": (importBase) => [
+    "Wire it up (2 manual steps):",
+    "  1. Wrap the [...nextauth] route with withAmplio so auth events share the request spine",
+    "     (stock create-t3-app: `amplio init --wire` does this):",
+    "       const { GET: authGet, POST: authPost } = handlers;",
+    "       export const GET = withAmplio(authGet);",
+    "       export const POST = withAmplio(authPost);",
+    "  2. Add the events to your NextAuth config (T3: src/server/auth/config.ts):",
+    `       import { amplioNextAuthEvents } from "${importBase}/integrations/next-auth";`,
+    "       export const authConfig = { /* … */, events: amplioNextAuthEvents() };",
+    `  Guide: node_modules/@useamplio/amplio/docs/t3.md §6 (also ${T3_MD_URL})`,
+  ],
+  "better-auth": (importBase) => [
+    "Wire it up: add the plugin to your betterAuth() config:",
+    `  import { createBetterAuthAmplioPlugin } from "${importBase}/integrations/better-auth";`,
+    "  export const auth = betterAuth({ /* … */, plugins: [createBetterAuthAmplioPlugin()] });",
+  ],
+  clerk: (importBase) => [
+    "Wire it up: call handleClerkWebhook(event) from your Clerk webhook route after verifying the signature:",
+    `  import { handleClerkWebhook } from "${importBase}/integrations/clerk";`,
+    "  // e.g. src/app/api/webhooks/clerk/route.ts, after verifyWebhook(...)",
+    "  handleClerkWebhook(event);",
+  ],
+  resend: (importBase) => [
+    "Wire it up: call handleResendWebhook(event) from your Resend webhook route,",
+    "or trackResendEmail(...) right after resend.emails.send():",
+    `  import { handleResendWebhook, trackResendEmail } from "${importBase}/integrations/resend";`,
+  ],
+  polar: (importBase) => [
+    "Wire it up: call handlePolarWebhook(event) from your Polar webhook handler:",
+    `  import { handlePolarWebhook } from "${importBase}/integrations/polar";`,
+  ],
+};
 
 export interface AddOptions {
   cwd: string;
@@ -464,7 +525,7 @@ export async function runAddSink(id: string, options: AddOptions): Promise<void>
     if (gitignoreResult !== "skipped") {
       console.log(
         dryRun
-          ? `  ~ .gitignore (would add amplio.jsonl)`
+          ? `  ~ .gitignore (would add amplio*.jsonl)`
           : `  ✓ .gitignore (${gitignoreResult})`,
       );
     }
@@ -552,4 +613,30 @@ export async function runAddIntegration(id: string, options: AddOptions): Promis
     return;
   }
   await formatTelemetry(options.cwd);
+
+  // The integration is open code against a third-party package — installing
+  // it into a project that doesn't have that package deserves a heads-up.
+  const rule = INTEGRATION_DEP_RULES.find((entry) => entry.integration === id);
+  if (rule && !(await findDependency(options.cwd, rule.matches))) {
+    if (INTEGRATION_SELF_CONTAINED_TYPES.has(id)) {
+      console.log(
+        `\n! ${rule.depLabel} is not in package.json — this integration targets it. The file uses local structural types (tsc stays green), but it emits nothing until ${rule.depLabel} is installed and wired.`,
+      );
+    } else {
+      console.log(
+        `\n! ${rule.depLabel} is not in package.json — the integration file imports from it, so typecheck/build will fail until it is installed.`,
+      );
+    }
+  }
+
+  const wiring = INTEGRATION_WIRING[id];
+  if (wiring) {
+    const importBase = (await hasTelemetryPathAlias(options.cwd, telemetryDir))
+      ? "~telemetry"
+      : telemetryDir;
+    console.log("");
+    for (const line of wiring(importBase)) {
+      console.log(`  ${line}`);
+    }
+  }
 }

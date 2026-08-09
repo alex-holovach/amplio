@@ -26,6 +26,13 @@ function detectEntryIndent(source: string, braceIndex: number): string {
   return lineMatch?.[1] ?? "    ";
 }
 
+/** "," when the object already has entries after the insert point; "" when the
+ * inserted entry would be the last one (a trailing comma is invalid JSON). */
+function separatorAfterInsert(source: string, braceIndex: number): string {
+  const nextNonWhitespace = /^\s*(\S)/.exec(source.slice(braceIndex + 1))?.[1];
+  return nextNonWhitespace === "}" ? "" : ",";
+}
+
 export async function applyTsconfigPathsAlias(
   cwd: string,
   telemetryDir: string,
@@ -47,7 +54,7 @@ export async function applyTsconfigPathsAlias(
   if (pathsKeyMatch && pathsKeyMatch.index !== undefined) {
     const braceIndex = raw.indexOf("{", pathsKeyMatch.index);
     const entryIndent = detectEntryIndent(raw, braceIndex);
-    const insert = `\n${entryIndent}${aliasEntry},`;
+    const insert = `\n${entryIndent}${aliasEntry}${separatorAfterInsert(raw, braceIndex)}`;
     edited = raw.slice(0, braceIndex + 1) + insert + raw.slice(braceIndex + 1);
   } else {
     const compilerOptionsMatch = /(["'])compilerOptions\1\s*:\s*\{/.exec(raw);
@@ -56,7 +63,7 @@ export async function applyTsconfigPathsAlias(
     }
     const braceIndex = raw.indexOf("{", compilerOptionsMatch.index);
     const entryIndent = detectEntryIndent(raw, braceIndex);
-    const pathsBlock = `\n${entryIndent}"paths": {\n${entryIndent}  ${aliasEntry}\n${entryIndent}},`;
+    const pathsBlock = `\n${entryIndent}"paths": {\n${entryIndent}  ${aliasEntry}\n${entryIndent}}${separatorAfterInsert(raw, braceIndex)}`;
     edited = raw.slice(0, braceIndex + 1) + pathsBlock + raw.slice(braceIndex + 1);
   }
 

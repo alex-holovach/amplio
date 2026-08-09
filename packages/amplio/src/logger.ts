@@ -1,7 +1,7 @@
 import { isInitialized, resolveAlwaysSample, resolveConfig } from "./config.js";
 import { hasAmbientLogger } from "./context.js";
 import { createError } from "./error.js";
-import { isDevelopment, isTest } from "./env.js";
+import { isAmplioDisabled, isDevelopment, isNextBuildPhase, isTest } from "./env.js";
 import { getGlobalState } from "./global-state.js";
 import { getSealedNoopLogger } from "./noop-logger.js";
 import { AmplioValidationError } from "./validation-error.js";
@@ -76,6 +76,13 @@ const finalizeRecord = (
   record.env = config.env;
   record.timestamp = getTimestampIso(now);
   record.duration_ms = now - logger._startedAt;
+
+  // `next build` static generation executes RSC pages, so emits fire from CI
+  // with env: "production". Tag instead of drop — dashboards filter on
+  // build_phase != true, and people who want SSG rows still get them.
+  if (isNextBuildPhase()) {
+    record.build_phase = true;
+  }
 
   if (record.success === undefined && record.status !== undefined) {
     const status = record.status;
@@ -290,6 +297,12 @@ class InternalLoggerImpl implements InternalLogger {
       warnSealed("emit");
       return null;
     }
+    if (isAmplioDisabled()) {
+      // Deliberate escape hatch (CI, builds): drop without sinks and without
+      // sealing noise — the logger seals so repeat emits stay no-ops.
+      this._seal.sealed = true;
+      return null;
+    }
     if (!isInitialized()) {
       if (isDevelopment()) {
         console.warn(
@@ -396,6 +409,25 @@ class InternalLoggerImpl implements InternalLogger {
       _startedAt: Date.now(),
       _seal: { sealed: false },
     });
+  }
+
+  async time<T extends Record<string, unknown>, R>(
+    def: EventDef<T>,
+    fn: (ev: EventLogger<T>) => R | Promise<R>,
+  ): Promise<R> {
+    // Timed-path sugar: the child's clock starts before fn runs, so
+    // duration_ms measures the work — the footgun where a `.child()` created
+    // right before `.emit()` reports ~0 cannot happen here.
+    const ev = this.child(def);
+    try {
+      const result = await fn(ev);
+      ev.emit();
+      return result;
+    } catch (error) {
+      ev.error(error);
+      ev.emit();
+      throw error;
+    }
   }
 }
 

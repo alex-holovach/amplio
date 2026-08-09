@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "docs": "requestMetadata is a per-request enricher factory — use it inside middleware/wrappers (requestLogger.set(enrich({}))), not in the init() enrichers array.",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.14"
+    "@useamplio/amplio@^0.1.0-alpha.15"
   ],
   "files": [
     {

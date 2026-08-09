@@ -6,7 +6,11 @@ import { upsertComponentsJson } from "../utils/components-json.js";
 import { detectFramework, shouldAutoScaffold } from "../utils/detect-framework.js";
 import { detectPackageManager } from "../utils/detect-package-manager.js";
 import { ensureDir, pathExists, writeFileIfMissing } from "../utils/fs.js";
-import { hasAuthDependency, hasDependency } from "../utils/has-dep.js";
+import {
+  hasAuthDependency,
+  hasDependency,
+  INTEGRATION_DEP_RULES,
+} from "../utils/has-dep.js";
 import { ALPHA_MD_URL, T3_MD_URL } from "../help.js";
 import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
 import { formatGeneratedFiles } from "../utils/format-files.js";
@@ -165,17 +169,6 @@ function resolveEventName(
   }
   return null;
 }
-
-const INTEGRATION_DEP_RULES: Array<{
-  integration: string;
-  matches: (depName: string) => boolean;
-}> = [
-  { integration: "next-auth", matches: (name) => name === "next-auth" },
-  { integration: "better-auth", matches: (name) => name === "better-auth" },
-  { integration: "clerk", matches: (name) => name.startsWith("@clerk/") },
-  { integration: "resend", matches: (name) => name === "resend" },
-  { integration: "polar", matches: (name) => name.startsWith("@polar-sh/") },
-];
 
 /**
  * Surface registry integrations that match dependencies already in the app —
@@ -435,15 +428,21 @@ export async function runInit(options: InitOptions): Promise<void> {
     verbose: options.verbose,
   });
 
-  // Apply the tsconfig alias before wiring so wired imports can use ~telemetry/*.
-  if (options.paths) {
+  const auto = shouldAutoScaffold(options.yes);
+
+  // Apply the tsconfig alias before wiring so wired imports use ~telemetry/*
+  // instead of a 5-deep ../ chain. Defaults on under --yes / non-interactive
+  // (when a tsconfig exists); --no-paths opts out.
+  const applyPaths =
+    options.paths ??
+    (auto && (await pathExists(path.join(options.cwd, "tsconfig.json"))));
+  if (applyPaths) {
     const config = await readAmplioConfig(options.cwd);
     const telemetryDir = config?.telemetryDir ?? "telemetry";
     await writeTsconfigPathsAlias(options.cwd, telemetryDir);
   }
 
   const detected = await detectFramework(options.cwd);
-  const auto = shouldAutoScaffold(options.yes);
   const hasAuth = await hasAuthDependency(options.cwd);
   const middlewareName = resolveMiddlewareName(options.middleware, detected, auto);
   const eventName = resolveEventName(options.event, middlewareName, auto, hasAuth);
@@ -589,6 +588,9 @@ export async function runInit(options: InitOptions): Promise<void> {
     );
     console.log("  3. Expect one JSON line on stdout (console sink)");
     console.log(`  4. ${scriptRunCommand(packageManager, "amplio doctor")}`);
+    console.log(
+      `  Steps 2–3 in one shot (needs the JSON sink: amplio add sink json): ${scriptRunCommand(packageManager, "amplio smoke <url>")}`,
+    );
 
     // http.search is the most PII-prone field in the schema and redaction
     // does not parse query strings — surface the opt-in scrubber here, the
@@ -624,7 +626,7 @@ export async function runInit(options: InitOptions): Promise<void> {
   if (
     isNext &&
     (await resolveNextInstrumentationBase(options.cwd)) === "src" &&
-    !options.paths
+    !applyPaths
   ) {
     printTsconfigPathsHint();
   }

@@ -270,13 +270,19 @@ describe("cli --paths only with init", () => {
   it("exits 1 when --paths is used with doctor", () => {
     const result = runCli(["doctor", "--paths"]);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("error: --paths is only valid with init");
+    expect(result.stderr).toContain("error: --paths/--no-paths is only valid with init");
   });
 
   it("exits 1 when --paths is used with add", () => {
     const result = runCli(["add", "sink", "console", "--paths"]);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("error: --paths is only valid with init");
+    expect(result.stderr).toContain("error: --paths/--no-paths is only valid with init");
+  });
+
+  it("exits 1 when --no-paths is used with doctor", () => {
+    const result = runCli(["doctor", "--no-paths"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --paths/--no-paths is only valid with init");
   });
 });
 

@@ -12,7 +12,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -32,7 +32,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -52,7 +52,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -72,7 +72,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -92,14 +92,14 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
           "path": "registry/events/page/viewed.ts",
           "target": "~/telemetry/events/page/viewed.ts",
           "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PageViewed = defineEvent(\n  \"page.viewed\",\n  z.object({\n    page: z.object({\n      // Pathname only (\"/pricing\") — query strings carry PII; if you need a\n      // param, add it as its own typed field instead.\n      path: z.string(),\n      title: z.string().optional(),\n      referrer: z.string().optional(),\n    }),\n    visitor: z\n      .object({\n        // Authenticated user id or anonymous visitor id — whichever you have.\n        id: z.string(),\n        authenticated: z.boolean().optional(),\n      })\n      .optional(),\n  }),\n);\n"
+          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PageViewed = defineEvent(\n  \"page.viewed\",\n  z.object({\n    page: z.object({\n      // Pathname only (\"/pricing\") — query strings carry PII; if you need a\n      // param, add it as its own typed field instead.\n      path: z.string(),\n      title: z.string().optional(),\n      referrer: z.string().optional(),\n    }),\n    visitor: z\n      .object({\n        // Authenticated user id or anonymous visitor id — whichever you have.\n        // Optional so \"anonymous, but I know it's unauthenticated\" is valid:\n        //   visitor: { authenticated: false }\n        id: z.string().optional(),\n        authenticated: z.boolean().optional(),\n      })\n      .optional(),\n  }),\n);\n"
         }
       ]
     },
@@ -112,7 +112,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -132,7 +132,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -152,7 +152,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -171,7 +171,7 @@
       "type": "registry:lib",
       "docs": "Wire the middleware: `app.use(\"*\", amplioMiddleware())` in your Hono app. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -190,7 +190,7 @@
       "type": "registry:lib",
       "docs": "Wire the middleware: `app.use(amplioMiddleware())` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -207,16 +207,16 @@
       "title": "Next.js Route Handler Wrapper",
       "description": "Route-handler wrapper (withAmplio) that owns the request wide event - this is not Next.js middleware.ts.",
       "type": "registry:lib",
-      "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you.",
+      "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you. Also exports withAmplioRender(name, fn) to give RSC page renders an ambient page.render spine so server-caller calls and facade events correlate.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
           "path": "registry/middleware/next.ts",
           "target": "~/telemetry/middleware/next.ts",
           "type": "registry:lib",
-          "content": "// Side-effect import: ensures init() from telemetry/logger runs in every module\n// graph that uses this middleware (next dev --turbo compiles instrumentation.ts\n// and route bundles separately, which would otherwise drop events silently).\nimport \"../logger\";\n\nimport {\n  createRequestLogger,\n  getLogger,\n  runWithLogger,\n  scheduleFlush,\n  type Logger,\n} from \"@useamplio/amplio\";\nimport type { NextRequest } from \"next/server\";\n\nexport interface WithAmplioOptions {\n  waitUntil?: (promise: Promise<unknown>) => void;\n}\n\n// The `never[]` rest constraint accepts any handler shape (route context params\n// included) without resorting to `any`, which trips lint/suspicious/noExplicitAny.\nexport function withAmplio<\n  T extends (request: NextRequest, ...args: never[]) => Promise<Response>,\n>(handler: T, options?: WithAmplioOptions): T {\n  const wrapped = (async (request: NextRequest, ...rest: never[]) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.nextUrl.pathname,\n    }).set({\n      http: {\n        search: request.nextUrl.search || undefined,\n      },\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        const response = await handler(request, ...rest);\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: response.status },\n            status: response.status,\n          });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        return response;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        throw error;\n      }\n    });\n  }) as T;\n\n  return wrapped;\n}\n\n// Server-side accessor for the ambient request logger. Named get*, not use*:\n// this is not a React hook and never runs on the client.\nexport function getRequestLogger(): Logger {\n  return getLogger();\n}\n"
+          "content": "// Side-effect import: ensures init() from telemetry/logger runs in every module\n// graph that uses this middleware (next dev --turbo compiles instrumentation.ts\n// and route bundles separately, which would otherwise drop events silently).\nimport \"../logger\";\n\nimport {\n  createLogger,\n  createRequestId,\n  createRequestLogger,\n  getLogger,\n  runWithLogger,\n  scheduleFlush,\n  type Logger,\n} from \"@useamplio/amplio\";\nimport type { NextRequest } from \"next/server\";\n\nexport interface WithAmplioOptions {\n  waitUntil?: (promise: Promise<unknown>) => void;\n}\n\n// The `never[]` rest constraint accepts any handler shape (route context params\n// included) without resorting to `any`, which trips lint/suspicious/noExplicitAny.\nexport function withAmplio<\n  T extends (request: NextRequest, ...args: never[]) => Promise<Response>,\n>(handler: T, options?: WithAmplioOptions): T {\n  const wrapped = (async (request: NextRequest, ...rest: never[]) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.nextUrl.pathname,\n    }).set({\n      http: {\n        search: request.nextUrl.search || undefined,\n      },\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        const response = await handler(request, ...rest);\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: response.status },\n            status: response.status,\n          });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        return response;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        throw error;\n      }\n    });\n  }) as T;\n\n  return wrapped;\n}\n\n// Server-side accessor for the ambient request logger. Named get*, not use*:\n// this is not a React hook and never runs on the client.\nexport function getRequestLogger(): Logger {\n  return getLogger();\n}\n\n// Next throws for control flow (redirect(), notFound()); those errors carry a\n// digest and are not render failures.\nfunction nextControlFlowDigest(error: unknown): string | undefined {\n  if (error !== null && typeof error === \"object\" && \"digest\" in error) {\n    const digest = (error as { digest?: unknown }).digest;\n    if (typeof digest === \"string\" && digest.startsWith(\"NEXT_\")) {\n      return digest;\n    }\n  }\n  return undefined;\n}\n\n/**\n * RSC render spine. Server components do not pass through withAmplio, so a\n * page render otherwise produces uncorrelated rows: standalone trpc.request\n * spines per server-caller call and request_id-less facade events. Wrapping\n * the page establishes an ambient `page.render` spine — amplioTrpcMiddleware\n * annotates it instead of creating standalone spines, and logger.event(Def)\n * rows emitted during the render share its request_id.\n *\n *   // src/app/page.tsx\n *   export default withAmplioRender(\"home\", async function Home() { … });\n *\n * Note: `next build` static generation also runs the render — those rows are\n * tagged `build_phase: true` by the runtime.\n */\nexport function withAmplioRender<A extends never[], R>(\n  page: string,\n  render: (...args: A) => R | Promise<R>,\n  options?: WithAmplioOptions,\n): (...args: A) => Promise<R> {\n  return async (...args: A) => {\n    const renderLogger = createLogger({\n      event: \"page.render\",\n      \"@event\": \"page.render\",\n      request_id: createRequestId(),\n      page: { name: page },\n    });\n\n    return runWithLogger(renderLogger, async () => {\n      try {\n        const result = await render(...args);\n        if (!renderLogger.sealed) {\n          renderLogger.set({ success: true });\n          renderLogger.emit();\n          scheduleFlush(options);\n        }\n        return result;\n      } catch (error) {\n        if (!renderLogger.sealed) {\n          const digest = nextControlFlowDigest(error);\n          if (digest) {\n            // redirect()/notFound() — record the outcome, not a failure.\n            renderLogger.set({ page: { interrupted: digest } });\n          } else {\n            renderLogger.error(error);\n          }\n          renderLogger.emit();\n          scheduleFlush(options);\n        }\n        throw error;\n      }\n    });\n  };\n}\n"
         }
       ]
     },
@@ -228,7 +228,7 @@
       "type": "registry:lib",
       "docs": "Wire the plugin: `await app.register(amplioPlugin)` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14",
+        "@useamplio/amplio@^0.1.0-alpha.15",
         "fastify-plugin@^5.0.0"
       ],
       "files": [
@@ -248,7 +248,7 @@
       "type": "registry:lib",
       "docs": "Wire into your procedure bases: `const amplioMiddleware = t.middleware(amplioTrpcMiddleware())` then `.use(amplioMiddleware)` on publicProcedure/protectedProcedure. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/server/api/trpc.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -267,7 +267,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { consoleSink } from \"./sinks/console\"` to telemetry/logger.ts and append `consoleSink` to the init() sinks array. Prefer `npx @useamplio/cli@alpha add sink console` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -284,16 +284,16 @@
       "title": "JSON Sink",
       "description": "JSON sink that serializes wide events for streaming or files.",
       "type": "registry:lib",
-      "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio.jsonl to .gitignore. Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
+      "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio*.jsonl to .gitignore (the default file name includes the env, e.g. amplio.development.jsonl). Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
           "path": "registry/sinks/json.ts",
           "target": "~/telemetry/sinks/json.ts",
           "type": "registry:lib",
-          "content": "/**\n * Dev-grade JSONL sink — appendFileSync blocks the event loop.\n * Use sink-otlp for production. Path from AMPLIO_JSON_SINK_PATH env or option;\n * defaults to amplio.jsonl (add to .gitignore).\n */\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport type { LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport interface JsonFileSinkOptions {\n  path?: string;\n}\n\nexport function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {\n  const filePath =\n    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined) ?? \"amplio.jsonl\";\n\n  return (record: LogRecord) => {\n    const dir = path.dirname(filePath);\n    if (dir && dir !== \".\") {\n      fs.mkdirSync(dir, { recursive: true });\n    }\n    fs.appendFileSync(filePath, `${JSON.stringify(record)}\\n`, \"utf8\");\n  };\n}\n"
+          "content": "/**\n * Dev-grade JSONL sink — appendFileSync blocks the event loop.\n * Use sink-otlp for production. Path from AMPLIO_JSON_SINK_PATH env or option;\n * defaults to amplio.<env>.jsonl (e.g. amplio.development.jsonl) so dev rows\n * and build/production rows never interleave in one file. Add amplio*.jsonl\n * to .gitignore (amplio add sink json does this).\n */\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport type { LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport interface JsonFileSinkOptions {\n  path?: string;\n}\n\nexport function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {\n  const explicitPath =\n    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined);\n\n  return (record: LogRecord) => {\n    const env = typeof record.env === \"string\" && record.env ? record.env : \"dev\";\n    const filePath = explicitPath ?? `amplio.${env}.jsonl`;\n    const dir = path.dirname(filePath);\n    if (dir && dir !== \".\") {\n      fs.mkdirSync(dir, { recursive: true });\n    }\n    fs.appendFileSync(filePath, `${JSON.stringify(record)}\\n`, \"utf8\");\n  };\n}\n"
         }
       ]
     },
@@ -305,7 +305,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (base URL, /v1/logs appended). Default is one POST per emit — pass otlpSink({ batch: true }) for production traffic. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -324,7 +324,7 @@
       "type": "registry:lib",
       "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -343,7 +343,7 @@
       "type": "registry:lib",
       "docs": "Wire the enricher: add `queryAllowlist()` to the init() enrichers array in telemetry/logger.ts (pass { allow: [\"page\"] } to keep specific params). Prefer `npx @useamplio/cli@alpha add enricher query-allowlist` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -362,7 +362,7 @@
       "type": "registry:lib",
       "docs": "requestMetadata is a per-request enricher factory — use it inside middleware/wrappers (requestLogger.set(enrich({}))), not in the init() enrichers array.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "files": [
         {
@@ -382,7 +382,7 @@
       "docs": "Wire into your NextAuth config: `events: amplioNextAuthEvents()` (create-t3-app: src/server/auth/config.ts), and wrap src/app/api/auth/[...nextauth]/route.ts with withAmplio so rows share the request spine's request_id (`amplio init --wire` does this). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "registryDependencies": [
         "@useamplio/event-auth-user-signed-up",
@@ -406,7 +406,7 @@
       "docs": "Wire the plugin: add `createBetterAuthAmplioPlugin()` to your betterAuth({ plugins: [...] }) config. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14",
+        "@useamplio/amplio@^0.1.0-alpha.15",
         "better-auth@^1.2.0"
       ],
       "registryDependencies": [
@@ -431,7 +431,7 @@
       "docs": "Call handleClerkWebhook from your Clerk webhook route (user.created / session.created). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14",
+        "@useamplio/amplio@^0.1.0-alpha.15",
         "@clerk/backend@^1.25.0"
       ],
       "registryDependencies": [
@@ -456,7 +456,7 @@
       "docs": "Call trackResendEmail after sending, or handleResendWebhook from your Resend webhook route. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "registryDependencies": [
         "@useamplio/event-email-sent"
@@ -479,7 +479,7 @@
       "docs": "Call handlePolarWebhook (or trackPolarOrderPaid) from your Polar webhook route (order.paid). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.14"
+        "@useamplio/amplio@^0.1.0-alpha.15"
       ],
       "registryDependencies": [
         "@useamplio/event-payment-order-paid"

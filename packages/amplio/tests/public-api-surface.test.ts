@@ -41,7 +41,7 @@ describe("public API surface", () => {
     expect(typeof core.logger.event).toBe("function");
   });
 
-  it("wide-event instances expose set/error/emit/create/event/child (+ sealed)", () => {
+  it("wide-event instances expose set/error/emit/create/event/child/time (+ sealed)", () => {
     const scope = createLogger().set({ a: 1 });
     expect("sealed" in scope).toBe(true);
     expect(typeof scope.sealed).toBe("boolean");
@@ -50,6 +50,7 @@ describe("public API surface", () => {
     expect(typeof scope.create).toBe("function");
     expect(typeof scope.event).toBe("function");
     expect(typeof scope.child).toBe("function");
+    expect(typeof scope.time).toBe("function");
 
     const def = defineEvent(
       "auth.user.signed_up",
