@@ -1,0 +1,72 @@
+---
+title: Emit API
+description: set, error, emit, child, sealing, and sampling behavior.
+---
+
+## Lifecycle
+
+```typescript
+const log = logger.event(AuthUserSignedUp);
+
+log.set({ user: { id: "u_1" } });
+log.set({ signup: { method: "oauth" } }); // deep-merge
+log.emit(); // validate, redact, drain sinks, seal
+```
+
+`.set()` deep-merges nested objects. `null` overwrites; `undefined` in a patch is skipped.
+
+## Errors
+
+```typescript
+try {
+  await work();
+} catch (err) {
+  log.error(err, { status: 500 });
+}
+log.emit();
+```
+
+`.error()` records structured failure (`success: false`) but does not emit — call `.emit()` after.
+
+## Return value
+
+`.emit()` returns the finalized record, or **`null`** when:
+
+- `init()` never ran (dev warns)
+- the logger was already sealed (repeat `.emit()`)
+- sampling skipped sink delivery (enrichers + redaction still run)
+
+## child() for correlated rows
+
+```typescript
+const ev = getLogger().child(PostCreated); // clock starts here
+const post = await db.insert(...);
+ev.set({ post: { id: post.id } }).emit();
+```
+
+`duration_ms` on a child measures time since `.child()` — create the child **before** work to time the operation. Or use `.time()`:
+
+```typescript
+await getLogger().time(PostCreated, async (ev) => {
+  const post = await createPost();
+  ev.set({ post: { id: post.id } });
+  return post;
+});
+```
+
+## success field
+
+When unset, `success` is omitted from the record. Numeric `status` in `[200, 400)` derives `success: true`. Explicit `success` always wins.
+
+For domain events without `status`, filter with `success != false` rather than `success = true`.
+
+## flush()
+
+```typescript
+import { flush } from "@useamplio/amplio";
+
+await handler();
+await flush(); // await pending async sink deliveries
+```
+
+Use with serverless `waitUntil` / Next.js `after` when async sinks (OTLP batch) must complete.

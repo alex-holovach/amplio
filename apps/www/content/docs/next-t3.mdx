@@ -1,0 +1,83 @@
+---
+title: create-t3-app
+description: Next.js 15, tRPC v11, App Router wiring for amplio.
+---
+
+The most polished path: create-t3-app with `src/` layout and `telemetry/` at repo root.
+
+## Scaffold
+
+```bash
+npx @useamplio/cli@alpha init --service t3-app --yes
+```
+
+Under `--yes`, `init` auto-wires:
+
+- `src/app/api/trpc/[trpc]/route.ts` → `withAmplio`
+- `src/server/api/trpc.ts` → `amplioTrpcMiddleware`
+- `src/app/api/auth/[...nextauth]/route.ts` → `withAmplio` (when present)
+- `src/instrumentation.ts` → imports `telemetry/logger` (Node runtime guard)
+
+`instrumentation.ts` is required — without it, `.emit()` before `init()` drops silently.
+
+```typescript
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("../telemetry/logger");
+  }
+}
+```
+
+## Domain events from procedures
+
+```typescript
+import { getLogger } from "@useamplio/amplio";
+import { AuthUserSignedUp } from "../../../telemetry/events/auth/user-signed-up";
+
+export const authRouter = createTRPCRouter({
+  register: publicProcedure.mutation(async () => {
+    getLogger()
+      .child(AuthUserSignedUp)
+      .set({ user: { id: "u_123" }, signup: { method: "email" } })
+      .emit();
+  }),
+});
+```
+
+Annotate every authenticated spine in one place:
+
+```typescript
+export const protectedProcedure = t.procedure
+  .use(amplioMiddleware)
+  .use(({ ctx, next }) => {
+    getLogger().set({ user: { id: ctx.session.user.id } });
+    return next({ ctx });
+  });
+```
+
+## RSC page renders
+
+Wrap pages with `withAmplioRender` so server-caller tRPC and facade events share one `request_id`:
+
+```tsx
+import { withAmplioRender } from "~telemetry/middleware/next";
+
+export default withAmplioRender("home", async function Home() {
+  const latest = await api.post.getLatest();
+  return <div>{latest?.name}</div>;
+});
+```
+
+## Verify
+
+```bash
+pnpm dev
+npx @useamplio/cli@alpha doctor
+pnpm amplio smoke 'http://localhost:3000/api/trpc/post.hello?batch=1&input=…'
+```
+
+Requires JSON sink (`amplio add sink json`) for `smoke`.
+
+## Server-only rule
+
+Do not import `telemetry/logger` or `getLogger()` from `"use client"` — the runtime uses `node:async_hooks`. Event **definitions** from `@useamplio/amplio/events` are client-safe; emit server-side.

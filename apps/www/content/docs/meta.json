@@ -1,0 +1,13 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "concepts",
+    "emit",
+    "next-t3",
+    "frameworks",
+    "cli",
+    "sinks",
+    "vs-evlog"
+  ]
+}

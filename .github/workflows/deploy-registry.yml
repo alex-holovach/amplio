@@ -1,4 +1,4 @@
-name: deploy-registry
+name: deploy-site
 
 on:
   push:
@@ -6,7 +6,9 @@ on:
     paths:
       - "registry/**"
       - "scripts/build-registry.mjs"
+      - "scripts/sync-registry.mjs"
       - "public/**"
+      - "apps/www/**"
       - "vercel.json"
       - ".github/workflows/deploy-registry.yml"
   workflow_dispatch:
@@ -15,24 +17,33 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-registry
+  group: deploy-site
   cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
 
-      - name: Build registry
-        run: node scripts/build-registry.mjs
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build site
+        run: pnpm --filter @useamplio/www build
 
       - name: Deploy to Vercel (aholovach/amplio)
+        working-directory: apps/www
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

@@ -1,0 +1,43 @@
+---
+title: vs evlog
+description: How amplio differs from evlog and traditional loggers.
+---
+
+## evlog
+
+| | evlog | amplio |
+|---|---|---|
+| Code location | Closed npm runtime + optional augmentation | Open `telemetry/` in your repo |
+| Event model | Logger methods + modules | Schema-first `defineEvent` + wide events |
+| Install | npm package | CLI scaffolds editable files (shadcn-style) |
+| API surface | `log.info`, plugins, etc. | `.set()`, `.error()`, `.emit()` only |
+
+amplio is **not** evlog. You own the schemas, middleware, sinks, and integrations. The runtime (`@useamplio/amplio`) is tiny and dependency-free.
+
+## vs printf logging
+
+```typescript
+// ❌ not amplio
+log.info("user signed up", { userId });
+
+// ✅ amplio
+getLogger()
+  .child(AuthUserSignedUp)
+  .set({ user: { id: userId }, signup: { method: "email" } })
+  .emit();
+```
+
+Structured fields come from Zod schemas — not ad-hoc objects.
+
+## vs OpenTelemetry traces alone
+
+amplio emits **wide events**: one rich JSON record per request or domain action. Traces answer "what happened in this span tree"; wide events answer "what happened in this business unit of work" with schema-validated fields you define.
+
+OTLP sink exports to your collector when you need both.
+
+## When to pick amplio
+
+- You want observability code in PRs, not black boxes
+- You prefer one emit per request/job with accumulated context
+- You use shadcn-style registry installs
+- create-t3-app / Hono / Express / Fastify with minimal wiring

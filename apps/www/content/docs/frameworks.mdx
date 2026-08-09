@@ -1,0 +1,68 @@
+---
+title: Frameworks
+description: Hono, Next.js, Express, and Fastify middleware wiring.
+---
+
+## Hono
+
+```bash
+npx @useamplio/cli@alpha init --service my-app --middleware hono --yes
+```
+
+```typescript
+import { Hono } from "hono";
+import { amplioMiddleware } from "./telemetry/middleware/hono";
+
+const app = new Hono();
+app.use("*", amplioMiddleware());
+```
+
+```typescript
+import { getRequestLogger } from "./telemetry/middleware/hono";
+
+app.post("/signup", async (c) => {
+  getRequestLogger(c)
+    .child(AuthUserSignedUp)
+    .set({ user: { id: "u_123" }, signup: { method: "email" } })
+    .emit();
+  return c.json({ ok: true });
+});
+```
+
+## Next.js App Router
+
+```bash
+npx @useamplio/cli@alpha init --service my-app --middleware next --yes
+```
+
+```typescript
+import { withAmplio } from "@/telemetry/middleware/next";
+import { getLogger } from "@useamplio/amplio";
+
+export const GET = withAmplio(async () => {
+  getLogger().child(AuthUserSignedUp).set({ user: { id: "u_123" } }).emit();
+  return NextResponse.json({ ok: true });
+});
+```
+
+## Express
+
+```typescript
+import { amplioMiddleware } from "./telemetry/middleware/express";
+
+app.use(amplioMiddleware());
+// req.amplio available in handlers
+```
+
+## Fastify
+
+```typescript
+import { amplioPlugin } from "./telemetry/middleware/fastify";
+
+await app.register(amplioPlugin);
+// request.amplio available in handlers
+```
+
+## tRPC v11
+
+When `@trpc/server` is detected alongside Next.js, `init` scaffolds `telemetry/middleware/trpc.ts`. See [create-t3-app](/docs/next-t3).

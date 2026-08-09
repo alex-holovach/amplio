@@ -1,0 +1,65 @@
+---
+title: Introduction
+description: Schema-first wide-event telemetry that installs as open code in your repo.
+---
+
+**amplio** is shadcn for observability: typed event schemas, a tiny runtime, and generated `telemetry/` code you read and edit like application code.
+
+## Quick start
+
+```bash
+npx @useamplio/cli@alpha init --service my-app --yes
+npx @useamplio/cli@alpha add event auth.user.signed_up
+npx @useamplio/cli@alpha add middleware hono
+```
+
+`init` detects Next.js, Hono, Express, or Fastify from `package.json` and can scaffold middleware plus a starter event in one shot.
+
+> The unscoped npm name `amplio` is blocked by typo-squatting rules. Always use `@useamplio/cli@alpha`.
+
+## Emit a wide event
+
+```typescript
+import { logger } from "./telemetry/logger.js";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up.js";
+
+logger
+  .event(AuthUserSignedUp)
+  .set({
+    user: { id: "u_123" },
+    signup: { method: "email" },
+  })
+  .emit();
+```
+
+Example record (fields vary by schema and enrichers):
+
+```json
+{
+  "service": "my-app",
+  "env": "development",
+  "timestamp": "2026-08-07T16:30:00.000Z",
+  "duration_ms": 12,
+  "success": true,
+  "event": "auth.user.signed_up",
+  "@event": "auth.user.signed_up",
+  "user": { "id": "u_123" },
+  "signup": { "method": "email" }
+}
+```
+
+## Packages
+
+| Package | Role |
+|---|---|
+| `@useamplio/cli` | Scaffolding (`init`, `add`, `doctor`) |
+| `@useamplio/amplio` | Runtime (`defineEvent`, `init`, `.set()`, `.emit()`) |
+
+## Next steps
+
+<Cards>
+  <Card title="Core concepts" href="/docs/concepts" />
+  <Card title="Emit API" href="/docs/emit" />
+  <Card title="create-t3-app" href="/docs/next-t3" />
+  <Card title="CLI reference" href="/docs/cli" />
+</Cards>

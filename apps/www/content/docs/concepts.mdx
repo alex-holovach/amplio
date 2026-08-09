@@ -1,0 +1,70 @@
+---
+title: Core concepts
+description: Wide events, schemas, open code, and the request spine model.
+---
+
+## Wide events
+
+One record per unit of work. Accumulate context with `.set()`, finalize with `.emit()`. After emit, the instance is **sealed** — further `.set()` / `.error()` are no-ops.
+
+## Schema-first
+
+Every important event is declared with `defineEvent` before use:
+
+```typescript
+import { defineEvent } from "@useamplio/amplio";
+import { z } from "zod";
+
+export const PostCreated = defineEvent(
+  "post.created",
+  z.object({
+    post: z.object({ id: z.string(), title: z.string() }),
+  }),
+);
+```
+
+Validation runs at emit time. Outside `NODE_ENV=test`, failures soft-tag the record with `validation.issues` and set `success: false` unless `init({ strict: true })`.
+
+## Open code in telemetry/
+
+Events, middleware, sinks, enrichers, and integrations live in `telemetry/` — owned by your app, not hidden in `node_modules`. The CLI scaffolds; you edit.
+
+```
+telemetry/
+├── events/       # one file per schema
+├── middleware/   # hono, next, trpc, …
+├── sinks/        # console, json, otlp, …
+├── enrichers/
+├── integrations/
+└── logger.ts     # init() + exported logger
+```
+
+## Request spine + domain events
+
+HTTP middleware emits one **spine** row (`http.request` or `trpc.request`). Domain events are separate rows correlated by `request_id`:
+
+```typescript
+import { getLogger } from "@useamplio/amplio";
+
+// inside request scope:
+getLogger()
+  .child(AuthUserSignedUp)
+  .set({ user: { id: "u_123" }, signup: { method: "email" } })
+  .emit();
+// → spine row + domain row, same request_id
+```
+
+| API | Use when |
+|---|---|
+| `.child(EventDef)` | Canonical domain row — copies `request_id` only |
+| `getLogger().set({ … })` | Annotate the spine (middleware emits it) |
+| `logger.event(Def).emit()` | Standalone row outside a request |
+
+## Public runtime surface
+
+Only these symbols are public from `@useamplio/amplio`:
+
+- `defineEvent`, `init`, `logger.event`, `logger.create`, `getLogger`
+- `.set()`, `.error()`, `.emit()`, `flush()`
+
+No `log.info` / `log.warn` — use schema fields and `.error()` for structured failures.

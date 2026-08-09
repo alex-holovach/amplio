@@ -1,0 +1,76 @@
+---
+title: CLI
+description: init, add, list, doctor, smoke, and registry commands.
+---
+
+```bash
+npx @useamplio/cli@alpha <command>
+```
+
+## init
+
+```bash
+npx @useamplio/cli@alpha init --service my-app --yes
+npx @useamplio/cli@alpha init --service my-app --middleware hono --event auth.user.signed_up --yes
+npx @useamplio/cli@alpha init --paths   # adds ~telemetry/* tsconfig alias
+npx @useamplio/cli@alpha init --skip-install
+```
+
+Creates `telemetry/`, `amplio.json`, `components.json`, installs `@useamplio/amplio` + `zod`.
+
+## add
+
+```bash
+npx @useamplio/cli@alpha add event post.created
+npx @useamplio/cli@alpha add middleware hono
+npx @useamplio/cli@alpha add sink json
+npx @useamplio/cli@alpha add enricher query-allowlist
+npx @useamplio/cli@alpha add integration next-auth
+npx @useamplio/cli@alpha add sink otlp --dry-run
+```
+
+Valid kinds: `event`, `middleware`, `sink`, `enricher`, `integration`.
+
+`amplio add` wires barrels and `logger.ts`. shadcn drops files only — run `doctor --fix` after.
+
+## list
+
+```bash
+npx @useamplio/cli@alpha list
+npx @useamplio/cli@alpha list middleware --json
+```
+
+## doctor
+
+```bash
+npx @useamplio/cli@alpha doctor
+npx @useamplio/cli@alpha doctor --fix
+npx @useamplio/cli@alpha doctor --strict   # CI gate
+```
+
+Checks middleware exports, event barrels, Turbopack `../logger` imports, instrumentation guard, T3 wiring.
+
+## smoke
+
+```bash
+npx @useamplio/cli@alpha smoke http://localhost:3000/api/health
+```
+
+End-to-end: hits URL, watches `amplio*.jsonl` for a new row. Requires JSON sink.
+
+## shadcn registry
+
+Hosted at `/r/{name}.json` on this site. `init` writes:
+
+```json
+{
+  "registries": {
+    "@useamplio": "https://amplio.vercel.app/r/{name}.json"
+  }
+}
+```
+
+```bash
+npx shadcn@latest add @useamplio/sink-json
+npx shadcn@latest add @useamplio/middleware-hono
+```
