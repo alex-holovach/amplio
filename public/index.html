@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>amplio registry</title>
+    <style>
+      :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+      body { margin: 2rem auto; max-width: 40rem; line-height: 1.5; padding: 0 1rem; }
+      code { font-family: ui-monospace, monospace; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <h1>amplio registry</h1>
+    <p>shadcn-compatible telemetry registry for <code>@useamplio/*</code>.</p>
+    <ul>
+      <li><a href="/r/registry.json"><code>/r/registry.json</code></a></li>
+      <li><a href="/r/middleware-hono.json"><code>/r/middleware-hono.json</code></a></li>
+      <li><a href="/r/event-auth-user-signed-up.json"><code>/r/event-auth-user-signed-up.json</code></a></li>
+    </ul>
+    <p>Point <code>components.json</code> at:</p>
+    <pre><code>"registries": {
+  "@useamplio": "https://amplio-ruddy.vercel.app/r/{name}.json"
+}</code></pre>
+  </body>
+</html>

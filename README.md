@@ -188,12 +188,22 @@ pnpm registry:build   # regenerate public/r/*.json
 pnpm registry:serve   # local HTTP server for shadcn
 ```
 
-**Local development:** run `pnpm registry:serve`, then point `components.json` at `http://127.0.0.1:4173/{name}.json`. Use `PORT=0` or `--port 0` for an ephemeral port (printed on startup). Deploying this repo to Vercel serves `public/r` at `/r/{name}.json` (CORS `*`); update `components.json` registry URL accordingly. Hosted CDN still TODO as product URL; `amplio add` works without it because the CLI bundles `registry/`.
+**Hosted registry:** [`https://amplio-ruddy.vercel.app`](https://amplio-ruddy.vercel.app) serves `public/r` at `/r/{name}.json` (CORS `*`).
 
 ```json
 {
   "registries": {
-    "@amplio": "./public/r/{name}.json"
+    "@useamplio": "https://amplio-ruddy.vercel.app/r/{name}.json"
+  }
+}
+```
+
+**Local development:** run `pnpm registry:serve`, then point `components.json` at `http://127.0.0.1:4173/{name}.json`. Use `PORT=0` or `--port 0` for an ephemeral port. `amplio add` works without the hosted URL because the CLI bundles `registry/`.
+
+```json
+{
+  "registries": {
+    "@useamplio": "https://amplio-ruddy.vercel.app/r/{name}.json"
   }
 }
 ```
@@ -290,7 +300,7 @@ See `examples/*/README.md` for curl commands and what each demo covers.
 
 - **`@useamplio/amplio`** is packable as-is (`dist/` only; optional Zod peer).
 - **`@useamplio/cli`** bundles `registry/` into the published tarball at build (`pnpm build` → `copy-registry.mjs`).
-- **Hosted shadcn registry URL** — still TODO; use `pnpm registry:build` and local `public/r/` (or the CLI bundle) until a CDN/base URL is published.
+- **Hosted shadcn registry** — https://amplio-ruddy.vercel.app/r/{name}.json (redeploy with `pnpm registry:deploy`).
 
 ```bash
 pnpm install

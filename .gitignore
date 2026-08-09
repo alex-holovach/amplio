@@ -13,3 +13,7 @@ bench-results
 packages/cli/registry/
 packages/cli/.registry-copy.lock
 packages/cli/.registry-staging-*/
+
+.vercel
+.vercelignore.local
+.env*
