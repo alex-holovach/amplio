@@ -50,9 +50,10 @@ try {
   const amplio = path.join(project, "node_modules/.bin/amplio");
   if (!existsSync(amplio)) fail("amplio bin missing after install");
 
-  const initOut = run(amplio, ["init", "--service", "publish-smoke"], { cwd: project });
+  const initOut = run(amplio, ["init", "--service", "publish-smoke", "--skip-install"], { cwd: project });
   if (!existsSync(path.join(project, "telemetry/logger.ts"))) fail("init did not create telemetry/logger.ts");
   if (!existsSync(path.join(project, "amplio.json"))) fail("init did not create amplio.json");
+  if (!existsSync(path.join(project, "components.json"))) fail("init did not create components.json");
 
   const listOut = run(amplio, ["list"], { cwd: project });
   if (!listOut.includes("middleware-hono") && !listOut.includes("hono")) {

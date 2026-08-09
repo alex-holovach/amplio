@@ -55,7 +55,7 @@ describe("generated event prettier defaults", () => {
 
   it("amplio add event output matches Prettier defaults", async () => {
     const cwd = await mkdtemp(path.join(tmpdir(), "amplio-prettier-"));
-    await runInit({ cwd, service: "prettier-app" });
+    await runInit({ cwd, service: "prettier-app" , skipInstall: true });
     await runAddEvent("ops.deploy.started", { cwd });
 
     const eventPath = path.join(cwd, "telemetry/events/ops/deploy-started.ts");

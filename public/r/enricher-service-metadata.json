@@ -10,7 +10,7 @@
   "files": [
     {
       "path": "registry/enrichers/service-metadata.ts",
-      "target": "~/enrichers/service-metadata.ts",
+      "target": "telemetry/enrichers/service-metadata.ts",
       "type": "registry:lib",
       "content": "import type { LogRecord } from \"@useamplio/amplio\";\n\nfunction envOrUndefined(key: string): string | undefined {\n  const value = process.env[key];\n  if (value === undefined || value === \"\") {\n    return undefined;\n  }\n  return value;\n}\n\nexport function serviceMetadata(record: LogRecord): LogRecord {\n  const service: Record<string, unknown> = {\n    name: envOrUndefined(\"AMPLIO_SERVICE\") ?? record.service,\n  };\n\n  const version = envOrUndefined(\"AMPLIO_SERVICE_VERSION\");\n  if (version !== undefined) {\n    service.version = version;\n  }\n\n  const region = envOrUndefined(\"AMPLIO_REGION\");\n  if (region !== undefined) {\n    service.region = region;\n  }\n\n  return {\n    ...record,\n    service,\n  };\n}\n"
     }

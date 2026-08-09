@@ -75,7 +75,7 @@ telemetry/
   logger.ts
 ```
 
-- Creates config (`components.json` or amplio-specific manifest) pointing registry namespace `@amplio`.
+- Creates config (`components.json` or amplio-specific manifest) pointing registry namespace `@useamplio`.
 - Writes a minimal `telemetry/logger.ts` that calls `init()` with default console sink.
 - Does not create `middleware/` until an middleware item is added.
 

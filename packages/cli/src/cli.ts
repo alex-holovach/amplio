@@ -34,6 +34,7 @@ Options:
   --middleware <name|none>     Scaffold middleware on init (auto-detect from package.json)
   --event <name|none>          Scaffold event on init (default: auth.user.signed_up when auto)
   --yes                        Non-interactive init: auto-scaffold detected middleware + event
+  --skip-install               Skip installing @useamplio/amplio and zod (init)
   --force                      Overwrite generated files (add)
   -h, --help                   Show help
   -V, --version                Print version
@@ -53,6 +54,7 @@ function parseCliArgs() {
         middleware: { type: "string" },
         event: { type: "string" },
         yes: { type: "boolean", default: false },
+        "skip-install": { type: "boolean", default: false },
         force: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
         version: { type: "boolean", short: "V", default: false },
@@ -120,6 +122,10 @@ async function main(): Promise<void> {
       console.error("error: --yes is only valid with init");
       process.exit(1);
     }
+    if (values["skip-install"]) {
+      console.error("error: --skip-install is only valid with init");
+      process.exit(1);
+    }
   }
 
   try {
@@ -148,6 +154,7 @@ async function main(): Promise<void> {
         ...(middleware ? { middleware } : {}),
         ...(event ? { event } : {}),
         ...(values.yes ? { yes: true } : {}),
+        ...(values["skip-install"] ? { skipInstall: true } : {}),
       });
       return;
     }

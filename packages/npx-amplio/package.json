@@ -1,0 +1,33 @@
+{
+  "name": "amplio",
+  "version": "0.1.0-alpha.5",
+  "description": "npx entry for @useamplio/cli \u2014 schema-first wide-event telemetry scaffolding",
+  "type": "module",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alex-holovach/amplio.git",
+    "directory": "packages/npx-amplio"
+  },
+  "homepage": "https://github.com/alex-holovach/amplio#readme",
+  "bugs": {
+    "url": "https://github.com/alex-holovach/amplio/issues"
+  },
+  "bin": {
+    "amplio": "./bin.mjs"
+  },
+  "files": [
+    "bin.mjs",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@useamplio/cli": "workspace:*"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

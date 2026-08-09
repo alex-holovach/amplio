@@ -4,13 +4,17 @@ Schema-first wide-event telemetry that installs as **open code** in your repo �
 
 Define typed event schemas, accumulate context with `.set()`, emit once with `.emit()`. Events, middleware, sinks, and integrations live in `telemetry/` — you read, edit, and review them like application code. No sprawling logger surface. No opaque npm runtime.
 
+**Alpha testers:** start with [ALPHA.md](./ALPHA.md).
+
 ## Quick start
 
 ```bash
-npx amplio init
-npx amplio add event auth.user.signed_up
-npx amplio add middleware hono
+npx amplio@alpha init --service my-app --yes
+npx amplio@alpha add event auth.user.signed_up
+npx amplio@alpha add middleware hono
 ```
+
+> Alpha: use the `@alpha` tag (`npx @useamplio/cli@alpha …` also works). See [ALPHA.md](./ALPHA.md).
 
 `amplio init` detects your framework from `package.json` (Next.js, Hono, Express, Fastify) and can scaffold middleware plus a starter event in one shot (`--yes` or non-interactive).
 
@@ -21,7 +25,7 @@ npx shadcn@latest add @useamplio/event-auth-user-signed-up
 npx shadcn@latest add @useamplio/middleware-hono
 ```
 
-Registry items are published as shadcn-compatible JSON under `public/r/` (e.g. `event-auth-user-signed-up.json` with `~/events/...` targets → `telemetry/`).
+Registry items are published as shadcn-compatible JSON under `public/r/` (e.g. `event-auth-user-signed-up.json` with `telemetry/events/...` targets).
 
 ### Emit
 
@@ -96,9 +100,9 @@ pnpm build
 pnpm --filter @useamplio/amplio pack
 pnpm --filter @useamplio/cli pack
 # then in your app:
-pnpm add /absolute/path/to/amplio-core-0.1.0.tgz
-pnpm add -D /absolute/path/to/amplio-cli-0.1.0.tgz
-pnpm exec amplio init --service my-app
+pnpm add /absolute/path/to/useamplio-amplio-0.1.0-alpha.5.tgz
+pnpm add -D /absolute/path/to/useamplio-cli-0.1.0-alpha.5.tgz
+pnpm exec amplio init --service my-app --skip-install
 ```
 
 ## API

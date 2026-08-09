@@ -25,7 +25,7 @@ type RegistryItem = {
 
 /**
  * Mimic shadcn's local file install for `registry:lib` items:
- * target `~/events/...` → `<cwd>/telemetry/events/...`
+ * target `telemetry/events/...` → `<cwd>/telemetry/events/...`
  */
 async function installShadcnItem(cwd: string, item: RegistryItem): Promise<string[]> {
   const written: string[] = [];
@@ -34,12 +34,11 @@ async function installShadcnItem(cwd: string, item: RegistryItem): Promise<strin
     if (!file.content) {
       throw new Error(`Registry item ${item.name} missing embedded content for ${file.path}`);
     }
-    if (!file.target?.startsWith("~/")) {
-      throw new Error(`Expected ~/ target, got ${file.target}`);
+    if (!file.target?.startsWith("telemetry/")) {
+      throw new Error(`Expected telemetry/ target, got ${file.target}`);
     }
 
-    const relative = file.target.slice(2); // events/auth/user-signed-up.ts
-    const dest = path.join(cwd, "telemetry", relative);
+    const dest = path.join(cwd, file.target);
     await mkdir(path.dirname(dest), { recursive: true });
     await writeFile(dest, file.content, "utf8");
     written.push(path.relative(cwd, dest));

@@ -23,7 +23,6 @@ export function renderAmplioConfig(options: {
   typescript?: boolean;
 }): string {
   const config: Record<string, unknown> = {
-    $schema: "https://ui.shadcn.com/schema/registry.json",
     telemetryDir: "telemetry",
     typescript: options.typescript ?? true,
     packageManager: options.packageManager ?? "pnpm",
@@ -32,6 +31,34 @@ export function renderAmplioConfig(options: {
   if (options.registry) {
     config.registry = options.registry;
   }
+
+  return `${JSON.stringify(config, null, 2)}\n`;
+}
+
+/** shadcn components.json so @useamplio/* installs into telemetry/ */
+export function renderComponentsJson(registryUrl: string): string {
+  const config = {
+    $schema: "https://ui.shadcn.com/schema.json",
+    style: "new-york",
+    rsc: false,
+    tsx: true,
+    tailwind: {
+      config: "",
+      css: "",
+      baseColor: "neutral",
+      cssVariables: true,
+    },
+    aliases: {
+      components: "@/components",
+      utils: "@/lib/utils",
+      ui: "@/components/ui",
+      lib: "@/lib",
+      hooks: "@/hooks",
+    },
+    registries: {
+      "@useamplio": registryUrl,
+    },
+  };
 
   return `${JSON.stringify(config, null, 2)}\n`;
 }

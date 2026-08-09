@@ -45,9 +45,7 @@ function titleFromName(name) {
 }
 
 function toRegistryTarget(target) {
-  if (target.startsWith("telemetry/")) {
-    return `~/${target.slice("telemetry/".length)}`;
-  }
+  // Explicit telemetry/ paths so shadcn writes into telemetry/, not project root.
   return target;
 }
 

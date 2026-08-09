@@ -22,7 +22,7 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 async function initWithRegistry(cwd: string, service?: string): Promise<void> {
-  await runInit({ cwd, service });
+  await runInit({ cwd, service, skipInstall: true });
   const configPath = path.join(cwd, "amplio.json");
   const config = JSON.parse(await readFile(configPath, "utf8"));
   config.registry = monorepoRegistry;
@@ -33,7 +33,7 @@ async function initWithRegistry(cwd: string, service?: string): Promise<void> {
 describe("runInit", () => {
   it("creates amplio.json, telemetry/logger.ts, and telemetry tree dirs", async () => {
     const cwd = await makeTempDir("amplio-init-");
-    await runInit({ cwd, service: "test-app" });
+    await runInit({ cwd, service: "test-app" , skipInstall: true });
 
     await access(path.join(cwd, "amplio.json"));
     await access(path.join(cwd, "telemetry/logger.ts"));
@@ -49,6 +49,10 @@ describe("runInit", () => {
 
     const config = JSON.parse(await readFile(path.join(cwd, "amplio.json"), "utf8"));
     expect(config.telemetryDir).toBe("telemetry");
+    expect(config.$schema).toBeUndefined();
+    await access(path.join(cwd, "components.json"));
+    const components = JSON.parse(await readFile(path.join(cwd, "components.json"), "utf8"));
+    expect(components.registries["@useamplio"]).toContain("/r/{name}.json");
 
     const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
     expect(loggerSource).toContain('import { init, logger } from "@useamplio/amplio"');
@@ -58,14 +62,14 @@ describe("runInit", () => {
   });
   it("is idempotent — second init preserves events from add event", async () => {
     const cwd = await makeTempDir("amplio-init-idempotent-");
-    await runInit({ cwd, service: "test-app" });
+    await runInit({ cwd, service: "test-app" , skipInstall: true });
     await runAddEvent("auth.user.signed_up", { cwd });
 
     const eventPath = path.join(cwd, "telemetry/events/auth/user-signed-up.ts");
     const eventBefore = await readFile(eventPath, "utf8");
     const loggerBefore = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
 
-    await runInit({ cwd, service: "other-service" });
+    await runInit({ cwd, service: "other-service" , skipInstall: true });
 
     expect(await readFile(eventPath, "utf8")).toBe(eventBefore);
     expect(await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8")).toBe(loggerBefore);
@@ -76,7 +80,7 @@ describe("runInit", () => {
 describe("runAddEvent", () => {
   it("scaffolds nested auth.user.signed_up with barrel files", async () => {
     const cwd = await makeTempDir("amplio-add-");
-    await runInit({ cwd });
+    await runInit({ cwd , skipInstall: true });
     await runAddEvent("auth.user.signed_up", { cwd });
 
     const eventPath = path.join(cwd, "telemetry/events/auth/user-signed-up.ts");
@@ -614,7 +618,7 @@ describe("runInit framework detect", () => {
       path.join(cwd, "package.json"),
       JSON.stringify({ dependencies: { next: "^15.0.0" } }, null, 2),
     );
-    await runInit({ cwd, yes: true });
+    await runInit({ cwd, yes: true , skipInstall: true });
 
     const middlewarePath = path.join(cwd, "telemetry/middleware/next.ts");
     const eventPath = path.join(cwd, "telemetry/events/auth/user-signed-up.ts");
@@ -632,7 +636,7 @@ describe("runInit framework detect", () => {
       path.join(cwd, "package.json"),
       JSON.stringify({ dependencies: { hono: "^4.0.0" } }, null, 2),
     );
-    await runInit({ cwd, yes: true, middleware: "none", event: "none" });
+    await runInit({ cwd, yes: true, middleware: "none", event: "none" , skipInstall: true });
 
     await expect(access(path.join(cwd, "telemetry/middleware/hono.ts"))).rejects.toThrow();
     await expect(access(path.join(cwd, "telemetry/events/auth/user-signed-up.ts"))).rejects.toThrow();
@@ -640,7 +644,7 @@ describe("runInit framework detect", () => {
 
   it("explicit --middleware hono scaffolds hono without package.json", async () => {
     const cwd = await makeTempDir("amplio-init-explicit-mw-");
-    await runInit({ cwd, middleware: "hono", event: "none" });
+    await runInit({ cwd, middleware: "hono", event: "none" , skipInstall: true });
 
     const middlewarePath = path.join(cwd, "telemetry/middleware/hono.ts");
     await access(middlewarePath);

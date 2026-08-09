@@ -63,5 +63,18 @@ jobs:
           tag="${{ steps.dist-tag.outputs.tag }}"
           pnpm --filter @useamplio/amplio publish --access public --tag "$tag" --no-git-checks
           pnpm --filter @useamplio/cli publish --access public --tag "$tag" --no-git-checks
+          # Unscoped `amplio` enables `npx amplio` (depends on matching @useamplio/cli version).
+          pnpm --filter ./packages/npx-amplio publish --access public --tag "$tag" --no-git-checks
+
+          # Alpha: keep latest pointing at the newest prerelease so bare installs work.
+          if [ "$tag" != "latest" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            npm dist-tag add "@useamplio/amplio@$version" latest
+            npm dist-tag add "@useamplio/cli@$version" latest
+            npm dist-tag add "amplio@$version" latest
+          fi
+
+          # Point abandoned name at the new package (idempotent).
+          npm deprecate @useamplio/core "Use @useamplio/amplio — the core package was renamed." || true
 
           shred -u "$npmrc" 2>/dev/null || rm -f "$npmrc"

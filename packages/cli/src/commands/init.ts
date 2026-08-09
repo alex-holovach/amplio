@@ -1,11 +1,18 @@
 import path from "node:path";
 import { runAddEvent, runAddMiddleware } from "./add.js";
-import { renderAmplioConfig, renderLoggerTemplate } from "../templates/init.js";
+import {
+  renderAmplioConfig,
+  renderComponentsJson,
+  renderLoggerTemplate,
+} from "../templates/init.js";
 import { detectFramework, shouldAutoScaffold } from "../utils/detect-framework.js";
 import { ensureDir, writeFileIfMissing } from "../utils/fs.js";
 import { resolveRegistryPath } from "../utils/config.js";
+import { ensureRuntimeDependencies } from "../utils/install-deps.js";
 import { resolveProjectPaths } from "../utils/paths.js";
 import { registryPathForConfig } from "../utils/registry-path.js";
+
+const DEFAULT_REGISTRY_URL = "https://amplio-ruddy.vercel.app/r/{name}.json";
 
 export interface InitOptions {
   cwd: string;
@@ -15,6 +22,7 @@ export interface InitOptions {
   middleware?: string;
   event?: string;
   yes?: boolean;
+  skipInstall?: boolean;
 }
 
 function resolveMiddlewareName(
@@ -55,6 +63,7 @@ export async function runInit(options: InitOptions): Promise<void> {
   const registryPath = await resolveRegistryPath(options.cwd);
   const paths = resolveProjectPaths(options.cwd, "telemetry");
   const registry = registryPathForConfig(options.cwd, registryPath);
+  const packageManager = options.packageManager ?? "pnpm";
 
   const scaffoldDirs = [
     paths.events,
@@ -72,9 +81,15 @@ export async function runInit(options: InitOptions): Promise<void> {
     paths.config,
     renderAmplioConfig({
       ...(registry ? { registry } : {}),
-      packageManager: options.packageManager ?? "pnpm",
+      packageManager,
       typescript: options.typescript ?? true,
     }),
+  );
+
+  const componentsPath = path.join(options.cwd, "components.json");
+  const componentsResult = await writeFileIfMissing(
+    componentsPath,
+    renderComponentsJson(DEFAULT_REGISTRY_URL),
   );
 
   const loggerResult = await writeFileIfMissing(
@@ -90,6 +105,9 @@ export async function runInit(options: InitOptions): Promise<void> {
 
   console.log("amplio init");
   console.log(`  ${configResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, paths.config)}`);
+  console.log(
+    `  ${componentsResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, componentsPath)}`,
+  );
   console.log(`  ${loggerResult === "created" ? "✓" : "·"} ${path.relative(options.cwd, paths.logger)}`);
   for (const dir of scaffoldDirs) {
     console.log(`  ✓ ${path.relative(options.cwd, dir)}/`);
@@ -100,11 +118,18 @@ export async function runInit(options: InitOptions): Promise<void> {
 
   if (
     configResult === "skipped" ||
+    componentsResult === "skipped" ||
     loggerResult === "skipped" ||
     eventsIndexResult === "skipped"
   ) {
     console.log("\nExisting files were left unchanged.");
   }
+
+  await ensureRuntimeDependencies({
+    cwd: options.cwd,
+    packageManager,
+    skipInstall: options.skipInstall,
+  });
 
   const detected = await detectFramework(options.cwd);
   const auto = shouldAutoScaffold(options.yes);

@@ -23,7 +23,7 @@ describe("version sync", () => {
     const core = readPackageJson("packages/amplio/package.json");
     const cli = readPackageJson("packages/cli/package.json");
 
-    expect(root.name).toBe("amplio");
+    expect(root.name).toBe("amplio-monorepo");
     expect(core.name).toBe("@useamplio/amplio");
     expect(cli.name).toBe("@useamplio/cli");
 
