@@ -17,23 +17,69 @@ function shortId(name: string, kind: Kind | "other"): string {
   return name.slice(kind.length + 1);
 }
 
+export interface ListItem {
+  id: string;
+  kind: Kind | "other";
+  name: string;
+  title?: string;
+  description?: string;
+}
+
 export interface ListOptions {
   cwd: string;
   kind?: string;
+  json?: boolean;
 }
 
-export async function runList(options: ListOptions): Promise<void> {
-  const kindFilter = options.kind?.replace(/s$/, "");
-  if (kindFilter && !KINDS.includes(kindFilter as Kind) && kindFilter !== "other") {
+function collectListItems(
+  manifest: Awaited<ReturnType<typeof loadRegistry>>,
+  kindFilter?: string,
+): ListItem[] {
+  const normalizedKind = kindFilter?.replace(/s$/, "");
+  if (normalizedKind && !KINDS.includes(normalizedKind as Kind) && normalizedKind !== "other") {
     throw new Error(
-      `Unknown kind "${options.kind}". Use: ${KINDS.join(", ")}`,
+      `Unknown kind "${kindFilter}". Use: ${KINDS.join(", ")}`,
     );
   }
 
+  const items: ListItem[] = [];
+  for (const item of manifest.items) {
+    const kind = kindOf(item.name);
+    if (normalizedKind && kind !== normalizedKind) continue;
+    items.push({
+      id: shortId(item.name, kind),
+      kind,
+      name: item.name,
+      ...(item.title ? { title: item.title } : {}),
+      ...(item.description ? { description: item.description } : {}),
+    });
+  }
+
+  items.sort((a, b) => {
+    const kindOrder = kindOf(a.name) === kindOf(b.name)
+      ? 0
+      : KINDS.indexOf(kindOf(a.name) as Kind) - KINDS.indexOf(kindOf(b.name) as Kind);
+    if (kindOrder !== 0) {
+      return kindOrder;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  return items;
+}
+
+export async function runList(options: ListOptions): Promise<void> {
   const registryPath = await resolveRegistryPath(options.cwd);
   await assertRegistryExists(registryPath);
   const manifest = await loadRegistry(registryPath);
+  const items = collectListItems(manifest, options.kind);
 
+  if (options.json) {
+    console.log(JSON.stringify(items, null, 2));
+    return;
+  }
+
+  const kindFilter = options.kind?.replace(/s$/, "");
   const grouped = new Map<string, RegistryItem[]>();
   for (const item of manifest.items) {
     const kind = kindOf(item.name);

@@ -6,7 +6,8 @@ import { upsertComponentsJson } from "../utils/components-json.js";
 import { detectFramework, shouldAutoScaffold } from "../utils/detect-framework.js";
 import { detectPackageManager } from "../utils/detect-package-manager.js";
 import { ensureDir, pathExists, writeFileIfMissing } from "../utils/fs.js";
-import { hasDependency } from "../utils/has-dep.js";
+import { hasAuthDependency, hasDependency } from "../utils/has-dep.js";
+import { ALPHA_MD_URL, T3_MD_URL } from "../help.js";
 import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
 import { ensureRuntimeDependencies } from "../utils/install-deps.js";
 import { parseJsonc } from "../utils/jsonc.js";
@@ -72,7 +73,8 @@ function printNextWiringSnippet(telemetryDir: string, srcLayout: boolean): void 
 
 function printTrpcWiringSnippet(telemetryDir: string, srcLayout: boolean): void {
   const importPath = middlewareImportPath(telemetryDir, "trpc", srcLayout);
-  console.log("\nWire tRPC middleware (see ALPHA.md ## tRPC (v11)):");
+  console.log(`\nWire tRPC middleware (see ${ALPHA_MD_URL} ## tRPC (v11)):`);
+  console.log(`  T3 / create-t3-app walkthrough: ${T3_MD_URL}`);
   console.log(`  import { amplioTrpcMiddleware } from "${importPath}";`);
   console.log("  const amplioMw = t.middleware(amplioTrpcMiddleware());");
   console.log("  publicProcedure.use(amplioMw);");
@@ -188,6 +190,7 @@ function resolveEventName(
   explicit: string | undefined,
   middlewareName: string | null,
   auto: boolean,
+  hasAuth: boolean,
 ): string | null {
   if (explicit === "none") {
     return null;
@@ -195,10 +198,15 @@ function resolveEventName(
   if (explicit?.trim()) {
     return explicit.trim();
   }
-  if (middlewareName && auto) {
+  if (middlewareName && auto && hasAuth) {
     return "auth.user.signed_up";
   }
   return null;
+}
+
+function printNoStarterEventHint(): void {
+  console.log("\nNo starter event scaffolded (no auth dependency detected). Add your first domain event:");
+  console.log("  npx @useamplio/cli@alpha add event post.created");
 }
 
 async function resolveNextInstrumentationBase(cwd: string): Promise<"src" | ""> {
@@ -305,8 +313,10 @@ export async function runInit(options: InitOptions): Promise<void> {
 
   const detected = await detectFramework(options.cwd);
   const auto = shouldAutoScaffold(options.yes);
+  const hasAuth = await hasAuthDependency(options.cwd);
   const middlewareName = resolveMiddlewareName(options.middleware, detected, auto);
-  const eventName = resolveEventName(options.event, middlewareName, auto);
+  const eventName = resolveEventName(options.event, middlewareName, auto, hasAuth);
+  const explicitEvent = options.event?.trim();
 
   if (detected && !middlewareName && !auto && options.middleware === undefined) {
     console.log(`\nDetected ${detected} in package.json.`);
@@ -339,6 +349,8 @@ export async function runInit(options: InitOptions): Promise<void> {
 
   if (eventName) {
     await runAddEvent(eventName, { cwd: options.cwd });
+  } else if (auto && middlewareName && !hasAuth && explicitEvent !== "none" && !explicitEvent) {
+    printNoStarterEventHint();
   }
 
   const isNext =
@@ -355,7 +367,7 @@ export async function runInit(options: InitOptions): Promise<void> {
     console.log("  3. Expect one JSON line on stdout (console sink)");
     console.log("  4. npx @useamplio/cli@alpha doctor");
 
-    if ((await resolveNextInstrumentationBase(options.cwd)) === "src") {
+    if ((await resolveNextInstrumentationBase(options.cwd)) === "src" && !options.paths) {
       printTsconfigPathsHint();
     }
   }
@@ -367,7 +379,7 @@ export async function runInit(options: InitOptions): Promise<void> {
     } else {
       console.log("  amplio add middleware hono");
     }
-    console.log("  amplio add event auth.user.signed_up");
+    console.log("  amplio add event post.created");
   }
 
   if (options.paths) {

@@ -14,7 +14,20 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 describe("components.json", () => {
-  it("derives ~/* aliases from tsconfig paths", async () => {
+  it("creates minimal config with empty aliases when no tsconfig paths", async () => {
+    const cwd = await makeTempDir("amplio-components-minimal-");
+    const config = await deriveComponentsJsonOptions(cwd, REGISTRY_URL);
+    expect(config.$schema).toBe("https://ui.shadcn.com/schema.json");
+    expect(config.style).toBe("new-york");
+    expect(config.aliases).toEqual({});
+    expect(config.tailwind.config).toBe("");
+    expect(config.tailwind.css).toBe("");
+    expect(config.registries["@useamplio"]).toBe(REGISTRY_URL);
+    expect(config).not.toHaveProperty("rsc");
+    expect(config).not.toHaveProperty("tsx");
+  });
+
+  it("derives aliases from tsconfig paths when present", async () => {
     const cwd = await makeTempDir("amplio-components-derive-");
     await writeFile(
       path.join(cwd, "tsconfig.json"),

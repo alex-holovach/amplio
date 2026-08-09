@@ -181,14 +181,14 @@ describe("success from status", () => {
     expect(records[0].success).toBe(true);
   });
 
-  it("no status and no explicit success -> success defaults to true", () => {
+  it("no status and no explicit success -> success omitted", () => {
     const { records, sink } = memorySink();
     init({ service: "api", env: "test", sinks: [sink] });
 
     const record = createLogger().emit();
 
-    expect(record.success).toBe(true);
+    expect(record.success).toBeUndefined();
     expect(records).toHaveLength(1);
-    expect(records[0].success).toBe(true);
+    expect(records[0].success).toBeUndefined();
   });
 });

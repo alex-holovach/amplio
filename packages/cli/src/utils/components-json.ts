@@ -1,12 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { detectFramework } from "./detect-framework.js";
 import { pathExists } from "./fs.js";
 import { parseJsonc } from "./jsonc.js";
 
 type PathAlias = { prefix: string; pattern: string };
-
-const DEFAULT_ALIAS_PREFIX = "@";
 
 const TAILWIND_CONFIG_CANDIDATES = [
   "tailwind.config.ts",
@@ -79,22 +76,20 @@ async function firstExistingRelative(cwd: string, candidates: string[]): Promise
 }
 
 export async function deriveComponentsJsonOptions(cwd: string, registryUrl: string) {
-  const alias = (await readTsconfigPaths(cwd))?.prefix ?? DEFAULT_ALIAS_PREFIX;
-  const framework = await detectFramework(cwd);
-  const hasTsconfig = await pathExists(path.join(cwd, "tsconfig.json"));
+  const alias = await readTsconfigPaths(cwd);
+  const tailwindConfig = await firstExistingRelative(cwd, TAILWIND_CONFIG_CANDIDATES);
+  const tailwindCss = await firstExistingRelative(cwd, TAILWIND_CSS_CANDIDATES);
 
   return {
     $schema: "https://ui.shadcn.com/schema.json",
     style: "new-york",
-    rsc: framework === "next",
-    tsx: hasTsconfig ? true : true,
     tailwind: {
-      config: await firstExistingRelative(cwd, TAILWIND_CONFIG_CANDIDATES),
-      css: await firstExistingRelative(cwd, TAILWIND_CSS_CANDIDATES),
+      config: tailwindConfig,
+      css: tailwindCss,
       baseColor: "neutral",
       cssVariables: true,
     },
-    aliases: aliasesFromPrefix(alias),
+    aliases: alias ? aliasesFromPrefix(alias.prefix) : {},
     registries: {
       "@useamplio": registryUrl,
     },

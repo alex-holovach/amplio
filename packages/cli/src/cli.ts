@@ -14,6 +14,7 @@ import {
 } from "./commands/add.js";
 import { runList } from "./commands/list.js";
 import { runDoctor } from "./commands/doctor.js";
+import { printCommandHelp, printGlobalHelp } from "./help.js";
 
 const VALID_ADD_KINDS = [
   "event",
@@ -23,35 +24,7 @@ const VALID_ADD_KINDS = [
   "integration",
 ] as const;
 
-function printHelp(): void {
-  console.log(`amplio — schema-first wide-event telemetry scaffolding
-
-Usage:
-  amplio init [options]
-  amplio doctor [--fix] [options]
-  amplio list [kind]   List registry items (id, title, description)
-  amplio add event <domain.entity.action>
-  amplio add middleware <hono|express|next|fastify|trpc>
-  amplio add sink <console|otlp|json>
-  amplio add enricher <service-metadata|request|request-metadata>
-  amplio add integration <better-auth|clerk|resend|polar>
-
-Options:
-  --cwd <path>                 Project directory (default: .)
-  --service <name>             Service name for logger.ts (init; defaults to package.json name)
-  --package-manager <pm>       pnpm | npm | yarn | bun (init)
-  --no-typescript              Disable TypeScript defaults in amplio.json (init)
-  --middleware <name|none>     Scaffold middleware on init (auto-detect from package.json)
-  --event <name|none>          Scaffold event on init (default: auth.user.signed_up when auto)
-  --yes                        Non-interactive init: auto-scaffold detected middleware + event
-  --skip-install               Skip installing @useamplio/amplio and zod (init)
-  --paths                      Write ~telemetry/* tsconfig path alias (init)
-  --fix                        Regenerate missing event barrel exports (doctor)
-  --force                      Overwrite generated files (add)
-  -h, --help                   Show help
-  -V, --version                Print version
-`);
-}
+const VALID_COMMANDS = new Set(["init", "add", "list", "doctor"]);
 
 function parseCliArgs() {
   try {
@@ -69,7 +42,9 @@ function parseCliArgs() {
         "skip-install": { type: "boolean", default: false },
         paths: { type: "boolean", default: false },
         fix: { type: "boolean", default: false },
+        strict: { type: "boolean", default: false },
         force: { type: "boolean", default: false },
+        json: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
         version: { type: "boolean", short: "V", default: false },
       },
@@ -100,10 +75,20 @@ async function main(): Promise<void> {
   }
 
   const command = positionals[0]?.trim();
-  if (values.help || !command) {
-    printHelp();
-    process.exit(values.help ? 0 : 1);
+
+  if (values.help) {
+    if (command && printCommandHelp(command)) {
+      process.exit(0);
+    }
+    printGlobalHelp();
+    process.exit(0);
   }
+
+  if (!command) {
+    printGlobalHelp();
+    process.exit(1);
+  }
+
   const cwd = (values.cwd ?? ".").trim() || ".";
 
   if (values.force && command !== "add") {
@@ -113,6 +98,16 @@ async function main(): Promise<void> {
 
   if (values.fix && command !== "doctor") {
     console.error("error: --fix is only valid with doctor");
+    process.exit(1);
+  }
+
+  if (values.strict && command !== "doctor") {
+    console.error("error: --strict is only valid with doctor");
+    process.exit(1);
+  }
+
+  if (values.json && command !== "list") {
+    console.error("error: --json is only valid with list");
     process.exit(1);
   }
 
@@ -189,6 +184,7 @@ async function main(): Promise<void> {
       await runList({
         cwd,
         ...(kind ? { kind } : {}),
+        ...(values.json ? { json: true } : {}),
       });
       return;
     }
@@ -198,7 +194,9 @@ async function main(): Promise<void> {
       const id = positionals[2]?.trim();
 
       if (!kind) {
-        throw new Error("Missing add target. Example: amplio add event auth.user.signed_up");
+        throw new Error(
+          "Missing add target. Example: amplio add event post.created",
+        );
       }
 
       if (!(VALID_ADD_KINDS as readonly string[]).includes(kind)) {
@@ -209,7 +207,7 @@ async function main(): Promise<void> {
 
       if (!id) {
         const examples: Record<(typeof VALID_ADD_KINDS)[number], string> = {
-          event: "amplio add event auth.user.signed_up",
+          event: "amplio add event post.created",
           middleware: "amplio add middleware hono",
           sink: "amplio add sink console",
           enricher: "amplio add enricher service-metadata",
@@ -240,11 +238,17 @@ async function main(): Promise<void> {
     }
 
     if (command === "doctor") {
-      const exitCode = await runDoctor({ cwd, ...(values.fix ? { fix: true } : {}) });
+      const exitCode = await runDoctor({
+        cwd,
+        ...(values.fix ? { fix: true } : {}),
+        ...(values.strict ? { strict: true } : {}),
+      });
       process.exit(exitCode);
     }
 
-    throw new Error(`Unknown command "${command}".`);
+    if (!VALID_COMMANDS.has(command)) {
+      throw new Error(`Unknown command "${command}".`);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`error: ${message}`);

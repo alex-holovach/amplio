@@ -57,7 +57,7 @@ describe("runInit", () => {
     expect(loggerSource).toContain("consoleJsonSink");
     expect(loggerSource).toContain("enrichers: []");
     expect(loggerSource).toContain("// sampling:");
-    expect(loggerSource).toContain("// see README # sampling");
+    expect(loggerSource).toContain("// see @useamplio/amplio README ## Sampling");
     expect(loggerSource).toContain("export { logger }");
   });
   it("is idempotent — second init preserves events from add event", async () => {
@@ -655,22 +655,42 @@ describe("runAddIntegration", () => {
 });
 
 describe("runInit framework detect", () => {
-  it("auto-scaffolds next middleware and auth.user.signed_up with --yes", async () => {
+  it("auto-scaffolds next middleware without auth event when no auth dependency", async () => {
     const cwd = await makeTempDir("amplio-init-next-");
     await writeFile(
       path.join(cwd, "package.json"),
       JSON.stringify({ dependencies: { next: "^15.0.0" } }, null, 2),
     );
-    await runInit({ cwd, yes: true , skipInstall: true });
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    await runInit({ cwd, yes: true, skipInstall: true });
+    logSpy.mockRestore();
 
     const middlewarePath = path.join(cwd, "telemetry/middleware/next.ts");
     const eventPath = path.join(cwd, "telemetry/events/auth/user-signed-up.ts");
     await access(middlewarePath);
-    await access(eventPath);
+    await expect(access(eventPath)).rejects.toThrow();
 
     const middlewareSource = await readFile(middlewarePath, "utf8");
     expect(middlewareSource).toContain("withAmplio");
-    expect(middlewareSource).toContain("flush");
+    expect(middlewareSource).toContain("scheduleFlush");
+    expect(logs.join("\n")).toContain("No starter event scaffolded");
+  });
+
+  it("auto-scaffolds auth.user.signed_up with --yes when better-auth is present", async () => {
+    const cwd = await makeTempDir("amplio-init-next-auth-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { next: "^15.0.0", "better-auth": "^1.0.0" },
+      }, null, 2),
+    );
+    await runInit({ cwd, yes: true, skipInstall: true });
+
+    await access(path.join(cwd, "telemetry/middleware/next.ts"));
+    await access(path.join(cwd, "telemetry/events/auth/user-signed-up.ts"));
   });
 
   it("respects --middleware none --event none", async () => {

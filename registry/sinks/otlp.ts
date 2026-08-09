@@ -3,6 +3,7 @@ import type { JsonValue, LogRecord, Sink } from "@useamplio/amplio";
 export interface OtlpSinkOptions {
   endpoint?: string;
   headers?: Record<string, string>;
+  /** When false (default), export failures warn once then stay silent. Pass true to throw. */
   throwOnError?: boolean;
 }
 
@@ -106,7 +107,7 @@ const buildAttributes = (record: LogRecord): OtlpAttribute[] => {
 
 export function otlpSink(options: OtlpSinkOptions = {}): Sink {
   const endpoint = options.endpoint ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-  const throwOnError = options.throwOnError ?? true;
+  const throwOnError = options.throwOnError ?? false;
   const headers = {
     "content-type": "application/json",
     ...parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS),
@@ -127,6 +128,18 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
 
   const base = endpoint.replace(/\/$/, "");
   const url = base.endsWith("/v1/logs") ? base : `${base}/v1/logs`;
+
+  let warnedExportFailure = false;
+
+  const warnExportFailure = (detail: string): void => {
+    if (throwOnError || warnedExportFailure) {
+      return;
+    }
+    warnedExportFailure = true;
+    console.warn(
+      `[amplio] otlpSink: export failed (${detail}); further failures will be silent. Pass throwOnError: true to fail hard.`,
+    );
+  };
 
   return async (record: LogRecord) => {
     const attributes = buildAttributes(record);
@@ -187,6 +200,7 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
       if (throwOnError) {
         throw error;
       }
+      warnExportFailure(error instanceof Error ? error.message : String(error));
       return;
     }
 
@@ -194,6 +208,7 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
       if (throwOnError) {
         throw new Error(`OTLP export failed with status ${response.status}`);
       }
+      warnExportFailure(`status ${response.status}`);
       return;
     }
   };

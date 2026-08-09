@@ -196,6 +196,7 @@ export async function runAddEvent(eventName: string, options: AddOptions): Promi
     const registryId = eventNameToRegistryId(eventName);
     const item = findRegistryItem(manifest, registryId);
     if (item) {
+      console.log(`  matched registry event ${registryId}`);
       const eventExists = await pathExists(targetPath);
       await installByName(options.cwd, registryId, options);
       await updateEventBarrels(options.cwd, telemetryDir, relativePath, exportName);
@@ -213,6 +214,7 @@ export async function runAddEvent(eventName: string, options: AddOptions): Promi
       ? renderAuthUserSignedUpEvent()
       : renderEventTemplate(eventName, exportName);
 
+  console.log(`  generated starter schema (no registry template for ${eventName})`);
   const status = await writeFileOrSkip(targetPath, content, options.force ?? false);
   console.log(`  ${status === "skipped" ? "·" : "✓"} ${path.relative(options.cwd, targetPath)}`);
 

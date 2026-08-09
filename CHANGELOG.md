@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.9] - 2026-08-09
+
+Dogfood iter 4 — packaging, docs, and emit/sampling semantics alignment.
+
+### Runtime
+
+- **`.emit()` return** — returns `null` whenever the record was **not delivered** (before `init()`, after seal, or sampled out). Enrichers and redaction still run on sampled-out emits; only sink delivery is skipped.
+- **`success` field** — omitted when neither `status` nor explicit `success` is set; numeric `status` in `[200, 400)` or exact `"ok"` derives `success: true`.
+- **Redaction** — also scans URL-decoded copies of percent-encoded strings.
+- **`init({ canonicalKeyOnly: true })`** — drops duplicate `event` key; keeps `@event`.
+- **`@useamplio/amplio/events`** — client-safe subpath (`defineEvent`, types; no `node:async_hooks`).
+- **`scheduleFlush()` / `trpcErrorHttpStatus()`** — new runtime exports for serverless flush and tRPC status mapping.
+
+### CLI
+
+- **Version sync** — `@useamplio/cli` bumped to `0.1.0-alpha.9`.
+- **Per-command `--help`** — `amplio init|add|list|doctor --help`.
+- **`amplio doctor --strict`** — non-zero exit on warnings (CI gate).
+- **`amplio list --json`** — machine-readable registry listing.
+- **`init`** — no longer auto-scaffolds `auth.user.signed_up` unless an auth dependency is detected; minimal `components.json`.
+- **`add event`** — prints `matched registry event` vs `generated starter schema`; hints use full GitHub URLs.
+
+### Registry templates
+
+- Thinned templates use runtime `scheduleFlush` / `trpcErrorHttpStatus`.
+- **`registry/logger.ts`** — unified with init template (no `composeSinks`).
+- **`otlpSink`** — defaults to `throwOnError: false` (warn once; opt in to fail hard).
+
+### Docs
+
+- **`ALPHA.md` + `docs/`** — copied into published `@useamplio/amplio` and `@useamplio/cli` tarballs at build time.
+- **README `## Sampling`** — rate/keep rules and sampled-out `.emit()` → `null` note.
+- **ALPHA.md / CLI README / t3.md** — emit return semantics, `canonicalKeyOnly`, client-safe events subpath, `amplio.json` registry override, two-segment event names, updated success derivation.
+
 ## [0.1.0-alpha.8] - 2026-08-09
 
 ### Runtime

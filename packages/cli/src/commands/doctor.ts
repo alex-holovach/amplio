@@ -9,10 +9,12 @@ import { detectPackageManager } from "../utils/detect-package-manager.js";
 import { pathExists } from "../utils/fs.js";
 import { parseJsonc } from "../utils/jsonc.js";
 import { resolveProjectPaths } from "../utils/paths.js";
+import { ALPHA_MD_URL } from "../help.js";
 
 export interface DoctorOptions {
   cwd: string;
   fix?: boolean;
+  strict?: boolean;
 }
 
 type CheckStatus = "passed" | "warning" | "failed";
@@ -154,9 +156,10 @@ function printCheck(check: Check): void {
 }
 
 export async function runDoctor(options: DoctorOptions): Promise<number> {
-  const { cwd, fix = false } = options;
+  const { cwd, fix = false, strict = false } = options;
   const checks: Check[] = [];
   let hardFailures = 0;
+  let warnings = 0;
 
   const pkgPath = path.join(cwd, "package.json");
   if (!(await pathExists(pkgPath))) {
@@ -459,7 +462,7 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
         checks.push({
           status: "warning",
           message: `${relPath} scaffolded but ${exportName} is never imported by app code`,
-          fix: "Wire the middleware in your app entry or route handlers — see ALPHA.md for framework-specific snippets.",
+          fix: `Wire the middleware in your app entry or route handlers — see ${ALPHA_MD_URL} for framework-specific snippets.`,
         });
       }
     }
@@ -469,6 +472,9 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
 
   for (const check of checks) {
     printCheck(check);
+    if (check.status === "warning") {
+      warnings++;
+    }
   }
 
   console.log("\nVerify an event end-to-end:");
@@ -478,5 +484,11 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
   console.log("  Console sink: stdout (one line per emit).");
   console.log("  JSON sink: amplio.jsonl in the project root (or AMPLIO_JSON_SINK_PATH).");
 
-  return hardFailures > 0 ? 1 : 0;
+  if (hardFailures > 0) {
+    return 1;
+  }
+  if (strict && warnings > 0) {
+    return 1;
+  }
+  return 0;
 }

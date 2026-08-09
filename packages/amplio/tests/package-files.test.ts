@@ -23,8 +23,14 @@ describe("package files", () => {
     expect(root.types).toBe("./dist/index.d.ts");
   });
 
+  it('exports["./events"] points at dist ESM entry and types', () => {
+    const events = pkg.exports["./events"];
+    expect(events.import).toBe("./dist/events.js");
+    expect(events.types).toBe("./dist/events.d.ts");
+  });
+
   it("ships dist for published installs", async () => {
-    expect(pkg.files).toEqual(["dist", "LICENSE"]);
+    expect(pkg.files).toEqual(["dist", "LICENSE", "ALPHA.md", "docs"]);
 
     for (const entry of pkg.files) {
       await access(path.join(packageRoot, entry));
@@ -39,6 +45,8 @@ describe("package files", () => {
 
     expect(tarballPaths.some((tarballPath) => tarballPath.startsWith("dist/"))).toBe(true);
     expect(tarballPaths).toContain("LICENSE");
+    expect(tarballPaths).toContain("ALPHA.md");
+    expect(tarballPaths.some((tarballPath) => tarballPath.startsWith("docs/"))).toBe(true);
 
     const forbidden = tarballPaths.filter(
       (tarballPath) =>

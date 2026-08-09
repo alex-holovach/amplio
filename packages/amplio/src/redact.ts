@@ -2,6 +2,7 @@ import { getGlobalState } from "./global-state.js";
 import type { JsonValue, LogRecord, RedactConfig } from "./types.js";
 
 const REDACTED = "[REDACTED]";
+const PERCENT_ENCODED = /%[0-9A-Fa-f]{2}/;
 
 const DEFAULT_FIELD_KEYS = new Set([
   "authorization",
@@ -110,6 +111,9 @@ const fieldKeyRedacts = (fieldKey: string, fieldKeys: Set<string>): boolean => {
 };
 
 const needsPatternScan = (input: string): boolean => {
+  if (PERCENT_ENCODED.test(input)) {
+    return true;
+  }
   const len = input.length;
   if (len < 5) {
     return false;
@@ -174,7 +178,7 @@ const needsPatternScan = (input: string): boolean => {
   return false;
 };
 
-const redactString = (input: string, gatedPatterns: GatedPattern[]): string => {
+const applyGatedPatterns = (input: string, gatedPatterns: GatedPattern[]): string => {
   let out = input;
   for (const { test, pattern } of gatedPatterns) {
     if (!test(out)) {
@@ -186,6 +190,23 @@ const redactString = (input: string, gatedPatterns: GatedPattern[]): string => {
     }
   }
   return out === input ? input : out;
+};
+
+const redactString = (input: string, gatedPatterns: GatedPattern[]): string => {
+  const raw = applyGatedPatterns(input, gatedPatterns);
+  if (!PERCENT_ENCODED.test(input)) {
+    return raw;
+  }
+  try {
+    const decoded = decodeURIComponent(input);
+    const decodedRedacted = applyGatedPatterns(decoded, gatedPatterns);
+    if (decodedRedacted !== decoded) {
+      return decodedRedacted;
+    }
+  } catch {
+    // malformed percent-encoding — fall back to raw-string result only
+  }
+  return raw;
 };
 
 const redactStringValue = (

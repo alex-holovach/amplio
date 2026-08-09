@@ -5,8 +5,8 @@ import "../logger";
 
 import {
   createRequestLogger,
-  flush,
   runWithLogger,
+  scheduleFlush,
   useLogger,
   type Logger,
 } from "@useamplio/amplio";
@@ -16,46 +16,10 @@ export interface WithAmplioOptions {
   waitUntil?: (promise: Promise<unknown>) => void;
 }
 
-let afterFn: ((task: () => unknown) => void) | undefined;
-void import("next/server")
-  .then((m) => {
-    const a = (m as { after?: unknown }).after;
-    if (typeof a === "function") {
-      afterFn = a as typeof afterFn;
-    }
-  })
-  .catch(() => {});
-
-let warnedNoWaitUntil = false;
-
-function scheduleFlush(options?: WithAmplioOptions): void {
-  if (options?.waitUntil) {
-    options.waitUntil(flush());
-    return;
-  }
-
-  if (afterFn) {
-    afterFn(() => flush());
-    return;
-  }
-
-  void flush();
-
-  const env = globalThis.process?.env?.NODE_ENV;
-  if ((env === undefined || env === "development") && !warnedNoWaitUntil) {
-    warnedNoWaitUntil = true;
-    console.warn(
-      "[amplio] async sinks may be cut off without waitUntil/after; pass waitUntil to withAmplio or call flush()",
-    );
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function withAmplio<T extends (request: NextRequest, ...args: any[]) => Promise<Response>>(
   handler: T,
   options?: WithAmplioOptions,
 ): T {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wrapped = (async (request: NextRequest, ...rest: any[]) => {
     const requestLogger = createRequestLogger({
       method: request.method,

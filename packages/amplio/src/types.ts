@@ -79,6 +79,8 @@ export interface AmplioConfig {
   redact?: RedactConfig;
   /** When true, schema validation failures throw from emit() even outside NODE_ENV=test. */
   strict?: boolean;
+  /** When true, emitted records carry only the canonical @event key; the duplicate event key is removed at emit time. */
+  canonicalKeyOnly?: boolean;
 }
 
 export interface RequestLoggerOptions {

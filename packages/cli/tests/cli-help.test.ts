@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { constants, existsSync, readFileSync } from "node:fs";
-import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -101,14 +101,60 @@ describe("cli --help", () => {
     expect(result.stdout).toContain("add");
     expect(result.stdout).toContain("list");
     expect(result.stdout).toContain("doctor");
-    expect(result.stdout).toContain("trpc");
   });
 
-  it("list usage mentions title", () => {
+  it("global help is compact and points to per-command help", () => {
     const result = runCli(["--help"]);
 
     expect(result.status).toBe(0);
-    expect(result.stdout.toLowerCase()).toContain("title");
+    expect(result.stdout).toContain("amplio <command> --help");
+    expect(result.stdout).not.toContain("--package-manager");
+  });
+
+  it("init --help shows init-specific flags", () => {
+    const result = runCli(["init", "--help"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("--service");
+    expect(result.stdout).toContain("--package-manager");
+    expect(result.stdout).toContain("--no-typescript");
+    expect(result.stdout).toContain("--middleware");
+    expect(result.stdout).toContain("--event");
+    expect(result.stdout).toContain("--yes");
+    expect(result.stdout).toContain("--skip-install");
+    expect(result.stdout).toContain("--paths");
+    expect(result.stdout).toContain("amplio init --yes");
+    expect(result.stdout).not.toContain("amplio add middleware");
+  });
+
+  it("add --help shows kinds and --force", () => {
+    const result = runCli(["add", "--help"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("post.created");
+    expect(result.stdout).toContain("auth.user.signed_up");
+    expect(result.stdout).toContain("domain.action or domain.entity.action");
+    expect(result.stdout).toContain("--force");
+    expect(result.stdout).toContain("amplio add middleware hono");
+  });
+
+  it("doctor --help shows --fix and --strict", () => {
+    const result = runCli(["doctor", "--help"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("--fix");
+    expect(result.stdout).toContain("--strict");
+    expect(result.stdout).toContain("Exit non-zero on warnings");
+    expect(result.stdout).toContain("amplio doctor --strict");
+  });
+
+  it("list --help shows kinds and --json", () => {
+    const result = runCli(["list", "--help"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("event, middleware, sink");
+    expect(result.stdout).toContain("--json");
+    expect(result.stdout).toContain("amplio list sink --json");
   });
 
   it("exits 0 and mentions init and add with -h", () => {
@@ -175,6 +221,34 @@ describe("cli --force only with add", () => {
     const result = runCli(["list", "--force"]);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("error: --force is only valid with add");
+  });
+});
+
+describe("cli --strict only with doctor", () => {
+  it("exits 1 when --strict is used with init", () => {
+    const result = runCli(["init", "--strict"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --strict is only valid with doctor");
+  });
+
+  it("exits 1 when --strict is used with list", () => {
+    const result = runCli(["list", "--strict"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --strict is only valid with doctor");
+  });
+});
+
+describe("cli --json only with list", () => {
+  it("exits 1 when --json is used with init", () => {
+    const result = runCli(["init", "--json"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --json is only valid with list");
+  });
+
+  it("exits 1 when --json is used with add", () => {
+    const result = runCli(["add", "sink", "console", "--json"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --json is only valid with list");
   });
 });
 
@@ -289,6 +363,28 @@ describe("cli init --paths", () => {
     expectCliStatus(result, 0, "init --paths without tsconfig");
     expect(result.stdout).toContain("tsconfig.json not found");
     expect(result.stdout).toContain("amplio init --paths");
+  });
+
+  it("suppresses ~telemetry paths hint on Next src layout when --paths is passed", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-paths-no-hint-"));
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ dependencies: { next: "^15.0.0" } }),
+    );
+    await writeFile(
+      path.join(cwd, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          paths: { "@/*": ["./src/*"] },
+        },
+      }),
+    );
+    await mkdir(path.join(cwd, "src/app"), { recursive: true });
+
+    const result = runCli(["init", "--cwd", cwd, "--skip-install", "--yes", "--paths"]);
+    expectCliStatus(result, 0, "init --yes --paths on Next src layout");
+    expect(result.stdout).toContain("✓ tsconfig.json (~telemetry/* path alias)");
+    expect(result.stdout).not.toContain("Optional: add to tsconfig.json compilerOptions.paths");
   });
 });
 
@@ -677,9 +773,77 @@ describe("cli list", () => {
     expect(result.status).not.toBe(0);
     expect(`${result.stderr}${result.stdout}`).toContain("Unknown kind");
   });
+
+  it("list --json prints machine-readable array", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-list-json-"));
+    await initWithRegistry(cwd);
+    const result = runCli(["list", "sink", "--cwd", cwd, "--json"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).not.toContain("Total:");
+    expect(result.stdout).not.toContain("sinks:");
+
+    const items = JSON.parse(result.stdout) as Array<{
+      id: string;
+      kind: string;
+      name: string;
+      title?: string;
+    }>;
+    expect(Array.isArray(items)).toBe(true);
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((item) => item.kind === "sink")).toBe(true);
+    expect(items.some((item) => item.id === "console" && item.name === "sink-console")).toBe(true);
+  });
 });
 
+describe("cli add event provenance", () => {
+  it("prints matched registry event for auth.user.signed_up", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-event-registry-prov-"));
+    await initWithRegistry(cwd);
+    const result = runCli(["add", "event", "auth.user.signed_up", "--cwd", cwd]);
+    expectCliStatus(result, 0, "add event auth.user.signed_up");
+    expect(result.stdout).toContain("matched registry event event-auth-user-signed-up");
+  });
 
+  it("prints generated starter schema when no registry template", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-event-fallback-prov-"));
+    await initWithRegistry(cwd);
+    const result = runCli(["add", "event", "foo.bar.baz", "--cwd", cwd]);
+    expectCliStatus(result, 0, "add event foo.bar.baz");
+    expect(result.stdout).toContain("generated starter schema (no registry template for foo.bar.baz)");
+  });
+});
+
+describe("cli init auth event default", () => {
+  it("does not auto-scaffold auth.user.signed_up without auth dependency", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-no-auth-event-"));
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ dependencies: { next: "^15.0.0" } }),
+    );
+
+    const result = runCli(["init", "--cwd", cwd, "--skip-install", "--yes"]);
+    expectCliStatus(result, 0, "init --yes without auth dep");
+    expect(result.stdout).toContain("No starter event scaffolded");
+    expect(result.stdout).toContain("add event post.created");
+    expect(existsSync(path.join(cwd, "telemetry/events/auth/user-signed-up.ts"))).toBe(false);
+    expect(existsSync(path.join(cwd, "telemetry/middleware/next.ts"))).toBe(true);
+  });
+
+  it("auto-scaffolds auth.user.signed_up when better-auth is present", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-auth-event-"));
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { next: "^15.0.0", "better-auth": "^1.0.0" },
+      }),
+    );
+
+    const result = runCli(["init", "--cwd", cwd, "--skip-install", "--yes"]);
+    expectCliStatus(result, 0, "init --yes with better-auth");
+    expect(result.stdout).not.toContain("No starter event scaffolded");
+    expect(existsSync(path.join(cwd, "telemetry/events/auth/user-signed-up.ts"))).toBe(true);
+  });
+});
 
 describe("cli init --service", () => {
   it("writes telemetry/logger.ts with the given service name", async () => {
@@ -992,6 +1156,7 @@ describe("cli add event not in registry", () => {
     const result = runCli(["add", "event", eventName, "--cwd", cwd]);
     expectCliStatus(result, 0, `add event ${eventName}`);
     expect(result.stdout).toContain(`amplio add event ${eventName}`);
+    expect(result.stdout).toContain("generated starter schema (no registry template for foo.bar.baz)");
     expect(result.stdout).toContain("telemetry/events/foo/bar-baz.ts");
 
     const eventSource = await readFile(
@@ -1018,7 +1183,7 @@ describe("cli add missing name", () => {
     const result = runCli(["add", "event", "--cwd", cwd]);
     expectCliStatus(result, 1, "add event without name");
     expect(`${result.stderr}${result.stdout}`).toContain(
-      "Missing add name. Example: amplio add event auth.user.signed_up",
+      "Missing add name. Example: amplio add event post.created",
     );
   });
 

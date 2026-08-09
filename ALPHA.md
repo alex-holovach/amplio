@@ -16,7 +16,7 @@ That command:
 
 1. Scaffolds `telemetry/` + `amplio.json` + `components.json`
 2. Installs `@useamplio/amplio` and `zod`
-3. Auto-detects Next.js / Hono / Express / Fastify and scaffolds middleware + a starter event when possible
+3. Auto-detects Next.js / Hono / Express / Fastify and scaffolds middleware + a starter event when possible (`auth.user.signed_up` only when an auth dependency is detected)
 
 > The unscoped name `amplio` cannot be published on npm (typo-squatting block). Always use `@useamplio/cli`.
 
@@ -103,9 +103,27 @@ Fixes in alpha.8:
 
 Run `npx @useamplio/cli@alpha doctor` after upgrading; regenerate with `amplio add middleware next --force` (or `trpc --force`) if needed.
 
-### Server-only
+### Server-only runtime vs client-safe event defs
 
-The runtime imports `node:async_hooks` at module top level. Do **not** import `telemetry/logger` or event defs from a `"use client"` component — the bundle will fail. For client-originated telemetry, POST to a route handler wrapped in `withAmplio` and emit server-side.
+The main runtime (`@useamplio/amplio`) imports `node:async_hooks` at module top level. Do **not** import `telemetry/logger` or call `init()` / `useLogger()` from a `"use client"` component — the bundle will fail.
+
+**Event schemas are client-safe:** import `defineEvent` from `@useamplio/amplio/events` to share typed event definitions with client components (no AsyncLocalStorage). Emit server-side — POST to a route handler wrapped in `withAmplio` and call `.emit()` there.
+
+Pass `init({ canonicalKeyOnly: true })` to emit only `@event` (drops the duplicate `event` key for `@`-averse sinks). By default both keys are set on schema-bound emits.
+
+### `.emit()` return value
+
+`.emit()` returns the **delivered** record, or **`null` when the event was not delivered**:
+
+- before `init()` (library-first silence — dev warns on every drop)
+- after the logger was sealed (repeat `.emit()`)
+- when sampling skips sink delivery (enrichers + redaction still run; only sinks are skipped)
+
+Redaction runs at emit time — fields derived before redaction (e.g. a length computed from a raw value) can look inconsistent next to `[REDACTED]`; that is expected.
+
+### `success` field
+
+When neither `status` nor an explicit `success` is set, **`success` is omitted** from the emitted record. Numeric `status` in `[200, 400)` or the exact string `"ok"` derives `success: true`; explicit `success` always wins.
 
 ## Correlated domain events
 
@@ -220,10 +238,32 @@ Files land under `telemetry/…`.
 
 ## CLI reference
 
-- `amplio doctor` — wiring checks (middleware exports, event schemas, tsconfig paths, Turbopack `../logger` import on `telemetry/middleware/next.ts` and `trpc.ts`, event barrel exports including shadcn-installed events).
-- `amplio doctor --fix` — regenerates missing event barrel `index.ts` exports.
 - `amplio init --paths` — writes the `~telemetry/*` tsconfig path alias (JSONC-comment-safe).
 - `amplio add <badkind> …` — errors with `Unknown add kind "…". Valid kinds: event, middleware, sink, enricher, integration.` (no silent fallthrough).
+- `amplio add event <name>` — prints `matched registry event` or `generated starter schema`. Names need two+ segments (`post.created`, `auth.user.signed_up`).
+- `amplio list --json` — machine-readable registry listing.
+- `amplio doctor` — wiring checks (middleware exports, event schemas, tsconfig paths, Turbopack `../logger` import on `telemetry/middleware/next.ts` and `trpc.ts`, event barrel exports including shadcn-installed events).
+- `amplio doctor --fix` — regenerates missing event barrel `index.ts` exports.
+- `amplio doctor --strict` — exit non-zero on warnings (CI gate).
+- Per-command help: `amplio init --help`, `amplio add --help`, etc.
+
+### `amplio.json` registry override
+
+By default the CLI reads the bundled `registry/` shipped in `@useamplio/cli`. Set a custom path in `amplio.json`:
+
+```json
+{
+  "telemetryDir": "telemetry",
+  "registry": "../my-fork/registry",
+  "packageManager": "pnpm"
+}
+```
+
+Absolute paths work too. Resolution: `amplio.json` → bundled registry → monorepo checkout fallback (dev only).
+
+### OTLP sink default
+
+Registry `otlpSink` defaults to **`throwOnError: false`** — export failures log a one-time dev warning and are swallowed. Pass `throwOnError: true` to fail hard on network or HTTP errors.
 
 ## Feedback
 

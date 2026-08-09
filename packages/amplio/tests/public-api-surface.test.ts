@@ -27,6 +27,8 @@ describe("public API surface", () => {
       "createError",
       "AmplioValidationError",
       "flush",
+      "scheduleFlush",
+      "trpcErrorHttpStatus",
     ] as const;
 
     for (const name of requiredFns) {

@@ -58,6 +58,56 @@ describe("runDoctor", () => {
     expect(code).toBe(0);
   });
 
+  it("--strict exits 1 when warnings are present", async () => {
+    const cwd = await makeTempDir("amplio-doctor-strict-warn-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { next: "^15.0.0", "@useamplio/amplio": "^0.1.0-alpha.7" },
+      }),
+    );
+    await mkdir(path.join(cwd, "src/app"), { recursive: true });
+    await runInit({ cwd, skipInstall: true, middleware: "none", event: "none" });
+
+    const badEventDir = path.join(cwd, "telemetry/events/email");
+    await mkdir(badEventDir, { recursive: true });
+    await writeFile(
+      path.join(badEventDir, "email-sent.ts"),
+      'export const EmailSent = defineEvent("email.sent", {} as never);',
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await runDoctor({ cwd, strict: true });
+    log.mockRestore();
+
+    expect(code).toBe(1);
+  });
+
+  it("--strict exits 0 when no warnings or failures", async () => {
+    const cwd = await makeTempDir("amplio-doctor-strict-ok-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { "@useamplio/amplio": "^0.1.0-alpha.7", zod: "^3.24.0" },
+      }),
+    );
+    await writeFile(
+      path.join(cwd, "amplio.json"),
+      JSON.stringify({ telemetryDir: "telemetry", packageManager: "pnpm" }),
+    );
+    await mkdir(path.join(cwd, "telemetry"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/logger.ts"),
+      'import { init } from "@useamplio/amplio";\ninit({ service: "test", env: "test", sinks: [], enrichers: [] });\n',
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await runDoctor({ cwd, strict: true });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+  });
+
   it("exits 0 with warnings for event path mismatch and missing instrumentation", async () => {
     const cwd = await makeTempDir("amplio-doctor-warn-");
     await writeFile(
@@ -117,7 +167,9 @@ describe("runDoctor", () => {
     expect(logs.join("\n")).toContain(
       "telemetry/middleware/hono.ts scaffolded but amplioMiddleware is never imported by app code",
     );
-    expect(logs.join("\n")).toContain("ALPHA.md");
+    expect(logs.join("\n")).toContain(
+      "https://github.com/alex-holovach/amplio/blob/main/ALPHA.md",
+    );
   });
 
   it("passes middleware wiring check when export is referenced in app code", async () => {

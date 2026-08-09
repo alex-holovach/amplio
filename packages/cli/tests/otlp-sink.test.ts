@@ -196,30 +196,49 @@ describe("otlpSink", () => {
     await expect(sink(record)).rejects.toThrow("OTLP export failed with status 500");
   });
 
-  it("fetch 500 + throwOnError false -> resolves, no throw", async () => {
+  it("fetch 500 + default throwOnError -> resolves, warns once", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500 });
+
+    const sink = otlpSink({ endpoint: "https://otel.example.com" });
+    const record: LogRecord = { event: "test.event" };
+
+    await expect(sink(record)).resolves.toBeUndefined();
+    await expect(sink(record)).resolves.toBeUndefined();
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[amplio] otlpSink: export failed (status 500); further failures will be silent. Pass throwOnError: true to fail hard.",
+    );
+  });
+
+  it("fetch 500 + throwOnError false -> resolves, warns once", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500 });
 
     const sink = otlpSink({ endpoint: "https://otel.example.com", throwOnError: false });
     const record: LogRecord = { event: "test.event" };
 
     await expect(sink(record)).resolves.toBeUndefined();
+    await expect(sink(record)).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledOnce();
   });
 
-  it("fetch reject (network) + throwOnError false -> resolves", async () => {
+  it("fetch reject (network) + throwOnError false -> resolves, warns once", async () => {
     fetchMock.mockRejectedValue(new Error("network down"));
 
     const sink = otlpSink({ endpoint: "https://otel.example.com", throwOnError: false });
     const record: LogRecord = { event: "test.event" };
 
     await expect(sink(record)).resolves.toBeUndefined();
+    await expect(sink(record)).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0]![0]).toContain("network down");
   });
 
-  it("fetch reject (network) + throwOnError true (default) -> rejects with the network error", async () => {
+  it("fetch reject (network) + throwOnError true -> rejects with the network error", async () => {
     const networkError = new Error("network down");
     fetchMock.mockRejectedValue(networkError);
 
-    // omit throwOnError — default is true
-    const sink = otlpSink({ endpoint: "https://otel.example.com" });
+    const sink = otlpSink({ endpoint: "https://otel.example.com", throwOnError: true });
     const record: LogRecord = { event: "test.event" };
 
     await expect(sink(record)).rejects.toBe(networkError);

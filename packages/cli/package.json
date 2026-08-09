@@ -1,6 +1,6 @@
 {
   "name": "@useamplio/cli",
-  "version": "0.1.0-alpha.8",
+  "version": "0.1.0-alpha.9",
   "description": "Init and add commands for amplio telemetry scaffolding",
   "type": "module",
   "license": "MIT",
@@ -32,13 +32,15 @@
   "files": [
     "dist",
     "registry",
-    "LICENSE"
+    "LICENSE",
+    "ALPHA.md",
+    "docs"
   ],
   "scripts": {
-    "build": "tsup && node scripts/copy-registry.mjs",
+    "build": "tsup && node scripts/copy-registry.mjs && node ../../scripts/copy-docs.mjs .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "pretest": "node scripts/copy-registry.mjs"
+    "pretest": "node scripts/copy-registry.mjs && node ../../scripts/copy-docs.mjs ."
   },
   "engines": {
     "node": ">=20"

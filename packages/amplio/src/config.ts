@@ -51,6 +51,9 @@ export function init(config: AmplioConfig): LoggerFacade {
       : {}),
     ...(config.redact !== undefined ? { redact: config.redact } : {}),
     ...(config.strict !== undefined ? { strict: config.strict } : {}),
+    ...(config.canonicalKeyOnly !== undefined
+      ? { canonicalKeyOnly: config.canonicalKeyOnly }
+      : {}),
   };
   setCompiledRedactFromConfig(config.redact);
   state.alwaysSample = computeAlwaysSample(config.sampling);

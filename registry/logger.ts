@@ -1,20 +1,13 @@
-import { init, logger, type LogRecord, type Sink } from "@useamplio/amplio";
+import { init, logger } from "@useamplio/amplio";
 import { consoleSink } from "./sinks/console";
-
-type Enricher = (record: LogRecord) => LogRecord;
-
-function composeSinks(enrichers: Enricher[], sinks: Sink[]): Sink[] {
-  if (enrichers.length === 0) {
-    return sinks;
-  }
-
-  return sinks.map((sink) => (record) => sink(enrichers.reduce((acc, enrich) => enrich(acc), record)));
-}
 
 init({
   service: process.env.SERVICE_NAME ?? "my-app",
   env: process.env.NODE_ENV ?? "development",
-  sinks: composeSinks([], [consoleSink]),
+  enrichers: [],
+  // sampling: { rate: 0.1, keep: [{ field: "success", equals: false }] },
+  // see @useamplio/amplio README ## Sampling
+  sinks: [consoleSink],
 });
 
 export { logger };

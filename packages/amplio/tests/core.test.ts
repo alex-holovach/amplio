@@ -218,36 +218,40 @@ describe("sampling", () => {
     expect(records).toHaveLength(0);
   });
 
-  it("emit returns finalized record when sampling drops delivery", () => {
+  it("emit returns null when sampling drops delivery", () => {
     const { records, sink: mem } = capture();
     init({ service: "api", env: "test", sinks: [mem], sampling: { rate: 0 } });
     const record = createLogger().set({ step: "x" }).emit();
-    expect(record).not.toBeNull();
-    expect(record.service).toBe("api");
-    expect(record.step).toBe("x");
+    expect(record).toBeNull();
     expect(records).toHaveLength(0);
   });
 
   it("enrichers still run when sampling drops sink delivery", () => {
+    let enricherRan = false;
     const { records, sink: mem } = capture();
     init({
       service: "api",
       env: "test",
       sinks: [mem],
       sampling: { rate: 0 },
-      enrichers: [() => ({ tagged: true })],
+      enrichers: [
+        () => {
+          enricherRan = true;
+          return { tagged: true };
+        },
+      ],
     });
     const record = createLogger().emit();
-    expect(record?.tagged).toBe(true);
+    expect(enricherRan).toBe(true);
+    expect(record).toBeNull();
     expect(records).toHaveLength(0);
   });
 
-  it("redacts returned emit() record when sampling drops sinks", () => {
+  it("redaction still runs when sampling drops sinks but emit returns null", () => {
     const { records, sink: mem } = capture();
-    // redact default on — sink empty, returned record still redacted
     init({ service: "api", env: "test", sinks: [mem], sampling: { rate: 0 } });
     const record = createLogger().set({ email: "a@b.com" }).emit();
-    expect(record?.email).toBe("[REDACTED]");
+    expect(record).toBeNull();
     expect(records).toHaveLength(0);
   });
 

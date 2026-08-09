@@ -88,14 +88,14 @@ const finalizeRecord = (
     }
   }
 
-  if (record.success === undefined) {
-    record.success = true;
+  if (config.canonicalKeyOnly === true && "@event" in record) {
+    delete record.event;
   }
 
   return record;
 };
 
-const emitInternal = (logger: InternalLogger): LogRecord => {
+const emitInternal = (logger: InternalLogger): LogRecord | null => {
   const config = resolveConfig();
   const enrichers = config.enrichers;
   let payload: Record<string, unknown>;
@@ -179,10 +179,12 @@ const emitInternal = (logger: InternalLogger): LogRecord => {
   const now = Date.now();
   const record = finalizeRecord(logger, payload, config, now);
 
-  if (resolveAlwaysSample() || shouldSample(record, config.sampling)) {
-    runSinksSync(config.sinks, record);
+  const delivered = resolveAlwaysSample() || shouldSample(record, config.sampling);
+  if (!delivered) {
+    return null;
   }
 
+  runSinksSync(config.sinks, record);
   return record;
 };
 
@@ -295,7 +297,7 @@ class InternalLoggerImpl implements InternalLogger {
     if (!isInitialized()) {
       if (isDevelopment()) {
         console.warn(
-          '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See ALPHA.md.',
+          '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See https://github.com/alex-holovach/amplio/blob/main/ALPHA.md.',
         );
       }
       return null;
