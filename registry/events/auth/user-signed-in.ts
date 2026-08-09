@@ -9,7 +9,9 @@ export const AuthUserSignedIn = defineEvent(
       email: z.string().email().optional(),
     }),
     session: z.object({
-      id: z.string(),
+      // Optional: auth providers fire sign-in events before a session row exists
+      // (NextAuth `events.signIn`, Clerk webhooks, Better Auth hooks).
+      id: z.string().optional(),
       method: z.enum(["password", "oauth", "magic_link", "sso"]),
       mfa: z.boolean().optional(),
     }),

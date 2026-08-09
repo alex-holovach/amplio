@@ -8,12 +8,12 @@ const nextMiddlewarePath = path.resolve(
 );
 
 describe("registry Next middleware ALS", () => {
-  it("does not use module-scoped activeLogger; useRequestLogger delegates to useLogger", () => {
+  it("does not use module-scoped activeLogger; useRequestLogger delegates to getLogger", () => {
     const source = readFileSync(nextMiddlewarePath, "utf8");
     expect(source).not.toMatch(/\bactiveLogger\b/);
-    expect(source).toMatch(/useLogger/);
+    expect(source).toMatch(/getLogger/);
     expect(source).toMatch(
-      /export function useRequestLogger\(\)[\s\S]*return useLogger\(\)/,
+      /export function useRequestLogger\(\)[\s\S]*return getLogger\(\)/,
     );
   });
 });

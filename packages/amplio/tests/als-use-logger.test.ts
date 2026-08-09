@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   createLogger,
+  getLogger,
   init,
   resetConfigForTests,
+  resetUseLoggerDeprecationWarningForTests,
+  resetUseLoggerOutsideScopeWarningForTests,
   runWithLogger,
   useLogger,
 } from "../src/index.js";
@@ -21,6 +24,8 @@ const capture = (): { records: LogRecord[]; sink: Sink } => {
 
 beforeEach(() => {
   resetConfigForTests();
+  resetUseLoggerOutsideScopeWarningForTests();
+  resetUseLoggerDeprecationWarningForTests();
 });
 
 describe("ALS useLogger", () => {
@@ -47,10 +52,47 @@ describe("ALS useLogger", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     useLogger().set({ a: 1 });
     useLogger().set({ b: 2 });
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenNthCalledWith(
+      1,
+      "[amplio] useLogger() is deprecated and will be removed before 1.0 — use getLogger() (same behavior; renamed because lint tools mistake useLogger for a React hook).",
+    );
+    expect(warn).toHaveBeenNthCalledWith(
+      2,
+      "[amplio] getLogger() called outside runWithLogger(); fields will be dropped. Establish request scope with middleware (runWithLogger), or use the logger facade for one-shot scripts.",
+    );
+    warn.mockRestore();
+  });
+
+  it("getLogger inside runWithLogger returns the ambient logger", async () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+
+    await runWithLogger(createLogger(), async () => {
+      getLogger().set({ a: 1 });
+      getLogger().emit();
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0]!.a).toBe(1);
+  });
+
+  it("useLogger emits deprecation warning once in dev and still works inside runWithLogger", async () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await runWithLogger(createLogger(), async () => {
+      useLogger().set({ via: "useLogger" }).emit();
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0]!.via).toBe("useLogger");
     expect(warn).toHaveBeenCalledOnce();
     expect(warn).toHaveBeenCalledWith(
-      "[amplio] useLogger() called outside runWithLogger(); fields will be dropped. Establish request scope with middleware (runWithLogger), or use the logger facade for one-shot scripts.",
+      "[amplio] useLogger() is deprecated and will be removed before 1.0 — use getLogger() (same behavior; renamed because lint tools mistake useLogger for a React hook).",
     );
+
     warn.mockRestore();
   });
 

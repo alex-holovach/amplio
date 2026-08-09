@@ -6,6 +6,7 @@ import {
   eventNameToRelativePath,
 } from "../utils/event-name.js";
 import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
+import { formatGeneratedFiles } from "../utils/format-files.js";
 import fs from "node:fs/promises";
 import { ensureDir, pathExists, upsertBarrelExport, writeFileOrSkip } from "../utils/fs.js";
 import { updateLoggerWithEnricher } from "../utils/logger-enricher.js";
@@ -80,6 +81,14 @@ function itemId(kind: string, id: string): string {
 async function getTelemetryDir(cwd: string): Promise<string> {
   const config = await readAmplioConfig(cwd);
   return config?.telemetryDir ?? "telemetry";
+}
+
+async function formatTelemetry(cwd: string): Promise<void> {
+  const telemetryDir = await getTelemetryDir(cwd);
+  const formatted = await formatGeneratedFiles(cwd, [telemetryDir]);
+  if (formatted) {
+    console.log(`  ✓ formatted with ${formatted}`);
+  }
 }
 
 async function installByName(
@@ -203,6 +212,7 @@ export async function runAddEvent(eventName: string, options: AddOptions): Promi
       if (eventExists && !(options.force ?? false)) {
         console.log("  · skipped existing event file");
       }
+      await formatTelemetry(options.cwd);
       return;
     }
   } catch {
@@ -220,6 +230,7 @@ export async function runAddEvent(eventName: string, options: AddOptions): Promi
 
   if (status !== "skipped") {
     await updateEventBarrels(options.cwd, telemetryDir, relativePath, exportName);
+    await formatTelemetry(options.cwd);
   } else {
     console.log("  · skipped existing event file");
   }
@@ -240,6 +251,7 @@ export async function runAddMiddleware(id: string, options: AddOptions): Promise
   if (middlewareExists && !(options.force ?? false)) {
     console.log("  · skipped existing middleware file");
   }
+  await formatTelemetry(options.cwd);
 }
 
 export async function runAddSink(id: string, options: AddOptions): Promise<void> {
@@ -258,9 +270,12 @@ export async function runAddSink(id: string, options: AddOptions): Promise<void>
     console.log("  · skipped existing sink file");
   }
 
-  const loggerUpdated = await updateLoggerWithSink(paths.logger, id);
-  if (loggerUpdated) {
-    console.log(`  ✓ ${path.relative(options.cwd, paths.logger)}`);
+  const loggerUpdate = await updateLoggerWithSink(paths.logger, id);
+  if (loggerUpdate) {
+    console.log(`  ✓ ${path.relative(options.cwd, paths.logger)} (auto-wired sink)`);
+    for (const line of loggerUpdate.insertedLines) {
+      console.log(`    ${line}`);
+    }
   }
 
   if (id === "json") {
@@ -273,6 +288,7 @@ export async function runAddSink(id: string, options: AddOptions): Promise<void>
       console.log("  ✓ .env.example");
     }
   }
+  await formatTelemetry(options.cwd);
 }
 
 export async function runAddEnricher(id: string, options: AddOptions): Promise<void> {
@@ -309,6 +325,7 @@ export async function runAddEnricher(id: string, options: AddOptions): Promise<v
   if (loggerUpdated) {
     console.log(`  ✓ ${path.relative(options.cwd, paths.logger)}`);
   }
+  await formatTelemetry(options.cwd);
 }
 
 export async function runAddIntegration(id: string, options: AddOptions): Promise<void> {
@@ -328,4 +345,5 @@ export async function runAddIntegration(id: string, options: AddOptions): Promis
   if (integrationExists && !(options.force ?? false)) {
     console.log("  · skipped existing integration file");
   }
+  await formatTelemetry(options.cwd);
 }

@@ -75,12 +75,12 @@ Wrap a route handler:
 
 ```ts
 import { withAmplio } from "@/telemetry/middleware/next";
-import { useLogger } from "@useamplio/amplio";
+import { getLogger } from "@useamplio/amplio";
 import { AuthUserSignedUp } from "@/telemetry/events/auth/user-signed-up";
 import { NextResponse } from "next/server";
 
 export const GET = withAmplio(async () => {
-  useLogger()
+  getLogger()
     .child(AuthUserSignedUp)
     .set({ user: { id: "u_123" }, signup: { method: "email" } })
     .emit();
@@ -89,7 +89,7 @@ export const GET = withAmplio(async () => {
 });
 ```
 
-To annotate the spine only: `useLogger().set({ user: { id: "u_123" } })`.
+To annotate the spine only: `getLogger().set({ user: { id: "u_123" } })`.
 
 ### Turbopack / `next dev --turbo`
 
@@ -105,7 +105,7 @@ Run `npx @useamplio/cli@alpha doctor` after upgrading; regenerate with `amplio a
 
 ### Server-only runtime vs client-safe event defs
 
-The main runtime (`@useamplio/amplio`) imports `node:async_hooks` at module top level. Do **not** import `telemetry/logger` or call `init()` / `useLogger()` from a `"use client"` component — the bundle will fail.
+The main runtime (`@useamplio/amplio`) imports `node:async_hooks` at module top level. Do **not** import `telemetry/logger` or call `init()` / `getLogger()` from a `"use client"` component — the bundle will fail.
 
 **Event schemas are client-safe:** import `defineEvent` from `@useamplio/amplio/events` to share typed event definitions with client components (no AsyncLocalStorage). Emit server-side — POST to a route handler wrapped in `withAmplio` and call `.emit()` there.
 
@@ -125,6 +125,12 @@ Redaction runs at emit time — fields derived before redaction (e.g. a length c
 
 When neither `status` nor an explicit `success` is set, **`success` is omitted** from the emitted record. Numeric `status` in `[200, 400)` or the exact string `"ok"` derives `success: true`; explicit `success` always wins.
 
+> **Dashboard implication:** clean domain rows (`.child(Def).emit()` with no `status`) omit `success` entirely, so a filter like `success = true` silently excludes them. Filter domain events with `success != false` (or on `@event`) instead — only validation failures and explicit errors stamp `success: false`.
+
+### `getLogger()` (was `useLogger()`)
+
+`useLogger()` was renamed to **`getLogger()`** in `0.1.0-alpha.10` — it is not a React hook, but `use*` naming trips biome's `lint/correctness/useHookAtTopLevel` and eslint-plugin-react-hooks inside tRPC procedures. `useLogger` remains exported as a deprecated alias (identical behavior, one-time dev warning) and will be removed before 1.0.
+
 ## Correlated domain events
 
 One **spine** wide event per unit of work (`http.request` for HTTP, `trpc.request` for server-caller tRPC) plus **N domain events** that share its `request_id`.
@@ -132,19 +138,19 @@ One **spine** wide event per unit of work (`http.request` for HTTP, `trpc.reques
 | API | Use when |
 |---|---|
 | `.child(EventDef)` | **Canonical.** Fresh seal and start time; copies `request_id` only (no `http.*` / `trpc.*`). Emitting the child does not seal the spine. |
-| `useLogger().set({ … })` | Add fields to the spine row (middleware emits it). |
+| `getLogger().set({ … })` | Add fields to the spine row (middleware emits it). |
 | `logger.event(Def).emit()` | Standalone row outside a request; inside ALS (since alpha.8) copies `request_id` only. |
 
 ```ts
 // inside a request — two rows, same request_id:
-useLogger().child(PostCreated).set({ post: { id } }).emit();
+getLogger().child(PostCreated).set({ post: { id } }).emit();
 // spine: http.request (middleware) + domain: post.created
 ```
 
 > **Wrong spellings (pre-alpha.8 footguns):**
 >
 > - `logger.event(Def).emit()` **before alpha.8** inside a request — lost `request_id` correlation.
-> - `useLogger().event(Def).emit()` — **rebinds** the spine to the domain schema and seals it on emit (no separate `http.request` row). Dev now warns loudly when you emit a rebind of an already-named spine.
+> - `getLogger().event(Def).emit()` — **rebinds** the spine to the domain schema and seals it on emit (no separate `http.request` row). Dev now warns loudly when you emit a rebind of an already-named spine.
 > - `.create().event(Def)` — duplicated transport fields on the domain row; `.create()` forks inherited the parent's start time before alpha.8 (fixed: fresh start time).
 
 ## tRPC (v11)
@@ -154,6 +160,8 @@ When `init` detects `@trpc/server` alongside Next.js, it scaffolds `telemetry/mi
 **create-t3-app walkthrough:** [docs/t3.md](./docs/t3.md).
 
 ### Wiring (strict TypeScript)
+
+> In a stock create-t3-app layout you don't need to do this by hand: `npx @useamplio/cli@alpha init --yes` (or `init --wire`) edits both files below automatically.
 
 **1. Route handler** — wrap the tRPC HTTP entry so the request wide event exists before procedures run:
 
@@ -194,7 +202,7 @@ export const publicProcedure = t.procedure.use(amplioMiddleware);
 - **`withAmplio`** owns the request wide event (the spine). It is named `event: "http.request"` / `@event: "http.request"` so you can filter all HTTP traffic on one key.
 - **`amplioTrpcMiddleware`** annotates that spine with `trpc.path`, `trpc.type`, and HTTP status — it does not emit a sibling request row.
 - **Server-caller path** (RSC `createCaller`, no HTTP request): when no ambient logger exists, the middleware creates a spine row named `trpc.request` with `transport: "server-caller"` and `trpc.path` / `trpc.type` — no fabricated `http.method: "TRPC"` or other `http.*` fields. Real HTTP tRPC requests through `withAmplio` are unchanged (`http.request`).
-- **Domain events** — use `useLogger().child(Def).set({ … }).emit()` inside procedures (e.g. `auth.user.signed_up`). Separate rows; keep business context on domain events; keep transport on the spine.
+- **Domain events** — use `getLogger().child(Def).set({ … }).emit()` inside procedures (e.g. `auth.user.signed_up`). Separate rows; keep business context on domain events; keep transport on the spine.
 
 ### Errors
 
@@ -202,7 +210,7 @@ tRPC v11 returns `{ ok: false, error }` from `next()` instead of throwing for ma
 
 ### Batching
 
-With `httpBatchLink` / `httpBatchStreamLink`, multiple procedures share one HTTP request. The spine gets `trpc.batched: true` and `trpc.procedures: ["query post.hello", "mutation user.update", …]`; `trpc.path` / `trpc.type` stay on the **first** procedure in the batch. For clean per-procedure attribution, emit domain events inside each procedure rather than relying on the spine alone.
+With `httpBatchLink` / `httpBatchStreamLink`, multiple procedures share one HTTP request. The spine gets `trpc.batched: true`, `trpc.batch_size`, and `trpc.procedures: ["query post.hello", "mutation user.update", …]` — every invocation is counted, including repeat calls to the same procedure. `trpc.path` / `trpc.type` stay on the **first** procedure in the batch **unless a procedure errors**, in which case the error annotation overwrites them with the *failing* procedure (the full list stays in `trpc.procedures`). In batches, `status` is the **transport** status of the shared HTTP response (often `207` when results are mixed) while `error.*` carries the failing procedure's error (e.g. `error.code: "UNAUTHORIZED"`). For clean per-procedure attribution, emit domain events inside each procedure rather than relying on the spine alone.
 
 ## shadcn registry
 

@@ -15,9 +15,13 @@ export const ${exportSymbol} = defineEvent(
     ${domain}: z.object({
       id: z.string(),
     }),
-    context: z.object({
-      source: z.string().optional(),
-    }),
+    // Optional so the obvious first call — .set({ ${domain}: { id } }).emit() —
+    // validates clean without a context wrapper.
+    context: z
+      .object({
+        source: z.string().optional(),
+      })
+      .optional(),
   }),
 );
 `;

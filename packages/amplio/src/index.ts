@@ -11,9 +11,11 @@ export type { LoggerFacade } from "./logger.js";
 export { createRequestLogger } from "./request-logger.js";
 export {
   runWithLogger,
+  getLogger,
   useLogger,
   hasAmbientLogger,
   resetUseLoggerOutsideScopeWarningForTests,
+  resetUseLoggerDeprecationWarningForTests,
 } from "./context.js";
 export { createError } from "./error.js";
 export { deepMerge } from "./deep-merge.js";

@@ -1,6 +1,6 @@
 {
   "name": "@useamplio/cli",
-  "version": "0.1.0-alpha.9",
+  "version": "0.1.0-alpha.10",
   "description": "Init and add commands for amplio telemetry scaffolding",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,7 @@
   "files": [
     "dist",
     "registry",
+    "README.md",
     "LICENSE",
     "ALPHA.md",
     "docs"

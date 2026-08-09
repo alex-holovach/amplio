@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.10] - 2026-08-09
+
+Dogfood iter 5 — close the init → first-event gap (T3 auto-wiring), lint-clean generated code, `getLogger` rename.
+
+### Runtime
+
+- **`useLogger()` → `getLogger()`** — renamed; `useLogger` stays as a deprecated alias (identical behavior, one-time dev warning). The `use*` name tripped biome's `lint/correctness/useHookAtTopLevel` and eslint-plugin-react-hooks inside tRPC procedures.
+
+### CLI
+
+- **`init` auto-wires create-t3-app** (the headline change): under `--yes` (or with the new `--wire` flag), init wraps the handler export in `src/app/api/trpc/[trpc]/route.ts` with `withAmplio` and prepends `amplioTrpcMiddleware` to `publicProcedure`/`protectedProcedure` in `src/server/api/trpc.ts`. Shape-guarded string edits — drifted files are left untouched with manual snippets printed instead.
+- **`doctor` fails (exit 1) on scaffolded-but-unwired middleware** — "no events will be emitted" is no longer a green state. New warning when a sink file exists but is not referenced in `telemetry/logger.ts` (e.g. shadcn-installed sinks).
+- **Formatter pass** — init/add run the project's detected formatter (biome or prettier) over generated files, so a stock T3 app passes `biome check telemetry` right after `init --yes`.
+- **Wiring snippets print resolvable paths** — `~telemetry/...` when the tsconfig alias exists, otherwise the exact relative path from the detected T3 file (no more wrong-on-paste `../../telemetry/...`).
+- **`add sink` prints the lines it inserts into `logger.ts`** (`+ import …`, `+ … appended to sinks array`).
+- **Multi-add** — `amplio add event a.b c.d e.f` (all add kinds accept multiple names).
+- **`init` adds an `"amplio": "amplio"` script** to package.json and suggests installing the CLI as a devDependency.
+- **Starter event schema** — the `context` wrapper is now optional, so `.set({ domain: { id } }).emit()` validates clean.
+- **Neutral next-steps** in undetected projects (no more `add middleware hono` suggestion in empty packages); Verify section warns about Next silently binding a different port.
+- **`@useamplio/cli` npm README fixed** (README.md now shipped explicitly in `files`).
+
+### Registry templates
+
+- **tRPC batch counting fixed** — a batch of N calls to the *same* procedure now reports `trpc.batched: true`, new `trpc.batch_size: N`, and N `procedures` entries (was: deduplicated to a single-call spine).
+- **Lint-clean under strict biome** — `withAmplio` drops `any[]` for a `never[]` rest-constraint generic, the tRPC template drops its non-null assertion, and all templates call `getLogger()`.
+- **`auth.user.signed_in`** — `session.id` is now optional (NextAuth/Clerk/Better Auth fire sign-in events before a session row exists).
+- **shadcn parity** — sink and Next/tRPC middleware registry items now carry `docs` post-install notes explaining wiring (`npx shadcn add @useamplio/sink-*` no longer walks away silently).
+
+### Docs
+
+- ALPHA.md batching section aligned with actual behavior: `trpc.path` points at the failing procedure on error, `status` is the transport status (often 207) in batches.
+- `success` dashboard callout: clean domain rows omit `success`, so filter with `success != false`.
+- t3.md: auto-wiring section, port-binding hint in Verify, sinks-mutate-logger.ts note, full client-originated event example (defineEvent → fetch → withAmplio route).
+
 ## [0.1.0-alpha.9] - 2026-08-09
 
 Dogfood iter 4 — packaging, docs, and emit/sampling semantics alignment.

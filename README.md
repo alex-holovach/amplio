@@ -69,11 +69,11 @@ Default redaction masks emails and other sensitive patterns when those fields ar
 Inside request middleware scope, emit domain rows with `.child()` — fresh seal and start time, copies `request_id` only (no `http.*` duplication):
 
 ```typescript
-import { useLogger } from "@useamplio/amplio";
+import { getLogger } from "@useamplio/amplio";
 import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up.js";
 
 // inside withAmplio / hono middleware:
-useLogger()
+getLogger()
   .child(AuthUserSignedUp)
   .set({ user: { id: "u_123" }, signup: { method: "email" } })
   .emit();
@@ -138,8 +138,8 @@ Frozen public surface from `@useamplio/amplio`:
 | `.child(def)` | Correlated domain event: fresh seal + start time, copies `request_id` only — emit domain rows from inside requests without touching the spine |
 | `logger.event(def, initial?)` | Standalone schema event; inside request scope it copies `request_id` |
 | `logger.create(initial?)` | Standalone wide-event scope (jobs, scripts, CLI runs); forks get a fresh start time |
-| `useLogger` | Request-scoped logger from middleware context |
-| `.set()` | Merge nested context into the active wide event (mutates in place; returns same instance so `useLogger()` stays valid in middleware ALS) |
+| `getLogger` | Request-scoped logger from middleware context (`useLogger` is a deprecated alias — renamed because lint tools mistook it for a React hook) |
+| `.set()` | Merge nested context into the active wide event (mutates in place; returns same instance so `getLogger()` stays valid in middleware ALS) |
 | `.error(err, ctx?)` | Record a structured error (`success: false`); does not emit — call `.emit()` after. For `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when the thrown value carries a real string/number `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field (not `[object Object]`) |
 | `.emit()` | Finalize, validate, drain sinks; seals the instance |
 | `flush()` | Await pending async sink deliveries (use with serverless `waitUntil` / Next.js `after`) |
@@ -198,15 +198,15 @@ logger.create({ job: "nightly-sync" })
   .emit();
 ```
 
-### useLogger (middleware)
+### getLogger (middleware)
 
 Request middleware creates one wide event per HTTP unit of work named `http.request` (`event` and `@event` both set). Filter on `@event = "http.request"` for the request spine; domain events from `.child(SomeSchema).emit()` are separate rows sharing `request_id`.
 
 ```typescript
-import { useLogger } from "@useamplio/amplio";
+import { getLogger } from "@useamplio/amplio";
 
 app.get("/health", (c) => {
-  useLogger().set({ route: { name: "health" } });
+  getLogger().set({ route: { name: "health" } });
   return c.json({ ok: true });
 });
 ```

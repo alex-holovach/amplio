@@ -11,7 +11,7 @@ describe("package files", () => {
   it("ships dist + bundled registry for published installs", async () => {
     expect(pkg.type).toBe("module");
     expect(pkg.bin.amplio).toBe("./dist/cli.js");
-    expect(pkg.files).toEqual(["dist", "registry", "LICENSE", "ALPHA.md", "docs"]);
+    expect(pkg.files).toEqual(["dist", "registry", "README.md", "LICENSE", "ALPHA.md", "docs"]);
 
     for (const entry of pkg.files) {
       await access(path.join(packageRoot, entry));

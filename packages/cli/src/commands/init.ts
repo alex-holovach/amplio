@@ -9,10 +9,21 @@ import { ensureDir, pathExists, writeFileIfMissing } from "../utils/fs.js";
 import { hasAuthDependency, hasDependency } from "../utils/has-dep.js";
 import { ALPHA_MD_URL, T3_MD_URL } from "../help.js";
 import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
+import { formatGeneratedFiles } from "../utils/format-files.js";
 import { ensureRuntimeDependencies } from "../utils/install-deps.js";
 import { parseJsonc } from "../utils/jsonc.js";
 import { resolveProjectPaths } from "../utils/paths.js";
 import { registryPathForConfig } from "../utils/registry-path.js";
+import {
+  detectT3Layout,
+  hasTelemetryPathAlias,
+  middlewareImportForFile,
+  T3_ROUTE_FILE,
+  T3_TRPC_FILE,
+  wireT3RouteHandler,
+  wireT3TrpcProcedures,
+  type WireResult,
+} from "../utils/wire-t3.js";
 
 const DEFAULT_REGISTRY_URL = "https://amplio-ruddy.vercel.app/r/{name}.json";
 
@@ -28,6 +39,7 @@ export interface InitOptions {
   yes?: boolean;
   skipInstall?: boolean;
   paths?: boolean;
+  wire?: boolean;
 }
 
 async function resolveDefaultService(cwd: string): Promise<string> {
@@ -62,8 +74,28 @@ function middlewareImportPath(telemetryDir: string, middlewareName: string, srcL
   return `${base}${telemetryDir}/middleware/${middlewareName}`;
 }
 
-function printNextWiringSnippet(telemetryDir: string, srcLayout: boolean): void {
-  const importPath = middlewareImportPath(telemetryDir, "next", srcLayout);
+/**
+ * Resolve the import path to print in wiring snippets. Prefers the ~telemetry
+ * alias when tsconfig defines it; otherwise computes the exact relative path
+ * from the known T3 file when present, so pasted snippets resolve first try.
+ */
+async function snippetImportPath(
+  cwd: string,
+  telemetryDir: string,
+  middlewareName: "next" | "trpc",
+  srcLayout: boolean,
+): Promise<string> {
+  if (await hasTelemetryPathAlias(cwd, telemetryDir)) {
+    return `~telemetry/middleware/${middlewareName}`;
+  }
+  const knownFile = middlewareName === "next" ? T3_ROUTE_FILE : T3_TRPC_FILE;
+  if (await pathExists(path.join(cwd, knownFile))) {
+    return middlewareImportForFile(cwd, telemetryDir, knownFile, middlewareName);
+  }
+  return middlewareImportPath(telemetryDir, middlewareName, srcLayout);
+}
+
+function printNextWiringSnippet(importPath: string): void {
   console.log("\nWire Next.js route handlers:");
   console.log(`  import { withAmplio } from "${importPath}";`);
   console.log("  export const GET = withAmplio(async (request) => {");
@@ -71,13 +103,29 @@ function printNextWiringSnippet(telemetryDir: string, srcLayout: boolean): void 
   console.log("  });");
 }
 
-function printTrpcWiringSnippet(telemetryDir: string, srcLayout: boolean): void {
-  const importPath = middlewareImportPath(telemetryDir, "trpc", srcLayout);
+function printTrpcWiringSnippet(importPath: string): void {
   console.log(`\nWire tRPC middleware (see ${ALPHA_MD_URL} ## tRPC (v11)):`);
   console.log(`  T3 / create-t3-app walkthrough: ${T3_MD_URL}`);
   console.log(`  import { amplioTrpcMiddleware } from "${importPath}";`);
   console.log("  const amplioMw = t.middleware(amplioTrpcMiddleware());");
   console.log("  publicProcedure.use(amplioMw);");
+}
+
+function printWireResult(result: WireResult, action: string): boolean {
+  if (result.status === "wired") {
+    console.log(`  ✓ ${result.file} (${action})`);
+    return true;
+  }
+  if (result.status === "already") {
+    console.log(`  · ${result.file} already wired`);
+    return true;
+  }
+  if (result.status === "unrecognized") {
+    console.log(
+      `  ! ${result.file} does not match the create-t3-app shape — wire it manually:`,
+    );
+  }
+  return false;
 }
 
 function printTsconfigPathsHint(): void {
@@ -209,6 +257,47 @@ function printNoStarterEventHint(): void {
   console.log("  npx @useamplio/cli@alpha add event post.created");
 }
 
+/**
+ * Add an `"amplio": "amplio"` script (and suggest a devDependency install) so
+ * follow-up commands are `pnpm amplio doctor` instead of a fresh npx resolve.
+ */
+async function ensureAmplioScript(cwd: string, packageManager: string): Promise<void> {
+  const pkgPath = path.join(cwd, "package.json");
+  if (!(await pathExists(pkgPath))) {
+    return;
+  }
+
+  try {
+    const raw = await fs.readFile(pkgPath, "utf8");
+    const pkg = JSON.parse(raw) as {
+      scripts?: Record<string, string>;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+
+    const hasCliDep =
+      pkg.dependencies?.["@useamplio/cli"] !== undefined ||
+      pkg.devDependencies?.["@useamplio/cli"] !== undefined;
+
+    if (pkg.scripts?.amplio === undefined) {
+      pkg.scripts = { ...pkg.scripts, amplio: "amplio" };
+      const trailing = raw.endsWith("\n") ? "\n" : "";
+      await fs.writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}${trailing}`, "utf8");
+      console.log('  ✓ package.json ("amplio" script)');
+    }
+
+    if (!hasCliDep) {
+      const addDevFlag = packageManager === "npm" ? "--save-dev" : "-D";
+      console.log(
+        `\nTip: install the CLI once as a devDependency so \`${packageManager} amplio doctor\` skips the npx resolve:`,
+      );
+      console.log(`  ${packageManager} add ${addDevFlag} @useamplio/cli@alpha`);
+    }
+  } catch {
+    // best effort — leave package.json alone if it does not parse
+  }
+}
+
 async function resolveNextInstrumentationBase(cwd: string): Promise<"src" | ""> {
   if (
     (await pathExists(path.join(cwd, "src/app"))) ||
@@ -311,6 +400,13 @@ export async function runInit(options: InitOptions): Promise<void> {
     skipInstall: options.skipInstall,
   });
 
+  // Apply the tsconfig alias before wiring so wired imports can use ~telemetry/*.
+  if (options.paths) {
+    const config = await readAmplioConfig(options.cwd);
+    const telemetryDir = config?.telemetryDir ?? "telemetry";
+    await writeTsconfigPathsAlias(options.cwd, telemetryDir);
+  }
+
   const detected = await detectFramework(options.cwd);
   const auto = shouldAutoScaffold(options.yes);
   const hasAuth = await hasAuthDependency(options.cwd);
@@ -324,27 +420,74 @@ export async function runInit(options: InitOptions): Promise<void> {
 
   if (middlewareName) {
     await runAddMiddleware(middlewareName, { cwd: options.cwd });
-    const config = await readAmplioConfig(options.cwd);
-    const telemetryDir = config?.telemetryDir ?? "telemetry";
-    const srcLayout = (await resolveNextInstrumentationBase(options.cwd)) === "src";
-
-    if (middlewareName === "next") {
-      printNextWiringSnippet(telemetryDir, srcLayout);
-    } else if (middlewareName === "trpc") {
-      printTrpcWiringSnippet(telemetryDir, srcLayout);
-    }
   }
 
-  if (
+  const addTrpcMiddleware =
     auto &&
     middlewareName === "next" &&
-    (await hasDependency(options.cwd, "@trpc/server"))
-  ) {
+    (await hasDependency(options.cwd, "@trpc/server"));
+  if (addTrpcMiddleware) {
     await runAddMiddleware("trpc", { cwd: options.cwd });
+  }
+
+  const wiredFiles: string[] = [];
+  {
     const config = await readAmplioConfig(options.cwd);
     const telemetryDir = config?.telemetryDir ?? "telemetry";
     const srcLayout = (await resolveNextInstrumentationBase(options.cwd)) === "src";
-    printTrpcWiringSnippet(telemetryDir, srcLayout);
+    const layout = await detectT3Layout(options.cwd);
+    const wantWire = options.wire === true || auto;
+    const nextMiddlewarePresent = await pathExists(
+      path.join(options.cwd, telemetryDir, "middleware", "next.ts"),
+    );
+    const trpcMiddlewarePresent = await pathExists(
+      path.join(options.cwd, telemetryDir, "middleware", "trpc.ts"),
+    );
+
+    let routeHandled = false;
+    let trpcHandled = false;
+
+    if (wantWire && (layout.routeFile || layout.trpcFile)) {
+      console.log("\nWiring create-t3-app layout:");
+      if (layout.routeFile && nextMiddlewarePresent) {
+        const result = await wireT3RouteHandler(options.cwd, telemetryDir);
+        routeHandled = printWireResult(result, "wrapped tRPC fetch handler with withAmplio");
+        if (result.status === "wired") {
+          wiredFiles.push(result.file);
+        }
+      }
+      if (layout.trpcFile && trpcMiddlewarePresent) {
+        const result = await wireT3TrpcProcedures(options.cwd, telemetryDir);
+        trpcHandled = printWireResult(
+          result,
+          "prepended amplioTrpcMiddleware to publicProcedure/protectedProcedure",
+        );
+        if (result.status === "wired") {
+          wiredFiles.push(result.file);
+        }
+      }
+    }
+
+    if (nextMiddlewarePresent && middlewareName === "next" && !routeHandled) {
+      printNextWiringSnippet(
+        await snippetImportPath(options.cwd, telemetryDir, "next", srcLayout),
+      );
+    }
+    if (
+      trpcMiddlewarePresent &&
+      (middlewareName === "trpc" || addTrpcMiddleware) &&
+      !trpcHandled
+    ) {
+      printTrpcWiringSnippet(
+        await snippetImportPath(options.cwd, telemetryDir, "trpc", srcLayout),
+      );
+    }
+
+    if (!wantWire && (layout.routeFile || layout.trpcFile) && (nextMiddlewarePresent || trpcMiddlewarePresent)) {
+      console.log(
+        "\nDetected a create-t3-app layout — run `amplio init --wire` to wire the route handler and tRPC procedures automatically.",
+      );
+    }
   }
 
   if (eventName) {
@@ -353,17 +496,30 @@ export async function runInit(options: InitOptions): Promise<void> {
     printNoStarterEventHint();
   }
 
+  const instrumentationCreated: string[] = [];
   const isNext =
     detected === "next" || middlewareName === "next" || (await hasDependency(options.cwd, "next"));
   if (isNext) {
     const config = await readAmplioConfig(options.cwd);
     const telemetryDir = config?.telemetryDir ?? "telemetry";
     const loggerPath = path.join(options.cwd, telemetryDir, "logger.ts");
-    await scaffoldNextInstrumentation(options.cwd, telemetryDir, loggerPath);
+    const instrumentationResult = await scaffoldNextInstrumentation(
+      options.cwd,
+      telemetryDir,
+      loggerPath,
+    );
+    if (instrumentationResult === "created") {
+      const base = await resolveNextInstrumentationBase(options.cwd);
+      instrumentationCreated.push(
+        base ? `${base}/instrumentation.ts` : "instrumentation.ts",
+      );
+    }
 
     console.log("\nVerify:");
     console.log("  1. Start your dev server");
-    console.log("  2. curl any route wrapped with amplio middleware");
+    console.log(
+      "  2. curl any route wrapped with amplio middleware — confirm the port Next actually bound (it moves to 3001+ if 3000 is busy; a wrong-port curl looks identical to dropped events)",
+    );
     console.log("  3. Expect one JSON line on stdout (console sink)");
     console.log("  4. npx @useamplio/cli@alpha doctor");
 
@@ -376,15 +532,27 @@ export async function runInit(options: InitOptions): Promise<void> {
     console.log("\nNext:");
     if (detected) {
       console.log(`  amplio add middleware ${detected}`);
+      console.log("  amplio add event post.created");
     } else {
-      console.log("  amplio add middleware hono");
+      console.log("  amplio add event post.created");
+      console.log(
+        "  No framework detected — middleware available: next, hono, express, fastify, trpc",
+      );
     }
-    console.log("  amplio add event post.created");
   }
 
-  if (options.paths) {
+  await ensureAmplioScript(options.cwd, packageManager);
+
+  {
     const config = await readAmplioConfig(options.cwd);
     const telemetryDir = config?.telemetryDir ?? "telemetry";
-    await writeTsconfigPathsAlias(options.cwd, telemetryDir);
+    const formatted = await formatGeneratedFiles(options.cwd, [
+      telemetryDir,
+      ...instrumentationCreated,
+      ...wiredFiles,
+    ]);
+    if (formatted) {
+      console.log(`  ✓ formatted generated files with ${formatted}`);
+    }
   }
 }

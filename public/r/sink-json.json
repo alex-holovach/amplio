@@ -4,8 +4,9 @@
   "title": "JSON Sink",
   "description": "JSON sink that serializes wide events for streaming or files.",
   "type": "registry:lib",
+  "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio.jsonl to .gitignore. Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.9"
+    "@useamplio/amplio@^0.1.0-alpha.10"
   ],
   "files": [
     {

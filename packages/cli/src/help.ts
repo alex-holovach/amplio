@@ -35,13 +35,15 @@ Options:
   --no-typescript              Disable TypeScript defaults in amplio.json
   --middleware <name|none>     Scaffold middleware (auto-detect from package.json)
   --event <name|none>          Scaffold starter event (defaults to auth.user.signed_up when auto and an auth dependency is detected)
-  --yes                        Non-interactive: auto-scaffold detected middleware + event
+  --yes                        Non-interactive: auto-scaffold detected middleware + event (auto-wires create-t3-app layouts)
   --skip-install               Skip installing @useamplio/amplio and zod
   --paths                      Write ~telemetry/* tsconfig path alias
+  --wire                       Auto-wire create-t3-app files (route handler + tRPC procedures)
   -h, --help                   Show this help
 
-Example:
+Examples:
   amplio init --yes --service my-api
+  amplio init --wire --paths
 `);
 }
 
@@ -49,7 +51,7 @@ export function printAddHelp(): void {
   console.log(`amplio add — install a registry item into telemetry/
 
 Usage:
-  amplio add event <domain.action or domain.entity.action>
+  amplio add event <domain.action or domain.entity.action> [more names…]
   amplio add middleware <hono|express|next|fastify|trpc>
   amplio add sink <console|otlp|json>
   amplio add enricher <service-metadata|request|request-metadata>
@@ -63,6 +65,7 @@ Options:
 Examples:
   amplio add event post.created
   amplio add event auth.user.signed_up
+  amplio add event post.created comment.created vote.cast
   amplio add middleware hono
 `);
 }

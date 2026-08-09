@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@useamplio/amplio";
+import {createRequestLogger, runWithLogger, type Logger, getLogger} from "@useamplio/amplio";
 
 
 declare global {
@@ -46,5 +46,5 @@ export function amplioMiddleware() {
 }
 
 export function useRequestLogger(req: Request): Logger {
-  return req.amplio ?? useLogger();
+  return req.amplio ?? getLogger();
 }

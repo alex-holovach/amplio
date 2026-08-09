@@ -50,6 +50,10 @@ describe("runDoctor", () => {
     );
     await mkdir(path.join(cwd, "src/app"), { recursive: true });
     await runInit({ cwd, skipInstall: true, middleware: "next", event: "none" });
+    await writeFile(
+      path.join(cwd, "src/app/route.ts"),
+      'import { withAmplio } from "../../telemetry/middleware/next";\nexport const GET = withAmplio(async () => new Response("ok"));\n',
+    );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const code = await runDoctor({ cwd });
@@ -146,7 +150,7 @@ describe("runDoctor", () => {
     expect(code).toBe(1);
   });
 
-  it("warns when scaffolded middleware export is never imported", async () => {
+  it("fails when scaffolded middleware export is never imported", async () => {
     const cwd = await makeTempDir("amplio-doctor-mw-unwired-");
     await writeFile(
       path.join(cwd, "package.json"),
@@ -163,13 +167,82 @@ describe("runDoctor", () => {
     const code = await runDoctor({ cwd });
     log.mockRestore();
 
-    expect(code).toBe(0);
+    expect(code).toBe(1);
     expect(logs.join("\n")).toContain(
-      "telemetry/middleware/hono.ts scaffolded but amplioMiddleware is never imported by app code",
+      "telemetry/middleware/hono.ts scaffolded but amplioMiddleware is never imported by app code — no events will be emitted",
     );
     expect(logs.join("\n")).toContain(
       "https://github.com/alex-holovach/amplio/blob/main/ALPHA.md",
     );
+  });
+
+  it("warns when a sink file is not referenced in logger.ts", async () => {
+    const cwd = await makeTempDir("amplio-doctor-sink-unwired-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { "@useamplio/amplio": "^0.1.0-alpha.9", zod: "^3.24.0" },
+      }),
+    );
+    await writeFile(
+      path.join(cwd, "amplio.json"),
+      JSON.stringify({ telemetryDir: "telemetry", packageManager: "pnpm" }),
+    );
+    await mkdir(path.join(cwd, "telemetry/sinks"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/logger.ts"),
+      'import { init } from "@useamplio/amplio";\ninit({ service: "test", env: "test", sinks: [], enrichers: [] });\n',
+    );
+    await writeFile(
+      path.join(cwd, "telemetry/sinks/otlp.ts"),
+      "export function otlpSink() { return () => {}; }\n",
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).toContain(
+      "telemetry/sinks/otlp.ts exists but is not referenced in telemetry/logger.ts",
+    );
+    expect(logs.join("\n")).toContain("amplio add sink otlp");
+  });
+
+  it("passes the sink wiring check when logger.ts references the sink", async () => {
+    const cwd = await makeTempDir("amplio-doctor-sink-wired-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { "@useamplio/amplio": "^0.1.0-alpha.9", zod: "^3.24.0" },
+      }),
+    );
+    await writeFile(
+      path.join(cwd, "amplio.json"),
+      JSON.stringify({ telemetryDir: "telemetry", packageManager: "pnpm" }),
+    );
+    await mkdir(path.join(cwd, "telemetry/sinks"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/logger.ts"),
+      'import { init } from "@useamplio/amplio";\nimport { otlpSink } from "./sinks/otlp";\ninit({ service: "test", env: "test", sinks: [otlpSink()], enrichers: [] });\n',
+    );
+    await writeFile(
+      path.join(cwd, "telemetry/sinks/otlp.ts"),
+      "export function otlpSink() { return () => {}; }\n",
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).not.toContain("is not referenced in telemetry/logger.ts");
   });
 
   it("passes middleware wiring check when export is referenced in app code", async () => {
@@ -206,6 +279,10 @@ describe("runDoctor", () => {
       path.join(cwd, "telemetry/middleware/next.ts"),
       "export function withAmplio() {}\n",
     );
+    await writeFile(
+      path.join(cwd, "src/route.ts"),
+      'import { withAmplio } from "../telemetry/middleware/next";\nexport const GET = withAmplio;\n',
+    );
 
     const logs: string[] = [];
     const log = vi.spyOn(console, "log").mockImplementation((...args) => {
@@ -228,6 +305,10 @@ describe("runDoctor", () => {
     await writeFile(
       path.join(cwd, "telemetry/middleware/next.ts"),
       'import "../logger";\nexport function withAmplio() {}\n',
+    );
+    await writeFile(
+      path.join(cwd, "src/route.ts"),
+      'import { withAmplio } from "../telemetry/middleware/next";\nexport const GET = withAmplio;\n',
     );
 
     const logs: string[] = [];

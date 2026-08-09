@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@useamplio/amplio";
+import {createRequestLogger, runWithLogger, type Logger, getLogger} from "@useamplio/amplio";
 
 
 declare module "fastify" {
@@ -56,5 +56,5 @@ const plugin: FastifyPluginAsync = async (app) => {
 export const amplioPlugin = fp(plugin, { name: "amplio" });
 
 export function useRequestLogger(request: FastifyRequest): Logger {
-  return request.amplio ?? useLogger();
+  return request.amplio ?? getLogger();
 }

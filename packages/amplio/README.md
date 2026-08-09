@@ -48,7 +48,7 @@ createLogger()
 | `@useamplio/amplio/events` | Client-safe subpath: `defineEvent`, `createError`, and event types (no `node:async_hooks`) |
 | `createLogger(initial?)` | Wide-event builder: `.set()`, `.emit()`, `.create()`, `.event()`, `.child()` |
 | `createRequestLogger({ method, path })` | HTTP helper with `request_id` |
-| `runWithLogger` / `useLogger` | AsyncLocalStorage context (`useLogger` no-op outside ALS) |
+| `runWithLogger` / `getLogger` | AsyncLocalStorage context (`getLogger` no-op outside ALS; `useLogger` deprecated alias) |
 | `flush()` | Await pending async sink deliveries |
 | `scheduleFlush({ waitUntil? })` | Schedule `flush()` via platform `waitUntil` or Next.js `after()` |
 | `trpcErrorHttpStatus(error)` | Map tRPC error `code` strings to HTTP status (defaults 500) |
@@ -63,7 +63,7 @@ createLogger()
 - **No level methods** on wide events — use `.set()` / `.error()` / `.emit()` (plus `.create()` / `.event()` on the logger facade).
 - **Mutable `.set()`** deep-merges fields in place (`DeepPartial` on schema-bound loggers; ALS-safe); **`.emit()`** runs enrichers → validation → redaction → sampling → sinks synchronously, then seals the logger. **`.emit()`** returns the delivered record, or `null` when the event was not delivered (before `init()`, after the logger was sealed, or dropped by sampling). **`flush()`** awaits pending async sink deliveries.
 - **Soft seal:** after `.emit()`, the instance is sealed. Further `.set()` / `.error()` are no-ops; repeat `.emit()` returns `null`. Post-seal `.create()` and `.event()` return sealed no-op loggers (not `null`). Ignored calls log a dev warning (`console.warn`).
-- **`useLogger()`** returns a no-op logger outside AsyncLocalStorage (does not throw).
+- **`getLogger()`** returns a no-op logger outside AsyncLocalStorage (does not throw). **`useLogger()`** is a deprecated alias with identical behavior.
 - **Validation** soft-fails outside `NODE_ENV=test` unless `init({ strict: true })`; failed emits attach `validation.issues` and set `success: false`.
 - **`.error(err)`** on `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when `err.code` is a string or number (Node-style `ENOENT`, etc.) — plain `Error` omits `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field.
 - **Auto fields** on emit: `timestamp`, `duration_ms`, `request_id` (when set), `success` (derived from `status` or set explicitly via `.set()` / `.error()` — omitted when neither applies), `service`, `env`. Schema events set `event` and `@event` to the declared name; `@event` is canonical, `event` is a duplicate for `@`-averse sinks. Pass `init({ canonicalKeyOnly: true })` to emit only `@event`. `createRequestLogger` seeds `http.request` on both keys.
@@ -78,15 +78,22 @@ Configure sampling in `init({ sampling: { rate, keep } })`:
 
 Enrichers and redaction still run on `.emit()` even when sampling skips sink delivery. **`.emit()` returns the delivered record, or `null` when the event was not delivered** — including before `init()`, after the logger was sealed, or when sampling drops delivery.
 
+## Which entry point do I use?
+
+- **`logger`** (module-level facade) — one-shot scripts, jobs, or cron handlers where you create and emit a wide event in one place without HTTP request context.
+- **`createLogger(initial?)`** — a new named wide-event spine when you want an explicit builder (same as `logger.create()` after `init()`).
+- **`createRequestLogger({ method, path, … })`** — HTTP request spine with `request_id` and `http.*`; middleware wraps handlers with `runWithLogger(createRequestLogger(…), …)`.
+- **`getLogger()`** — ambient request logger inside middleware-established `runWithLogger` scope (e.g. tRPC procedures, route handlers). Returns a no-op outside that scope.
+
 ## Recipes
 
 ### Correlated domain event (inside a request)
 
 ```ts
-import { useLogger } from "@useamplio/amplio";
+import { getLogger } from "@useamplio/amplio";
 import { OrderPlaced } from "../events/commerce/order-placed";
 
-useLogger()
+getLogger()
   .child(OrderPlaced)
   .set({ order: { id: "ord_1" } })
   .emit();

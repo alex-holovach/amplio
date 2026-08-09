@@ -5,9 +5,9 @@ import "../logger";
 
 import {
   createRequestLogger,
+  getLogger,
   runWithLogger,
   scheduleFlush,
-  useLogger,
   type Logger,
 } from "@useamplio/amplio";
 import type { NextRequest } from "next/server";
@@ -16,11 +16,12 @@ export interface WithAmplioOptions {
   waitUntil?: (promise: Promise<unknown>) => void;
 }
 
-export function withAmplio<T extends (request: NextRequest, ...args: any[]) => Promise<Response>>(
-  handler: T,
-  options?: WithAmplioOptions,
-): T {
-  const wrapped = (async (request: NextRequest, ...rest: any[]) => {
+// The `never[]` rest constraint accepts any handler shape (route context params
+// included) without resorting to `any`, which trips lint/suspicious/noExplicitAny.
+export function withAmplio<
+  T extends (request: NextRequest, ...args: never[]) => Promise<Response>,
+>(handler: T, options?: WithAmplioOptions): T {
+  const wrapped = (async (request: NextRequest, ...rest: never[]) => {
     const requestLogger = createRequestLogger({
       method: request.method,
       path: request.nextUrl.pathname,
@@ -57,5 +58,5 @@ export function withAmplio<T extends (request: NextRequest, ...args: any[]) => P
 }
 
 export function useRequestLogger(): Logger {
-  return useLogger();
+  return getLogger();
 }

@@ -41,6 +41,7 @@ function parseCliArgs() {
         yes: { type: "boolean", default: false },
         "skip-install": { type: "boolean", default: false },
         paths: { type: "boolean", default: false },
+        wire: { type: "boolean", default: false },
         fix: { type: "boolean", default: false },
         strict: { type: "boolean", default: false },
         force: { type: "boolean", default: false },
@@ -116,6 +117,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  if (values.wire && command !== "init") {
+    console.error("error: --wire is only valid with init");
+    process.exit(1);
+  }
+
   if (command !== "init") {
     if (values.service?.trim()) {
       console.error("error: --service is only valid with init");
@@ -175,6 +181,7 @@ async function main(): Promise<void> {
         ...(values.yes ? { yes: true } : {}),
         ...(values["skip-install"] ? { skipInstall: true } : {}),
         ...(values.paths ? { paths: true } : {}),
+        ...(values.wire ? { wire: true } : {}),
       });
       return;
     }
@@ -191,7 +198,10 @@ async function main(): Promise<void> {
 
     if (command === "add") {
       const kind = positionals[1]?.trim();
-      const id = positionals[2]?.trim();
+      const ids = positionals
+        .slice(2)
+        .map((positional) => positional.trim())
+        .filter(Boolean);
 
       if (!kind) {
         throw new Error(
@@ -205,7 +215,7 @@ async function main(): Promise<void> {
         );
       }
 
-      if (!id) {
+      if (ids.length === 0) {
         const examples: Record<(typeof VALID_ADD_KINDS)[number], string> = {
           event: "amplio add event post.created",
           middleware: "amplio add middleware hono",
@@ -218,23 +228,26 @@ async function main(): Promise<void> {
 
       const options = { cwd, force: values.force ?? false };
 
-      switch (kind as (typeof VALID_ADD_KINDS)[number]) {
-        case "event":
-          await runAddEvent(id, options);
-          return;
-        case "middleware":
-          await runAddMiddleware(id, options);
-          return;
-        case "sink":
-          await runAddSink(id, options);
-          return;
-        case "enricher":
-          await runAddEnricher(id, options);
-          return;
-        case "integration":
-          await runAddIntegration(id, options);
-          return;
+      for (const id of ids) {
+        switch (kind as (typeof VALID_ADD_KINDS)[number]) {
+          case "event":
+            await runAddEvent(id, options);
+            break;
+          case "middleware":
+            await runAddMiddleware(id, options);
+            break;
+          case "sink":
+            await runAddSink(id, options);
+            break;
+          case "enricher":
+            await runAddEnricher(id, options);
+            break;
+          case "integration":
+            await runAddIntegration(id, options);
+            break;
+        }
       }
+      return;
     }
 
     if (command === "doctor") {

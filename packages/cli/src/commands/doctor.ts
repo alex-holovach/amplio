@@ -460,11 +460,34 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
       if (!referenced) {
         const relPath = path.relative(cwd, path.join(middlewareDir, entry.name)).replace(/\\/g, "/");
         checks.push({
-          status: "warning",
-          message: `${relPath} scaffolded but ${exportName} is never imported by app code`,
-          fix: `Wire the middleware in your app entry or route handlers — see ${ALPHA_MD_URL} for framework-specific snippets.`,
+          status: "failed",
+          message: `${relPath} scaffolded but ${exportName} is never imported by app code — no events will be emitted`,
+          fix: `Wire the middleware in your app entry or route handlers (create-t3-app: run \`amplio init --wire\`) — see ${ALPHA_MD_URL} for framework-specific snippets.`,
         });
+        hardFailures++;
       }
+    }
+  }
+
+  const sinksDir = paths.sinks;
+  if ((await pathExists(sinksDir)) && (await pathExists(paths.logger))) {
+    const loggerSource = await fs.readFile(paths.logger, "utf8");
+    const sinkEntries = await fs.readdir(sinksDir, { withFileTypes: true });
+    for (const entry of sinkEntries) {
+      if (!entry.isFile() || !entry.name.endsWith(".ts")) {
+        continue;
+      }
+      const sinkId = entry.name.replace(/\.ts$/, "");
+      if (loggerSource.includes(`sinks/${sinkId}`)) {
+        continue;
+      }
+      const relPath = path.relative(cwd, path.join(sinksDir, entry.name)).replace(/\\/g, "/");
+      const relLogger = path.relative(cwd, paths.logger).replace(/\\/g, "/");
+      checks.push({
+        status: "warning",
+        message: `${relPath} exists but is not referenced in ${relLogger} — events will not reach this sink`,
+        fix: `Run: amplio add sink ${sinkId} (auto-wires logger.ts), or import it and add it to the init() sinks array.`,
+      });
     }
   }
 

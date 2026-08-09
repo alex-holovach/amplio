@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler, Next } from "hono";
-import { createRequestLogger, runWithLogger, useLogger, type Logger } from "@useamplio/amplio";
+import { createRequestLogger, getLogger, runWithLogger, type Logger } from "@useamplio/amplio";
 
 const AMPLIO_KEY = "amplio";
 
@@ -38,5 +38,5 @@ export function amplioMiddleware(): MiddlewareHandler {
 }
 
 export function useRequestLogger(c: Context): Logger {
-  return (c.get(AMPLIO_KEY) as Logger | undefined) ?? useLogger();
+  return (c.get(AMPLIO_KEY) as Logger | undefined) ?? getLogger();
 }

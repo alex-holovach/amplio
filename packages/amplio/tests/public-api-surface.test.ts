@@ -22,6 +22,7 @@ describe("public API surface", () => {
       "createLogger",
       "createRequestLogger",
       "runWithLogger",
+      "getLogger",
       "useLogger",
       "hasAmbientLogger",
       "createError",

@@ -6,6 +6,7 @@ import {
   init,
   resetConfigForTests,
   resetEmitBeforeInitWarningForTests,
+  resetUseLoggerDeprecationWarningForTests,
   resetUseLoggerOutsideScopeWarningForTests,
   runWithLogger,
   useLogger,
@@ -16,8 +17,10 @@ import { getContextNoopLogger } from "../src/noop-logger.js";
 
 const EMIT_BEFORE_INIT_WARNING =
   '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See https://github.com/alex-holovach/amplio/blob/main/ALPHA.md.';
-const USE_LOGGER_OUTSIDE_SCOPE_WARNING =
-  "[amplio] useLogger() called outside runWithLogger(); fields will be dropped. Establish request scope with middleware (runWithLogger), or use the logger facade for one-shot scripts.";
+const USE_LOGGER_DEPRECATED_WARNING =
+  "[amplio] useLogger() is deprecated and will be removed before 1.0 — use getLogger() (same behavior; renamed because lint tools mistake useLogger for a React hook).";
+const GET_LOGGER_OUTSIDE_SCOPE_WARNING =
+  "[amplio] getLogger() called outside runWithLogger(); fields will be dropped. Establish request scope with middleware (runWithLogger), or use the logger facade for one-shot scripts.";
 
 const capture = (): { records: LogRecord[]; sink: Sink } => {
   const records: LogRecord[] = [];
@@ -33,6 +36,7 @@ beforeEach(() => {
   resetConfigForTests();
   resetEmitBeforeInitWarningForTests();
   resetUseLoggerOutsideScopeWarningForTests();
+  resetUseLoggerDeprecationWarningForTests();
 });
 
 describe("dev warnings", () => {
@@ -57,8 +61,9 @@ describe("dev warnings", () => {
 
     expect(first).toBe(getContextNoopLogger());
     expect(second).toBe(getContextNoopLogger());
-    expect(warn).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalledWith(USE_LOGGER_OUTSIDE_SCOPE_WARNING);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenNthCalledWith(1, USE_LOGGER_DEPRECATED_WARNING);
+    expect(warn).toHaveBeenNthCalledWith(2, GET_LOGGER_OUTSIDE_SCOPE_WARNING);
 
     warn.mockRestore();
   });

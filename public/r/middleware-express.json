@@ -5,14 +5,14 @@
   "description": "Express middleware that attaches request-scoped amplio context.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.9"
+    "@useamplio/amplio@^0.1.0-alpha.10"
   ],
   "files": [
     {
       "path": "registry/middleware/express.ts",
       "target": "~/telemetry/middleware/express.ts",
       "type": "registry:lib",
-      "content": "import type { NextFunction, Request, Response } from \"express\";\nimport { createRequestLogger, runWithLogger, type Logger, useLogger } from \"@useamplio/amplio\";\n\ndeclare global {\n  namespace Express {\n    interface Request {\n      amplio?: Logger;\n    }\n  }\n}\n\nexport function amplioMiddleware() {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const requestLogger = createRequestLogger({\n      method: req.method,\n      path: req.path,\n    }).set({\n      http: {\n        route: req.route?.path,\n        ip: req.ip,\n        user_agent: req.get(\"user-agent\") ?? undefined,\n      },\n    });\n\n    req.amplio = requestLogger;\n\n    runWithLogger(requestLogger, () => {\n      res.on(\"finish\", () => {\n        if (requestLogger.sealed) {\n          return;\n        }\n        requestLogger.set({\n          http: { status: res.statusCode },\n          status: res.statusCode,\n        });\n        requestLogger.emit();\n      });\n\n      next();\n    });\n  };\n}\n\nexport function useRequestLogger(req: Request): Logger {\n  return req.amplio ?? useLogger();\n}\n"
+      "content": "import type { NextFunction, Request, Response } from \"express\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\ndeclare global {\n  namespace Express {\n    interface Request {\n      amplio?: Logger;\n    }\n  }\n}\n\nexport function amplioMiddleware() {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const requestLogger = createRequestLogger({\n      method: req.method,\n      path: req.path,\n    }).set({\n      http: {\n        route: req.route?.path,\n        ip: req.ip,\n        user_agent: req.get(\"user-agent\") ?? undefined,\n      },\n    });\n\n    req.amplio = requestLogger;\n\n    runWithLogger(requestLogger, () => {\n      res.on(\"finish\", () => {\n        if (requestLogger.sealed) {\n          return;\n        }\n        requestLogger.set({\n          http: { status: res.statusCode },\n          status: res.statusCode,\n        });\n        requestLogger.emit();\n      });\n\n      next();\n    });\n  };\n}\n\nexport function useRequestLogger(req: Request): Logger {\n  return req.amplio ?? getLogger();\n}\n"
     }
   ]
 }

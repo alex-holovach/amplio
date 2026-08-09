@@ -134,36 +134,49 @@ function appendSinkToArray(source: string, meta: SinkMeta): string {
   return `${source.slice(0, arrayStart)}${nextArrayBody}${source.slice(arrayEnd)}`;
 }
 
+export interface LoggerSinkUpdate {
+  /** Diff-style description of what was inserted into logger.ts. */
+  insertedLines: string[];
+}
+
 export async function updateLoggerWithSink(
   loggerPath: string,
   sinkId: string,
-): Promise<boolean> {
+): Promise<LoggerSinkUpdate | null> {
   const meta = SINK_META[sinkId];
   if (!meta) {
-    return false;
+    return null;
   }
 
   if (!(await pathExists(loggerPath))) {
-    return false;
+    return null;
   }
 
   const source = await fs.readFile(loggerPath, "utf8");
 
   if (!hasInitAndSinks(source)) {
-    return false;
+    return null;
   }
 
   if (sinkAlreadyInSinksArray(source, meta)) {
-    return false;
+    return null;
   }
 
+  const insertedLines: string[] = [];
   const withImport = insertImport(source, meta);
+  if (withImport !== source) {
+    insertedLines.push(`+ import { ${meta.exportName} } from "${meta.importPath}";`);
+  }
   const updated = appendSinkToArray(withImport, meta);
 
   if (updated === source) {
-    return false;
+    return null;
+  }
+
+  if (updated !== withImport) {
+    insertedLines.push(`+ ${meta.sinkExpression} appended to init() sinks array`);
   }
 
   await fs.writeFile(loggerPath, updated, "utf8");
-  return true;
+  return { insertedLines };
 }

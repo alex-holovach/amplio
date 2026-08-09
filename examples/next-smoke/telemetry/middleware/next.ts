@@ -7,7 +7,7 @@ import {
   createRequestLogger,
   flush,
   runWithLogger,
-  useLogger,
+  getLogger,
   type Logger,
 } from "@useamplio/amplio";
 import type { NextRequest, NextResponse } from "next/server";
@@ -89,5 +89,5 @@ export function withAmplio<T extends (request: NextRequest, ...args: never[]) =>
 }
 
 export function useRequestLogger(): Logger {
-  return useLogger();
+  return getLogger();
 }

@@ -44,7 +44,7 @@ Only these symbols are public from `@useamplio/amplio`:
 | `init` | Configure global logger (sinks, enrichers, defaults) — called once from `telemetry/logger.ts` |
 | `logger.event` | Start or bind a wide event by schema |
 | `logger.create` | Create a standalone wide-event scope (jobs, scripts, CLI runs) |
-| `useLogger` | Retrieve request-scoped logger from framework context (via middleware); returns a no-op logger outside ALS (does not throw) |
+| `getLogger` | Retrieve request-scoped logger from framework context (via middleware); returns a no-op logger outside ALS (does not throw). `useLogger` is a deprecated alias (renamed in alpha.10 — lint tools mistook `use*` for a React hook) |
 | `.set()` | Merge nested context into the active wide event (`DeepPartial` on schema-bound loggers) |
 | `.error(err, ctx?)` | Record a structured error (`success: false`); does not emit — call `.emit()` after |
 | `.emit()` | Finalize, validate, redact, and drain sinks synchronously; seals the instance |
@@ -108,7 +108,7 @@ When building features, prefer this order:
 2. `defineEvent` + typed `.set()` inference
 3. CLI `init` + `add event`
 4. Registry build + one reference event item
-5. One middleware (Hono) + `useLogger`
+5. One middleware (Hono) + `getLogger`
 6. One sink (console JSON) + one enricher
 
 Sink and enricher failures are isolated: a throwing or non-object enricher is skipped (dev warn); later enrichers and sinks still run.

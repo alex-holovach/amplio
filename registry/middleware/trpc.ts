@@ -13,11 +13,11 @@ import "../logger";
 import {
   createLogger,
   createRequestId,
+  getLogger,
   hasAmbientLogger,
   runWithLogger,
   scheduleFlush,
   trpcErrorHttpStatus,
-  useLogger,
   type Logger,
 } from "@useamplio/amplio";
 
@@ -48,28 +48,25 @@ function annotateTrpcProcedure(
     return;
   }
 
+  // Count every invocation — a batch of two calls to the SAME procedure is two
+  // units of work and must not be deduplicated away.
   const entry: TrpcProcedureRef = { path, type };
   const seen = batchedProcedures.get(logger) ?? [];
+  const updated = [...seen, entry];
+  batchedProcedures.set(logger, updated);
 
-  if (seen.length === 0) {
-    batchedProcedures.set(logger, [entry]);
+  if (updated.length === 1) {
     logger.set({ trpc: { path, type } });
     return;
   }
 
-  const isDuplicate = seen.some((item) => item.path === path && item.type === type);
-  if (isDuplicate) {
-    return;
-  }
-
-  const updated = [...seen, entry];
-  batchedProcedures.set(logger, updated);
-  const first = seen[0]!;
+  const first = updated[0] ?? entry;
   logger.set({
     trpc: {
       path: first.path,
       type: first.type,
       batched: true,
+      batch_size: updated.length,
       procedures: updated.map((item) => `${item.type} ${item.path}`),
     },
   });
@@ -128,7 +125,7 @@ export function amplioTrpcMiddleware() {
     const { path, type, next } = opts;
 
     if (hasAmbientLogger()) {
-      const logger = useLogger();
+      const logger = getLogger();
       annotateTrpcProcedure(logger, path, type);
 
       try {
