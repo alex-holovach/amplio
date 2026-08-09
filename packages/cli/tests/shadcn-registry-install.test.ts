@@ -56,7 +56,7 @@ describe("shadcn-compatible registry install", () => {
     });
   });
 
-  it("installs @amplio/event-auth-user-signed-up into telemetry/ only", async () => {
+  it("installs @useamplio/event-auth-user-signed-up into telemetry/ only", async () => {
     const itemPath = path.join(repoRoot, "public/r/event-auth-user-signed-up.json");
     const item = JSON.parse(await readFile(itemPath, "utf8")) as RegistryItem;
 

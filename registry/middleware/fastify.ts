@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@amplio/core";
+import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@useamplio/core";
 
 
 declare module "fastify" {

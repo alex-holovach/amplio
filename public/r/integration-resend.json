@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@amplio/core",
+    "@useamplio/core",
     "resend"
   ],
   "registryDependencies": [

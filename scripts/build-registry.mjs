@@ -62,7 +62,7 @@ async function buildItem(item) {
     title: item.title ?? titleFromName(item.name),
     description: item.description ?? `amplio registry item: ${item.name}`,
     type: "registry:lib",
-    dependencies: item.dependencies ?? ["@amplio/core"],
+    dependencies: item.dependencies ?? ["@useamplio/core"],
     ...(item.devDependencies ? { devDependencies: item.devDependencies } : {}),
     ...(item.registryDependencies ? { registryDependencies: item.registryDependencies } : {}),
     files: [

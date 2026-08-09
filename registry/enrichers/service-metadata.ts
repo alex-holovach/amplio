@@ -1,4 +1,4 @@
-import type { LogRecord } from "@amplio/core";
+import type { LogRecord } from "@useamplio/core";
 
 function envOrUndefined(key: string): string | undefined {
   const value = process.env[key];

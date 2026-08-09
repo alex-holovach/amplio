@@ -1,11 +1,12 @@
 {
-  "name": "@amplio/core",
-  "version": "0.1.0",
+  "name": "@useamplio/core",
+  "version": "0.1.0-alpha.1",
   "description": "Tiny schema-first wide-event telemetry runtime",
   "type": "module",
   "license": "MIT",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "repository": {
     "type": "git",

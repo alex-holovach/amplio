@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler, Next } from "hono";
-import { createRequestLogger, runWithLogger, useLogger, type Logger } from "@amplio/core";
+import { createRequestLogger, runWithLogger, useLogger, type Logger } from "@useamplio/core";
 
 const AMPLIO_KEY = "amplio";
 

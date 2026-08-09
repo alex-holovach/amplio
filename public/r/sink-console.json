@@ -5,14 +5,14 @@
   "description": "Console sink that prints wide events as JSON.",
   "type": "registry:lib",
   "dependencies": [
-    "@amplio/core"
+    "@useamplio/core"
   ],
   "files": [
     {
       "path": "registry/sinks/console.ts",
       "target": "~/sinks/console.ts",
       "type": "registry:lib",
-      "content": "import type { LogRecord, Sink } from \"@amplio/core\";\n\nexport const consoleSink: Sink = (record: LogRecord) => {\n  console.log(JSON.stringify(record));\n};\n"
+      "content": "import type { LogRecord, Sink } from \"@useamplio/core\";\n\nexport const consoleSink: Sink = (record: LogRecord) => {\n  console.log(JSON.stringify(record));\n};\n"
     }
   ]
 }

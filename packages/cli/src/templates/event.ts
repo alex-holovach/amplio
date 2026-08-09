@@ -4,7 +4,7 @@ export function renderEventTemplate(eventName: string, exportName?: string): str
   const exportSymbol = exportName ?? eventNameToExport(eventName);
   const [domain] = eventName.split(".");
 
-  return `import { defineEvent } from "@amplio/core";
+  return `import { defineEvent } from "@useamplio/core";
 import { z } from "zod";
 
 export const ${exportSymbol} = defineEvent(
@@ -22,7 +22,7 @@ export const ${exportSymbol} = defineEvent(
 }
 
 export function renderAuthUserSignedUpEvent(): string {
-  return `import { defineEvent } from "@amplio/core";
+  return `import { defineEvent } from "@useamplio/core";
 import { z } from "zod";
 
 export const AuthUserSignedUp = defineEvent(

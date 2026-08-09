@@ -132,13 +132,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--service` is trimmed (whitespace-only → `my-app`).
 - `--package-manager` is trimmed and case-insensitive (whitespace-only → default).
 - Hosted shadcn registry URL is still TODO (local `public/r/` and bundled CLI registry work today).
-- Scoped packages (`@amplio/core`, `@amplio/cli`) set `publishConfig.access=public` for npm publish.
+- Scoped packages (`@useamplio/core`, `@useamplio/cli`) set `publishConfig.access=public` for npm publish.
 - CLI registry copy (`packages/cli/scripts/copy-registry.mjs`) uses a file lock to avoid concurrent build races.
 - Local full check: `pnpm run ci` (not `pnpm ci` — that is pnpm's install builtin).
 - GitHub Actions CI runs `pnpm run ci` as a single step (same bundle as local).
 - `amplio init --no-typescript` works (CLI `parseArgs` uses `allowNegative`) and writes `typescript: false`.
 - `amplio init --package-manager` rejects unknown values (pnpm|npm|yarn|bun only).
-- `@amplio/core` `peerDependencies.zod` is `"^3.0.0 || ^4.0.0"` (tested).
+- `@useamplio/core` `peerDependencies.zod` is `"^3.0.0 || ^4.0.0"` (tested).
 - Invalid event names are rejected (leading/trailing dots, uppercase, single segment, double dots).
 - `amplio add` works without prior `init` for event/middleware/sink/enricher/integration.
 - `amplio init --cwd` creates missing directories (`mkdir -p`).
@@ -161,7 +161,7 @@ Initial publish-ready snapshot of the amplio monorepo.
 
 ### Added
 
-- **`@amplio/core`** — schema-first wide-event runtime: `defineEvent`, `init`, `logger.event` / `logger.create`, `useLogger`, sampling, and redaction. Packaged as ESM with a frozen public API and optional Zod peer dependency.
-- **`@amplio/cli`** — `amplio init`, `amplio add`, and `amplio list` for scaffolding typed telemetry into `telemetry/`. Bundles the registry at build time (`registry/` copied into the published package).
+- **`@useamplio/core`** — schema-first wide-event runtime: `defineEvent`, `init`, `logger.event` / `logger.create`, `useLogger`, sampling, and redaction. Packaged as ESM with a frozen public API and optional Zod peer dependency.
+- **`@useamplio/cli`** — `amplio init`, `amplio add`, and `amplio list` for scaffolding typed telemetry into `telemetry/`. Bundles the registry at build time (`registry/` copied into the published package).
 - **Registry** — shadcn-compatible items (events, middleware, sinks, enrichers, integrations) declared in `registry/registry.manifest.json` and built to `public/r/*.json`.
 - **Examples** — runnable smoke apps for Hono, Express, Fastify, Next.js, and a standalone script under `examples/`.

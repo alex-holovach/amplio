@@ -19,36 +19,36 @@ function readPackageJson(relativePath: string): PackageJson {
 }
 
 describe("publish config", () => {
-  it("@amplio/core has publishConfig.access === \"public\"", () => {
+  it("@useamplio/core has publishConfig.access === \"public\"", () => {
     const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@amplio/core");
+    expect(pkg.name).toBe("@useamplio/core");
     expect(pkg.publishConfig?.access).toBe("public");
   });
 
-  it("@amplio/cli has publishConfig.access === \"public\"", () => {
+  it("@useamplio/cli has publishConfig.access === \"public\"", () => {
     const pkg = readPackageJson("packages/cli/package.json");
-    expect(pkg.name).toBe("@amplio/cli");
+    expect(pkg.name).toBe("@useamplio/cli");
     expect(pkg.publishConfig?.access).toBe("public");
   });
 
-  it("@amplio/core and @amplio/cli require Node >=20", () => {
+  it("@useamplio/core and @useamplio/cli require Node >=20", () => {
     const core = readPackageJson("packages/core/package.json");
     const cli = readPackageJson("packages/cli/package.json");
-    expect(core.name).toBe("@amplio/core");
-    expect(cli.name).toBe("@amplio/cli");
+    expect(core.name).toBe("@useamplio/core");
+    expect(cli.name).toBe("@useamplio/cli");
     expect(core.engines?.node).toBe(">=20");
     expect(cli.engines?.node).toBe(">=20");
   });
 
-  it('@amplio/core peerDependencies.zod === "^3.0.0 || ^4.0.0"', () => {
+  it('@useamplio/core peerDependencies.zod === "^3.0.0 || ^4.0.0"', () => {
     const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@amplio/core");
+    expect(pkg.name).toBe("@useamplio/core");
     expect(pkg.peerDependencies?.zod).toBe("^3.0.0 || ^4.0.0");
   });
 
-  it("@amplio/core peerDependenciesMeta.zod.optional === true", () => {
+  it("@useamplio/core peerDependenciesMeta.zod.optional === true", () => {
     const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@amplio/core");
+    expect(pkg.name).toBe("@useamplio/core");
     expect(pkg.peerDependenciesMeta?.zod?.optional).toBe(true);
   });
 });

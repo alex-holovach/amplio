@@ -9,7 +9,7 @@
       "target": "telemetry/events/auth/user-signed-up.ts",
       "dependencies": [
         "zod",
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -19,7 +19,7 @@
       "target": "telemetry/events/auth/user-signed-in.ts",
       "dependencies": [
         "zod",
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -29,7 +29,7 @@
       "target": "telemetry/events/email/email-sent.ts",
       "dependencies": [
         "zod",
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -39,7 +39,7 @@
       "target": "telemetry/events/payment/order-paid.ts",
       "dependencies": [
         "zod",
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -48,7 +48,7 @@
       "source": "middleware/hono.ts",
       "target": "telemetry/middleware/hono.ts",
       "dependencies": [
-        "@amplio/core"
+        "@useamplio/core"
       ],
       "devDependencies": [
         "hono"
@@ -60,7 +60,7 @@
       "source": "middleware/express.ts",
       "target": "telemetry/middleware/express.ts",
       "dependencies": [
-        "@amplio/core"
+        "@useamplio/core"
       ],
       "devDependencies": [
         "@types/express",
@@ -73,7 +73,7 @@
       "source": "middleware/next.ts",
       "target": "telemetry/middleware/next.ts",
       "dependencies": [
-        "@amplio/core"
+        "@useamplio/core"
       ],
       "devDependencies": [
         "next"
@@ -85,7 +85,7 @@
       "source": "middleware/fastify.ts",
       "target": "telemetry/middleware/fastify.ts",
       "dependencies": [
-        "@amplio/core",
+        "@useamplio/core",
         "fastify-plugin"
       ],
       "devDependencies": [
@@ -98,7 +98,7 @@
       "source": "sinks/console.ts",
       "target": "telemetry/sinks/console.ts",
       "dependencies": [
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -107,7 +107,7 @@
       "source": "sinks/json.ts",
       "target": "telemetry/sinks/json.ts",
       "dependencies": [
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -116,7 +116,7 @@
       "source": "sinks/otlp.ts",
       "target": "telemetry/sinks/otlp.ts",
       "dependencies": [
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -125,7 +125,7 @@
       "source": "enrichers/service-metadata.ts",
       "target": "telemetry/enrichers/service-metadata.ts",
       "dependencies": [
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -134,7 +134,7 @@
       "source": "enrichers/request-metadata.ts",
       "target": "telemetry/enrichers/request-metadata.ts",
       "dependencies": [
-        "@amplio/core"
+        "@useamplio/core"
       ]
     },
     {
@@ -144,7 +144,7 @@
       "target": "telemetry/integrations/better-auth.ts",
       "dependencies": [
         "zod",
-        "@amplio/core",
+        "@useamplio/core",
         "better-auth"
       ],
       "registryDependencies": [
@@ -159,7 +159,7 @@
       "target": "telemetry/integrations/clerk.ts",
       "dependencies": [
         "zod",
-        "@amplio/core",
+        "@useamplio/core",
         "@clerk/backend"
       ],
       "registryDependencies": [
@@ -174,7 +174,7 @@
       "target": "telemetry/integrations/resend.ts",
       "dependencies": [
         "zod",
-        "@amplio/core",
+        "@useamplio/core",
         "resend"
       ],
       "registryDependencies": [
@@ -188,7 +188,7 @@
       "target": "telemetry/integrations/polar.ts",
       "dependencies": [
         "zod",
-        "@amplio/core",
+        "@useamplio/core",
         "@polar-sh/sdk"
       ],
       "registryDependencies": [

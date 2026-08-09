@@ -1,6 +1,6 @@
 # fastify-smoke
 
-Minimal Fastify app using the registry `fastify` middleware pattern with `@amplio/core`.
+Minimal Fastify app using the registry `fastify` middleware pattern with `@useamplio/core`.
 
 ## Run
 
@@ -9,7 +9,7 @@ From the monorepo root:
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @amplio/example-fastify-smoke dev
+pnpm --filter @useamplio/example-fastify-smoke dev
 ```
 
 Try it:
@@ -23,7 +23,7 @@ curl http://127.0.0.1:3002/health
 ## Smoke
 
 ```bash
-pnpm --filter @amplio/example-fastify-smoke smoke
+pnpm --filter @useamplio/example-fastify-smoke smoke
 ```
 
 Starts the app, hits `GET /health`, asserts one JSON wide event with nested `http` and status 200.

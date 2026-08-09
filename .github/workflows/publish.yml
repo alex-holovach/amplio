@@ -1,0 +1,67 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: CI
+        run: pnpm run ci
+
+      - name: Resolve dist-tag
+        id: dist-tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "$version" == *-* ]]; then
+            tag="${version#*-}"
+            tag="${tag%%.*}"
+          else
+            tag="latest"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::error::NODE_AUTH_TOKEN is empty — set NPM_TOKEN on the npm-publish environment"
+            exit 1
+          fi
+
+          npmrc="${RUNNER_TEMP}/.npmrc"
+          umask 077
+          printf '%s\n' "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > "$npmrc"
+          export NPM_CONFIG_USERCONFIG="$npmrc"
+          export NPM_CONFIG_PROVENANCE=true
+
+          tag="${{ steps.dist-tag.outputs.tag }}"
+          pnpm --filter @useamplio/core publish --access public --tag "$tag" --no-git-checks
+          pnpm --filter @useamplio/cli publish --access public --tag "$tag" --no-git-checks
+
+          shred -u "$npmrc" 2>/dev/null || rm -f "$npmrc"

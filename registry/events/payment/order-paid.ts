@@ -1,4 +1,4 @@
-import { defineEvent } from "@amplio/core";
+import { defineEvent } from "@useamplio/core";
 import { z } from "zod";
 
 export const PaymentOrderPaid = defineEvent(

@@ -6,8 +6,8 @@ Technical specification and acceptance criteria for **amplio**.
 
 amplio provides:
 
-1. **`@amplio/core`** — immutable runtime for schema-first wide events.
-2. **`@amplio/cli`** — project init and registry-driven `add`.
+1. **`@useamplio/core`** — immutable runtime for schema-first wide events.
+2. **`@useamplio/cli`** — project init and registry-driven `add`.
 3. **`registry/`** — shadcn-compatible item definitions.
 4. **User-owned `telemetry/`** — events, sinks, enrichers, middleware, integrations.
 
@@ -34,8 +34,8 @@ amplio provides:
 ### 3.1 Monorepo
 
 ```
-packages/core/       → @amplio/core
-packages/cli/        → @amplio/cli
+packages/core/       → @useamplio/core
+packages/cli/        → @useamplio/cli
 registry/            → item sources + built manifest
 examples/
   hono/              → HTTP middleware reference
@@ -66,7 +66,7 @@ telemetry/
 ### 4.1 `defineEvent`
 
 ```typescript
-import { defineEvent } from "@amplio/core";
+import { defineEvent } from "@useamplio/core";
 import { z } from "zod";
 
 export const AuthUserSignedUp = defineEvent(
@@ -94,7 +94,7 @@ export const AuthUserSignedUp = defineEvent(
 
 ```typescript
 // telemetry/logger.ts
-import { init } from "@amplio/core";
+import { init } from "@useamplio/core";
 import { consoleJsonSink } from "./sinks/console-json";
 import { serviceMetadata } from "./enrichers/service-metadata";
 
@@ -143,7 +143,7 @@ ev.emit();
 ### 4.5 `useLogger`
 
 ```typescript
-import { useLogger } from "@amplio/core";
+import { useLogger } from "@useamplio/core";
 
 export async function handler(c: Context) {
   const log = useLogger();
@@ -208,7 +208,7 @@ Explicit `success` wins over `status` derivation (ignore `status` when `success`
 | Event name | `domain.entity.action` | `billing.invoice.paid` |
 | File | kebab-case | `billing-invoice-paid.ts` |
 | Export | PascalCase matching semantic | `BillingInvoicePaid` |
-| Registry id | `@amplio/event-<kebab-full-name>` | `@amplio/event-billing-invoice-paid` |
+| Registry id | `@useamplio/event-<kebab-full-name>` | `@useamplio/event-billing-invoice-paid` |
 
 CLI `add event billing.invoice.paid` → `telemetry/events/billing/invoice-paid.ts` (+ barrels).
 
@@ -270,7 +270,7 @@ Built output published to `registry/` as static JSON for CDN or git raw hosting.
 - On response `finish` / `error`: `await log.emit()`.
 - Export factory `amplioMiddleware()` and typed `useLogger(c)`.
 
-Auto-emit is middleware responsibility, not `@amplio/core` magic.
+Auto-emit is middleware responsibility, not `@useamplio/core` magic.
 
 Next.js middleware (`registry/middleware/next.ts`): wraps handlers with AsyncLocalStorage via `runWithLogger`, auto-emits on response, and schedules `flush()` via Next.js `after`, optional `waitUntil`, or a fire-and-forget fallback.
 
@@ -308,7 +308,7 @@ JSON file sink: `AMPLIO_JSON_SINK_PATH` empty or whitespace-only is treated as u
 4. **Stable event names** — `@event` field always set from `defineEvent.name`.
 5. **One emit per scope** — sealed loggers prevent duplicate request events.
 
-## 11. `@amplio/core` internals (non-public)
+## 11. `@useamplio/core` internals (non-public)
 
 May include: ALS store, merge util, validate adapter, seal flag, dev warnings.
 
@@ -362,7 +362,7 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 ### AC-2 Core API surface
 
-- [x] `@amplio/core` exports a frozen public surface (`defineEvent`, `init`, `logger`/`createLogger`, `useLogger`/`runWithLogger`, errors, types) — verified by tests.
+- [x] `@useamplio/core` exports a frozen public surface (`defineEvent`, `init`, `logger`/`createLogger`, `useLogger`/`runWithLogger`, errors, types) — verified by tests.
 - [x] `init()` returns `logger` with `.event()` and `.create()`.
 - [x] Wide event instances expose `.set()`, `.error()`, and `.emit()` (no level methods like `.info()`).
 - [x] Public API documented in package README and matches this spec.
@@ -414,7 +414,7 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 ### AC-8 Registry
 
 - [x] `pnpm registry:build` emits shadcn-compatible JSON.
-- [x] At least one event item installable via `shadcn add @amplio/event-auth-user-signed-up` (shadcn-compatible `public/r` install proven in tests).
+- [x] At least one event item installable via `shadcn add @useamplio/event-auth-user-signed-up` (shadcn-compatible `public/r` install proven in tests).
 - [x] Registry item lands files only under `telemetry/` (`~/…` targets).
 
 ### AC-9 Middleware (Hono example)
@@ -437,14 +437,14 @@ Standalone `logger.create()` without schema uses `init` default context type or 
 
 ### AC-12 Performance & size
 
-- [x] `pnpm size` reports `@amplio/core` ≤ 8 KB gzip.
+- [x] `pnpm size` reports `@useamplio/core` ≤ 8 KB gzip.
 - [x] Benchmark documents `set` + `emit` median & p99 for 1 KB payload (`pnpm bench`).
 - [x] Core package ships with zero runtime dependencies.
 
 ### AC-13 Differentiation
 
 - [x] README states open-code + in-repo schema vs opaque npm runtime.
-- [x] User can delete `@amplio/cli` after init and keep editing `telemetry/` with only `@amplio/core` installed (documented in README).
+- [x] User can delete `@useamplio/cli` after init and keep editing `telemetry/` with only `@useamplio/core` installed (documented in README).
 
 ### AC-14 Tests
 

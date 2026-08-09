@@ -38,10 +38,10 @@ To use a local build outside this monorepo, pack core + CLI tarballs and install
 
 | Command | Purpose |
 |---|---|
-| `pnpm build` | Build `@amplio/core` + `@amplio/cli` |
+| `pnpm build` | Build `@useamplio/core` + `@useamplio/cli` |
 | `pnpm test` | Unit tests |
 | `pnpm typecheck` | TypeScript check across packages (CI) |
-| `pnpm size` | `@amplio/core` gzip budget (< 8 KB) |
+| `pnpm size` | `@useamplio/core` gzip budget (< 8 KB) |
 | `pnpm registry:build` | Regenerate `public/r/` |
 | `pnpm registry:serve` | Local HTTP server for `public/r/` JSON |
 | `pnpm format:check:events` | Generated events match Prettier defaults; root `.prettierrc` pins the config |
@@ -58,7 +58,7 @@ CI (`.github/workflows/ci.yml`) runs build, test, typecheck, size, registry buil
 - Event names: `domain.entity.action` (or shorter forms like `email.sent`).
 - Relative imports under `telemetry/` are **extensionless** (Next-safe): `./sinks/json` not `./sinks/json.js`.
 - Generated telemetry code lives in user repos under `telemetry/` — keep it readable and diff-friendly.
-- Do not expand the public `@amplio/core` API beyond the frozen surface in `AGENTS.md`.
+- Do not expand the public `@useamplio/core` API beyond the frozen surface in `AGENTS.md`.
 
 ## Pull requests
 
@@ -68,4 +68,19 @@ CI (`.github/workflows/ci.yml`) runs build, test, typecheck, size, registry buil
 
 ## First release
 
-This repo may have no git commits yet. The first npm publish needs an initial commit and a version tag before release tooling can run — empty history is not ready to publish.
+Packages publish to npm as **`@useamplio/core`** and **`@useamplio/cli`** under the [`useamplio`](https://www.npmjs.com/org/useamplio) org.
+
+### Release steps
+
+1. Bump **`version`** together in root `package.json`, `packages/core/package.json`, and `packages/cli/package.json`.
+2. Commit the version bump.
+3. Create an annotated tag matching the version with a `v` prefix — e.g. `v0.1.0` or `v0.1.0-alpha.1`.
+4. Push the commit to `main`, then push the tag. The **publish** workflow (`.github/workflows/publish.yml`) runs only on tag pushes matching `v*` and publishes both packages.
+
+Prerelease tags (`vX.Y.Z-alpha.N`, `vX.Y.Z-beta.N`, …) map to npm dist-tags from the prerelease id (`alpha`, `beta`, `rc`, …). Stable tags (`vX.Y.Z` with no `-`) publish under dist-tag **`latest`**.
+
+### Security
+
+- **`NPM_TOKEN`** is stored as an **environment secret** on GitHub environment **`npm-publish`**, which is restricted to deployment tags `v*` only.
+- After the first successful publish, configure npm **Trusted Publishing** (OIDC) for workflow **`publish.yml`** on both `@useamplio/core` and `@useamplio/cli`, then **revoke the classic token** and rely on OIDC for future releases.
+- If an npm token was ever pasted in chat or committed, **rotate it** before or immediately after setup.

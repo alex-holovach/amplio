@@ -1,5 +1,5 @@
 {
-  "name": "@amplio/example-basic",
+  "name": "@useamplio/example-basic",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@amplio/core": "workspace:*",
+    "@useamplio/core": "workspace:*",
     "hono": "^4.7.4",
     "zod": "^3.24.2",
     "@hono/node-server": "^1.14.0"

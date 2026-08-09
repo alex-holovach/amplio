@@ -1,4 +1,4 @@
-import { init, logger, type LogRecord, type Sink } from "@amplio/core";
+import { init, logger, type LogRecord, type Sink } from "@useamplio/core";
 import { consoleSink } from "./sinks/console";
 
 type Enricher = (record: LogRecord) => LogRecord;
