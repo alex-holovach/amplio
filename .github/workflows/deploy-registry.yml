@@ -42,14 +42,23 @@ jobs:
       - name: Build site
         run: pnpm --filter @useamplio/www build
 
+      - name: Link Vercel project
+        working-directory: apps/www
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          mkdir -p .vercel
+          printf '{"projectId":"%s","orgId":"%s","projectName":"amplio"}\n' \
+            "$VERCEL_PROJECT_ID" "$VERCEL_ORG_ID" > .vercel/project.json
+
       - name: Vercel build output
         working-directory: apps/www
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          npx --yes vercel@latest build --token="$VERCEL_TOKEN" --scope aholovach
+        run: npx --yes vercel@latest build --token="$VERCEL_TOKEN" --scope aholovach
 
       - name: Deploy to Vercel (aholovach/amplio)
         working-directory: apps/www
