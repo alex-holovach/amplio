@@ -71,7 +71,7 @@ async function appendEnvExampleJsonSink(cwd: string): Promise<"updated" | "skipp
   return "updated";
 }
 
-const INTEGRATION_IDS = new Set(["better-auth", "clerk", "resend", "polar"]);
+const INTEGRATION_IDS = new Set(["better-auth", "clerk", "next-auth", "resend", "polar"]);
 
 export interface AddOptions {
   cwd: string;

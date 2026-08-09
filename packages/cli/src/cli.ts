@@ -14,6 +14,7 @@ import {
 } from "./commands/add.js";
 import { runList } from "./commands/list.js";
 import { runDoctor } from "./commands/doctor.js";
+import { runPaths } from "./commands/paths.js";
 import { printCommandHelp, printGlobalHelp } from "./help.js";
 
 const VALID_ADD_KINDS = [
@@ -24,7 +25,7 @@ const VALID_ADD_KINDS = [
   "integration",
 ] as const;
 
-const VALID_COMMANDS = new Set(["init", "add", "list", "doctor"]);
+const VALID_COMMANDS = new Set(["init", "add", "list", "doctor", "paths"]);
 
 function parseCliArgs() {
   try {
@@ -108,8 +109,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  if (values.verbose && command !== "doctor") {
-    console.error("error: --verbose is only valid with doctor");
+  if (values.verbose && command !== "doctor" && command !== "init") {
+    console.error("error: --verbose is only valid with doctor or init");
     process.exit(1);
   }
 
@@ -188,7 +189,13 @@ async function main(): Promise<void> {
         ...(values["skip-install"] ? { skipInstall: true } : {}),
         ...(values.paths ? { paths: true } : {}),
         ...(values.wire ? { wire: true } : {}),
+        ...(values.verbose ? { verbose: true } : {}),
       });
+      return;
+    }
+
+    if (command === "paths") {
+      await runPaths({ cwd });
       return;
     }
 

@@ -15,7 +15,8 @@ describe("registry Next middleware ALS", () => {
     expect(source).toMatch(
       /export function getRequestLogger\(\)[\s\S]*return getLogger\(\)/,
     );
-    // Back-compat alias for code generated before the rename.
-    expect(source).toMatch(/export const useRequestLogger = getRequestLogger/);
+    // Fresh scaffolds must not ship the deprecated pre-rename alias — it only
+    // ever existed for upgraders, and nobody has imported it from a new file.
+    expect(source).not.toMatch(/useRequestLogger/);
   });
 });

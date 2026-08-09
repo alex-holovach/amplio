@@ -6,7 +6,7 @@ import { aliasPrefixFromComponentsJson } from "../utils/components-json.js";
 import { readAmplioConfig } from "../utils/config.js";
 import { detectFramework } from "../utils/detect-framework.js";
 import { detectPackageManager } from "../utils/detect-package-manager.js";
-import { pathExists } from "../utils/fs.js";
+import { coalesceBarrelExports, pathExists } from "../utils/fs.js";
 import { parseJsonc } from "../utils/jsonc.js";
 import { resolveProjectPaths } from "../utils/paths.js";
 import { ALPHA_MD_URL } from "../help.js";
@@ -535,16 +535,27 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
   for (const barrelPath of barrelFiles) {
     const relBarrel = path.relative(cwd, barrelPath).replace(/\\/g, "/");
     const { content, stale } = await pruneStaleBarrelExports(barrelPath);
-    if (stale.length === 0) {
-      continue;
-    }
+    // While rewriting anyway, merge repeated `export { X } from "./m";`
+    // statements for the same module into one (harmless, so no warning in
+    // non-fix mode — --fix just tidies them up).
+    const coalesced = coalesceBarrelExports(content);
     if (fix) {
-      await fs.writeFile(barrelPath, content, "utf8");
-      checks.push({
-        status: "passed",
-        message: `Pruned stale export(s) from ${relBarrel}: ${stale.join("; ")}`,
-      });
-    } else {
+      const original = await fs.readFile(barrelPath, "utf8");
+      if (coalesced !== original) {
+        await fs.writeFile(barrelPath, coalesced, "utf8");
+      }
+      if (stale.length > 0) {
+        checks.push({
+          status: "passed",
+          message: `Pruned stale export(s) from ${relBarrel}: ${stale.join("; ")}`,
+        });
+      } else if (coalesced !== original) {
+        checks.push({
+          status: "passed",
+          message: `Coalesced duplicate module exports in ${relBarrel}`,
+        });
+      }
+    } else if (stale.length > 0) {
       checks.push({
         status: "warning",
         message: `${relBarrel} has stale export(s): ${stale.join("; ")} — tsc will fail with TS2307/TS2305`,

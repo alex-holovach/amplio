@@ -4,8 +4,9 @@
   "title": "Service Metadata Enricher",
   "description": "Enricher that adds service name / environment metadata.",
   "type": "registry:lib",
+  "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.12"
+    "@useamplio/amplio@^0.1.0-alpha.13"
   ],
   "files": [
     {

@@ -56,5 +56,3 @@ export function getRequestLogger(request: FastifyRequest): Logger {
   return request.amplio ?? getLogger();
 }
 
-/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */
-export const useRequestLogger = getRequestLogger;

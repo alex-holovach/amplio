@@ -11,8 +11,8 @@ import { ALPHA_MD_URL, T3_MD_URL } from "../help.js";
 import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
 import { formatGeneratedFiles } from "../utils/format-files.js";
 import { ensureRuntimeDependencies } from "../utils/install-deps.js";
-import { parseJsonc } from "../utils/jsonc.js";
 import { resolveProjectPaths } from "../utils/paths.js";
+import { printTsconfigPathsHint, writeTsconfigPathsAlias } from "../utils/tsconfig-paths.js";
 import { registryPathForConfig } from "../utils/registry-path.js";
 import {
   detectT3Layout,
@@ -20,6 +20,7 @@ import {
   middlewareImportForFile,
   T3_ROUTE_FILE,
   T3_TRPC_FILE,
+  wireT3NextAuthRoute,
   wireT3RouteHandler,
   wireT3TrpcProcedures,
   type WireResult,
@@ -40,6 +41,8 @@ export interface InitOptions {
   skipInstall?: boolean;
   paths?: boolean;
   wire?: boolean;
+  /** Stream raw package-manager install output instead of the one-line summary. */
+  verbose?: boolean;
 }
 
 async function resolveDefaultService(cwd: string): Promise<string> {
@@ -128,95 +131,6 @@ function printWireResult(result: WireResult, action: string): boolean {
   return false;
 }
 
-function printTsconfigPathsHint(): void {
-  console.log("\nOptional: add to tsconfig.json compilerOptions.paths for shorter imports:");
-  console.log('  "~telemetry/*": ["./telemetry/*"]');
-  console.log("  Then import from \"~telemetry/middleware/next\" instead of relative paths.");
-  console.log("  Or run: amplio init --paths");
-}
-
-function tsconfigHasTelemetryAlias(raw: string, telemetryDir: string): boolean {
-  try {
-    const config = parseJsonc<{ compilerOptions?: { paths?: Record<string, string[]> } }>(raw);
-    const paths = config.compilerOptions?.paths ?? {};
-    return paths["~telemetry/*"]?.includes(`./${telemetryDir}/*`) ?? false;
-  } catch {
-    return false;
-  }
-}
-
-function detectEntryIndent(source: string, braceIndex: number): string {
-  const afterBrace = source.slice(braceIndex + 1);
-  const lineMatch = /^\s*\n(\s+)\S/.exec(afterBrace);
-  return lineMatch?.[1] ?? "    ";
-}
-
-async function applyTsconfigPathsAlias(
-  cwd: string,
-  telemetryDir: string,
-): Promise<"success" | "already" | "missing" | "failed"> {
-  const tsconfigPath = path.join(cwd, "tsconfig.json");
-  if (!(await pathExists(tsconfigPath))) {
-    return "missing";
-  }
-
-  const raw = await fs.readFile(tsconfigPath, "utf8");
-  if (tsconfigHasTelemetryAlias(raw, telemetryDir)) {
-    return "already";
-  }
-
-  const aliasEntry = `"~telemetry/*": ["./${telemetryDir}/*"]`;
-  let edited: string;
-
-  const pathsKeyMatch = /(["'])paths\1\s*:\s*\{/.exec(raw);
-  if (pathsKeyMatch && pathsKeyMatch.index !== undefined) {
-    const braceIndex = raw.indexOf("{", pathsKeyMatch.index);
-    const entryIndent = detectEntryIndent(raw, braceIndex);
-    const insert = `\n${entryIndent}${aliasEntry},`;
-    edited = raw.slice(0, braceIndex + 1) + insert + raw.slice(braceIndex + 1);
-  } else {
-    const compilerOptionsMatch = /(["'])compilerOptions\1\s*:\s*\{/.exec(raw);
-    if (!compilerOptionsMatch || compilerOptionsMatch.index === undefined) {
-      return "failed";
-    }
-    const braceIndex = raw.indexOf("{", compilerOptionsMatch.index);
-    const entryIndent = detectEntryIndent(raw, braceIndex);
-    const pathsBlock = `\n${entryIndent}"paths": {\n${entryIndent}  ${aliasEntry}\n${entryIndent}},`;
-    edited = raw.slice(0, braceIndex + 1) + pathsBlock + raw.slice(braceIndex + 1);
-  }
-
-  try {
-    const config = parseJsonc<{ compilerOptions?: { paths?: Record<string, string[]> } }>(edited);
-    const paths = config.compilerOptions?.paths ?? {};
-    if (!paths["~telemetry/*"]?.includes(`./${telemetryDir}/*`)) {
-      return "failed";
-    }
-  } catch {
-    return "failed";
-  }
-
-  await fs.writeFile(tsconfigPath, edited, "utf8");
-  return "success";
-}
-
-async function writeTsconfigPathsAlias(cwd: string, telemetryDir: string): Promise<void> {
-  const result = await applyTsconfigPathsAlias(cwd, telemetryDir);
-  if (result === "success") {
-    console.log("  ✓ tsconfig.json (~telemetry/* path alias)");
-    return;
-  }
-  if (result === "already") {
-    console.log("  · tsconfig.json already has ~telemetry/*");
-    return;
-  }
-  if (result === "missing") {
-    console.log("\ntsconfig.json not found — skipped path alias.");
-    printTsconfigPathsHint();
-    return;
-  }
-  printTsconfigPathsHint();
-}
-
 function resolveMiddlewareName(
   explicit: string | undefined,
   detected: Awaited<ReturnType<typeof detectFramework>>,
@@ -250,6 +164,68 @@ function resolveEventName(
     return "auth.user.signed_up";
   }
   return null;
+}
+
+const INTEGRATION_DEP_RULES: Array<{
+  integration: string;
+  matches: (depName: string) => boolean;
+}> = [
+  { integration: "next-auth", matches: (name) => name === "next-auth" },
+  { integration: "better-auth", matches: (name) => name === "better-auth" },
+  { integration: "clerk", matches: (name) => name.startsWith("@clerk/") },
+  { integration: "resend", matches: (name) => name === "resend" },
+  { integration: "polar", matches: (name) => name.startsWith("@polar-sh/") },
+];
+
+/**
+ * Surface registry integrations that match dependencies already in the app —
+ * init detects the auth dep to pick a starter event, so answer the natural
+ * next question ("where do I emit this?") instead of stopping one step short.
+ */
+async function suggestDetectedIntegrations(
+  cwd: string,
+  telemetryDir: string,
+  packageManager: string,
+): Promise<void> {
+  const pkgPath = path.join(cwd, "package.json");
+  if (!(await pathExists(pkgPath))) {
+    return;
+  }
+
+  let depNames: string[];
+  try {
+    const pkg = JSON.parse(await fs.readFile(pkgPath, "utf8")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    depNames = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
+  } catch {
+    return;
+  }
+
+  const suggestions: Array<{ dep: string; integration: string }> = [];
+  for (const rule of INTEGRATION_DEP_RULES) {
+    const dep = depNames.find(rule.matches);
+    if (!dep) {
+      continue;
+    }
+    const installed = path.join(cwd, telemetryDir, "integrations", `${rule.integration}.ts`);
+    if (await pathExists(installed)) {
+      continue;
+    }
+    suggestions.push({ dep, integration: rule.integration });
+  }
+
+  if (suggestions.length === 0) {
+    return;
+  }
+
+  console.log("\nOptional integrations for dependencies detected in package.json:");
+  for (const { dep, integration } of suggestions) {
+    console.log(
+      `  ${dep} → ${scriptRunCommand(packageManager, `amplio add integration ${integration}`)}`,
+    );
+  }
 }
 
 function printNoStarterEventHint(packageManager: string): void {
@@ -456,6 +432,7 @@ export async function runInit(options: InitOptions): Promise<void> {
     packageManager,
     skipInstall: options.skipInstall,
     withCliDevDependency: true,
+    verbose: options.verbose,
   });
 
   // Apply the tsconfig alias before wiring so wired imports can use ~telemetry/*.
@@ -535,7 +512,7 @@ export async function runInit(options: InitOptions): Promise<void> {
     let routeHandled = false;
     let trpcHandled = false;
 
-    if (wantWire && (layout.routeFile || layout.trpcFile)) {
+    if (wantWire && (layout.routeFile || layout.trpcFile || layout.nextAuthRouteFile)) {
       console.log("\nWiring create-t3-app layout:");
       if (layout.routeFile && nextMiddlewarePresent) {
         const result = await wireT3RouteHandler(options.cwd, telemetryDir);
@@ -552,6 +529,30 @@ export async function runInit(options: InitOptions): Promise<void> {
         );
         if (result.status === "wired") {
           wiredFiles.push(result.file);
+        }
+      }
+      // NextAuth events (signIn, …) fire inside this route — without the wrap
+      // they run outside request scope and getLogger() silently no-ops.
+      if (layout.nextAuthRouteFile && nextMiddlewarePresent) {
+        const result = await wireT3NextAuthRoute(options.cwd, telemetryDir);
+        const handled = printWireResult(
+          result,
+          "wrapped NextAuth handlers with withAmplio",
+        );
+        if (result.status === "wired") {
+          wiredFiles.push(result.file);
+        }
+        if (!handled && result.status === "unrecognized") {
+          const importPath = await snippetImportPath(
+            options.cwd,
+            telemetryDir,
+            "next",
+            srcLayout,
+          );
+          console.log(`    import { withAmplio } from "${importPath}";`);
+          console.log("    const { GET: authGet, POST: authPost } = handlers;");
+          console.log("    export const GET = withAmplio(authGet);");
+          console.log("    export const POST = withAmplio(authPost);");
         }
       }
     }
@@ -576,6 +577,8 @@ export async function runInit(options: InitOptions): Promise<void> {
         "\nDetected a create-t3-app layout — run `amplio init --wire` to wire the route handler and tRPC procedures automatically.",
       );
     }
+
+    await suggestDetectedIntegrations(options.cwd, telemetryDir, packageManager);
   }
 
   if (isNext) {

@@ -11,9 +11,10 @@ Usage:
   amplio add <kind> <id>      Add registry item (event, middleware, sink, …)
   amplio list [kind]          List registry items
   amplio doctor [options]     Validate wiring and event layout
+  amplio paths                Write the ~telemetry/* tsconfig path alias (nothing else)
 
 Commands:
-  init, add, list, doctor     Run amplio <command> --help for command-specific flags
+  init, add, list, doctor, paths   Run amplio <command> --help for command-specific flags
 
 Global options:
   --cwd <path>                Project directory (default: .)
@@ -37,8 +38,9 @@ Options:
   --event <name|none>          Scaffold starter event (defaults to auth.user.signed_up when auto and an auth dependency is detected)
   --yes                        Non-interactive: auto-scaffold detected middleware + event (auto-wires create-t3-app layouts)
   --skip-install               Skip installing @useamplio/amplio and zod
-  --paths                      Write ~telemetry/* tsconfig path alias
+  --paths                      Write ~telemetry/* tsconfig path alias (standalone: amplio paths)
   --wire                       Auto-wire create-t3-app files (route handler + tRPC procedures)
+  --verbose                    Stream raw package-manager install output
   -h, --help                   Show this help
 
 Examples:
@@ -55,7 +57,7 @@ Usage:
   amplio add middleware <hono|express|next|fastify|trpc>
   amplio add sink <console|otlp|json>
   amplio add enricher <service-metadata|request-metadata|query-allowlist>
-  amplio add integration <better-auth|clerk|resend|polar>
+  amplio add integration <better-auth|clerk|next-auth|resend|polar>
 
 Options:
   --cwd <path>                 Project directory (default: .)
@@ -107,11 +109,27 @@ Example:
 `);
 }
 
+export function printPathsHelp(): void {
+  console.log(`amplio paths — write the ~telemetry/* tsconfig path alias
+
+Usage:
+  amplio paths
+
+Adds "~telemetry/*": ["./<telemetryDir>/*"] to tsconfig.json compilerOptions.paths
+(JSONC-comment-safe, idempotent). Does not re-run any other init step.
+
+Options:
+  --cwd <path>                 Project directory (default: .)
+  -h, --help                   Show this help
+`);
+}
+
 const COMMAND_HELP: Record<string, () => void> = {
   init: printInitHelp,
   add: printAddHelp,
   doctor: printDoctorHelp,
   list: printListHelp,
+  paths: printPathsHelp,
 };
 
 export function printCommandHelp(command: string): boolean {

@@ -62,6 +62,3 @@ export function withAmplio<
 export function getRequestLogger(): Logger {
   return getLogger();
 }
-
-/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */
-export const useRequestLogger = getRequestLogger;

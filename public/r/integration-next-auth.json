@@ -1,0 +1,24 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "integration-next-auth",
+  "title": "NextAuth (Auth.js) Integration",
+  "description": "NextAuth v5 events hook that emits amplio auth events (uses local message types — no next-auth type imports needed).",
+  "type": "registry:lib",
+  "docs": "Wire into your NextAuth config: `events: amplioNextAuthEvents()` (create-t3-app: src/server/auth/config.ts), and wrap src/app/api/auth/[...nextauth]/route.ts with withAmplio so rows share the request spine's request_id (`amplio init --wire` does this). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.13"
+  ],
+  "registryDependencies": [
+    "@useamplio/event-auth-user-signed-up",
+    "@useamplio/event-auth-user-signed-in"
+  ],
+  "files": [
+    {
+      "path": "registry/integrations/next-auth.ts",
+      "target": "~/telemetry/integrations/next-auth.ts",
+      "type": "registry:lib",
+      "content": "/**\n * NextAuth (Auth.js v5) → amplio auth events.\n *\n * Wire into your NextAuth config (create-t3-app: src/server/auth/config.ts):\n *\n *   import { amplioNextAuthEvents } from \"../../../telemetry/integrations/next-auth\";\n *\n *   export const authConfig = {\n *     providers: [...],\n *     events: amplioNextAuthEvents(),\n *   } satisfies NextAuthConfig;\n *\n * These events fire inside the [...nextauth] route handler. Wrap that route\n * with withAmplio so the rows share the request spine's request_id — in a\n * stock create-t3-app layout `amplio init --yes` (or `init --wire`) does it:\n *\n *   // src/app/api/auth/[...nextauth]/route.ts\n *   const { GET: authGet, POST: authPost } = handlers;\n *   export const GET = withAmplio(authGet);\n *   export const POST = withAmplio(authPost);\n *\n * Uses structural types for the NextAuth event messages instead of importing\n * from next-auth (its v5 type exports are still beta-unstable).\n */\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\ntype NextAuthUser = {\n  id?: string;\n  email?: string | null;\n};\n\ntype NextAuthAccount = {\n  provider?: string;\n  type?: string;\n} | null;\n\nexport type NextAuthSignInMessage = {\n  user: NextAuthUser;\n  account?: NextAuthAccount;\n  isNewUser?: boolean;\n};\n\ntype SignInMethod = \"password\" | \"oauth\" | \"magic_link\" | \"sso\";\n\nfunction signInMethod(account: NextAuthAccount | undefined): SignInMethod {\n  switch (account?.type) {\n    case \"credentials\":\n      return \"password\";\n    case \"email\":\n      return \"magic_link\";\n    default:\n      // oidc / oauth / webauthn all reach the app via a provider flow.\n      return \"oauth\";\n  }\n}\n\nfunction userFields(user: NextAuthUser): { id: string; email?: string } | null {\n  if (!user.id) {\n    return null;\n  }\n  return { id: user.id, ...(user.email ? { email: user.email } : {}) };\n}\n\nexport function trackNextAuthSignIn(message: NextAuthSignInMessage) {\n  const user = userFields(message.user);\n  if (!user) {\n    return null;\n  }\n\n  // NextAuth fires one signIn event for both flows; isNewUser distinguishes a\n  // first-time registration. Emit signed_up as an extra row so both funnels\n  // stay queryable on their own event name.\n  if (message.isNewUser) {\n    logger\n      .event(AuthUserSignedUp)\n      .set({\n        user,\n        signup: {\n          method: message.account?.type === \"credentials\" ? \"email\" : \"oauth\",\n        },\n      })\n      .emit();\n  }\n\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user,\n      session: { method: signInMethod(message.account) },\n    })\n    .emit();\n}\n\n/**\n * Drop-in `events` object for NextAuth(config). Inside a withAmplio-wrapped\n * route these rows correlate with the http.request spine via request_id;\n * outside one they still emit as standalone rows.\n */\nexport function amplioNextAuthEvents() {\n  return {\n    signIn: (message: NextAuthSignInMessage) => {\n      trackNextAuthSignIn(message);\n    },\n  };\n}\n"
+    }
+  ]
+}

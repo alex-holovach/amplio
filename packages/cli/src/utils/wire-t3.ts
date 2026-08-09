@@ -12,6 +12,7 @@ import { parseJsonc } from "./jsonc.js";
 
 export const T3_ROUTE_FILE = "src/app/api/trpc/[trpc]/route.ts";
 export const T3_TRPC_FILE = "src/server/api/trpc.ts";
+export const T3_NEXTAUTH_ROUTE_FILE = "src/app/api/auth/[...nextauth]/route.ts";
 
 export type WireStatus = "wired" | "already" | "not-found" | "unrecognized";
 
@@ -95,10 +96,12 @@ function commentBlockStart(source: string, index: number): number {
 export async function detectT3Layout(cwd: string): Promise<{
   routeFile: boolean;
   trpcFile: boolean;
+  nextAuthRouteFile: boolean;
 }> {
   return {
     routeFile: await pathExists(path.join(cwd, T3_ROUTE_FILE)),
     trpcFile: await pathExists(path.join(cwd, T3_TRPC_FILE)),
+    nextAuthRouteFile: await pathExists(path.join(cwd, T3_NEXTAUTH_ROUTE_FILE)),
   };
 }
 
@@ -135,6 +138,51 @@ export async function wireT3RouteHandler(
   const wired = withImport.replace(
     ROUTE_EXPORT_RE,
     "const wrappedHandler = withAmplio(handler);\n\nexport { wrappedHandler as GET, wrappedHandler as POST };",
+  );
+
+  await fs.writeFile(fullPath, wired, "utf8");
+  return { status: "wired", file };
+}
+
+const NEXTAUTH_EXPORT_RE =
+  /export\s+const\s*\{\s*GET\s*,\s*POST\s*\}\s*=\s*handlers\s*;?/;
+
+/**
+ * Wrap the NextAuth (Auth.js v5) route handlers with withAmplio:
+ *   export const { GET, POST } = handlers;
+ * becomes
+ *   const { GET: authGet, POST: authPost } = handlers;
+ *   export const GET = withAmplio(authGet);
+ *   export const POST = withAmplio(authPost);
+ * Without this, NextAuth `events` callbacks (signIn, etc.) run outside a
+ * request scope and every getLogger().child(...) in them silently no-ops.
+ */
+export async function wireT3NextAuthRoute(
+  cwd: string,
+  telemetryDir: string,
+): Promise<WireResult> {
+  const file = T3_NEXTAUTH_ROUTE_FILE;
+  const fullPath = path.join(cwd, file);
+  if (!(await pathExists(fullPath))) {
+    return { status: "not-found", file };
+  }
+
+  const source = await fs.readFile(fullPath, "utf8");
+  if (source.includes("withAmplio")) {
+    return { status: "already", file };
+  }
+  if (!NEXTAUTH_EXPORT_RE.test(source)) {
+    return { status: "unrecognized", file };
+  }
+
+  const importPath = await middlewareImportForFile(cwd, telemetryDir, file, "next");
+  const withImport = insertAfterImports(
+    source,
+    `import { withAmplio } from "${importPath}";`,
+  );
+  const wired = withImport.replace(
+    NEXTAUTH_EXPORT_RE,
+    "const { GET: authGet, POST: authPost } = handlers;\n\nexport const GET = withAmplio(authGet);\nexport const POST = withAmplio(authPost);",
   );
 
   await fs.writeFile(fullPath, wired, "utf8");

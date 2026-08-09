@@ -51,6 +51,7 @@
       "description": "Hono middleware that attaches request-scoped amplio context.",
       "source": "middleware/hono.ts",
       "target": "telemetry/middleware/hono.ts",
+      "docs": "Wire the middleware: `app.use(\"*\", amplioMiddleware())` in your Hono app. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
         "@useamplio/amplio"
       ]
@@ -60,6 +61,7 @@
       "description": "Express middleware that attaches request-scoped amplio context.",
       "source": "middleware/express.ts",
       "target": "telemetry/middleware/express.ts",
+      "docs": "Wire the middleware: `app.use(amplioMiddleware())` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
         "@useamplio/amplio"
       ]
@@ -80,6 +82,7 @@
       "description": "Fastify plugin that attaches request-scoped amplio context.",
       "source": "middleware/fastify.ts",
       "target": "telemetry/middleware/fastify.ts",
+      "docs": "Wire the plugin: `await app.register(amplioPlugin)` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
         "@useamplio/amplio",
         "fastify-plugin@^5.0.0"
@@ -131,6 +134,7 @@
       "description": "Enricher that adds service name / environment metadata.",
       "source": "enrichers/service-metadata.ts",
       "target": "telemetry/enrichers/service-metadata.ts",
+      "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
       "dependencies": [
         "@useamplio/amplio"
       ]
@@ -141,6 +145,7 @@
       "description": "Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.",
       "source": "enrichers/query-allowlist.ts",
       "target": "telemetry/enrichers/query-allowlist.ts",
+      "docs": "Wire the enricher: add `queryAllowlist()` to the init() enrichers array in telemetry/logger.ts (pass { allow: [\"page\"] } to keep specific params). Prefer `npx @useamplio/cli@alpha add enricher query-allowlist` — it wires logger.ts for you.",
       "dependencies": [
         "@useamplio/amplio"
       ]
@@ -150,8 +155,25 @@
       "description": "Enricher that adds request id / HTTP metadata.",
       "source": "enrichers/request-metadata.ts",
       "target": "telemetry/enrichers/request-metadata.ts",
+      "docs": "requestMetadata is a per-request enricher factory — use it inside middleware/wrappers (requestLogger.set(enrich({}))), not in the init() enrichers array.",
       "dependencies": [
         "@useamplio/amplio"
+      ]
+    },
+    {
+      "name": "integration-next-auth",
+      "title": "NextAuth (Auth.js) Integration",
+      "description": "NextAuth v5 events hook that emits amplio auth events (uses local message types — no next-auth type imports needed).",
+      "source": "integrations/next-auth.ts",
+      "target": "telemetry/integrations/next-auth.ts",
+      "docs": "Wire into your NextAuth config: `events: amplioNextAuthEvents()` (create-t3-app: src/server/auth/config.ts), and wrap src/app/api/auth/[...nextauth]/route.ts with withAmplio so rows share the request spine's request_id (`amplio init --wire` does this). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio"
+      ],
+      "registryDependencies": [
+        "event-auth-user-signed-up",
+        "event-auth-user-signed-in"
       ]
     },
     {
@@ -159,6 +181,7 @@
       "description": "Better Auth helpers that emit amplio auth events.",
       "source": "integrations/better-auth.ts",
       "target": "telemetry/integrations/better-auth.ts",
+      "docs": "Wire the plugin: add `createBetterAuthAmplioPlugin()` to your betterAuth({ plugins: [...] }) config. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
         "@useamplio/amplio",
@@ -174,6 +197,7 @@
       "description": "Clerk helpers that emit amplio auth events.",
       "source": "integrations/clerk.ts",
       "target": "telemetry/integrations/clerk.ts",
+      "docs": "Call handleClerkWebhook from your Clerk webhook route (user.created / session.created). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
         "@useamplio/amplio",
@@ -189,6 +213,7 @@
       "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).",
       "source": "integrations/resend.ts",
       "target": "telemetry/integrations/resend.ts",
+      "docs": "Call trackResendEmail after sending, or handleResendWebhook from your Resend webhook route. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
         "@useamplio/amplio"
@@ -202,6 +227,7 @@
       "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed).",
       "source": "integrations/polar.ts",
       "target": "telemetry/integrations/polar.ts",
+      "docs": "Call handlePolarWebhook (or trackPolarOrderPaid) from your Polar webhook route (order.paid). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
         "@useamplio/amplio"

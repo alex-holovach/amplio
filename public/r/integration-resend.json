@@ -4,9 +4,10 @@
   "title": "Resend Integration",
   "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).",
   "type": "registry:lib",
+  "docs": "Call trackResendEmail after sending, or handleResendWebhook from your Resend webhook route. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.12"
+    "@useamplio/amplio@^0.1.0-alpha.13"
   ],
   "registryDependencies": [
     "@useamplio/event-email-sent"

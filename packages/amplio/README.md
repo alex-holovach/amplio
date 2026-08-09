@@ -2,6 +2,15 @@
 
 Tiny schema-first wide-event telemetry runtime. Zero runtime dependencies (`zod` optional peer).
 
+**The spine.** amplio emits one wide event per unit of work — the **spine** (`http.request` for HTTP, `trpc.request` for server-caller tRPC). Everything that happens during that unit of work either *annotates* the spine (`.set()`) or emits a separate **domain event** row that shares the spine's `request_id`:
+
+```jsonc
+{"@event":"http.request","request_id":"req_x1","http":{"method":"POST","path":"/signup"},"status":200,"duration_ms":494,...}
+{"@event":"auth.user.signed_up","request_id":"req_x1","user":{"id":"u_1"},"duration_ms":3,...}
+```
+
+Middleware owns and emits the spine; your code adds fields to it or emits correlated domain rows with `.child(EventDef)`.
+
 ## Install
 
 ```bash
@@ -49,6 +58,8 @@ createLogger()
 | `createLogger(initial?)` | Wide-event builder: `.set()`, `.emit()`, `.create()`, `.event()`, `.child()` |
 | `createRequestLogger({ method, path })` | HTTP helper with `request_id` |
 | `runWithLogger` / `getLogger` | AsyncLocalStorage context (`getLogger` no-op outside ALS; `useLogger` deprecated alias) |
+| `hasAmbientLogger()` | `true` inside a `runWithLogger` scope — used by middleware to decide between annotating the ambient spine and creating a standalone one |
+| `createRequestId()` | New unique request id (`req_<time36>_<rand36>`) — pass to `createRequestLogger({ requestId })` to preserve an upstream id |
 | `flush()` | Await pending async sink deliveries |
 | `scheduleFlush({ waitUntil? })` | Schedule `flush()` via platform `waitUntil` or Next.js `after()` |
 | `trpcErrorHttpStatus(error)` | Map tRPC error `code` strings to HTTP status (defaults 500) |
@@ -66,8 +77,26 @@ createLogger()
 - **`getLogger()`** returns a no-op logger outside AsyncLocalStorage (does not throw). **`useLogger()`** is a deprecated alias with identical behavior.
 - **Validation** soft-fails outside `NODE_ENV=test` unless `init({ strict: true })`; failed emits attach `validation.issues` and set `success: false`.
 - **`.error(err)`** on `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when `err.code` is a string or number (Node-style `ENOENT`, etc.) — plain `Error` omits `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field.
-- **Auto fields** on emit: `timestamp`, `duration_ms` (time since the logger was created — a `.child()` created right before `.emit()` reports `~0`; create the child before the work to time the work), `request_id` (when set), `success` (derived from `status` or set explicitly via `.set()` / `.error()` — omitted when neither applies), `service`, `env`. Schema events set `event` and `@event` to the declared name; `@event` is canonical, `event` is a duplicate for `@`-averse sinks. Pass `init({ canonicalKeyOnly: true })` to emit only `@event`. `createRequestLogger` seeds `http.request` on both keys.
-- **Redaction**: emails, JWTs, Bearer tokens, credit cards, and sensitive field names (on by default; pass `redact: false` to `init()` to opt out). Redaction runs at emit time — fields derived before redaction (e.g. a length computed from a raw value) can look inconsistent next to `[REDACTED]`; that is expected.
+- **Auto fields** on emit: `timestamp`, `duration_ms` (time since the logger was created — a `.child()` created right before `.emit()` reports `~0`; create the child before the work to time the work), `request_id` (when set), `success` (derived from `status` or set explicitly via `.set()` / `.error()` — omitted when neither applies), `service`, `env`. Schema events set `event` and `@event` to the declared name; `@event` is canonical, `event` is a duplicate because some sinks and columnar stores reject or mangle `@`-prefixed keys. Pass `init({ canonicalKeyOnly: true })` to emit only `@event`. `createRequestLogger` seeds `http.request` on both keys.
+- **Redaction** is on by default (`redact: false` to opt out) — exact contract in [Redaction](#redaction) below. It runs at emit time, so fields derived before redaction (e.g. a length computed from a raw value) can look inconsistent next to `[REDACTED]`; that is expected.
+
+## Redaction
+
+The precise default contract (relying on this for compliance? read the limits):
+
+**Field names** — any field whose (case-insensitive) key is one of `authorization`, `cookie`, `set-cookie`, `email`, `password`, `secret`, `token`, `access_token`, `refresh_token`, `card`, `card_number`, `credit_card`, `pan` has its string value replaced with `[REDACTED]`, at any nesting depth (arrays included). Exact key match only — `user_email` is *not* matched by `email`. Add your own with `init({ redact: { fields: ["ssn"] } })`.
+
+**Value patterns** — scanned inside every string value (and once more on the percent-decoded string when it contains `%xx` escapes):
+
+| Pattern | Shape | Limits |
+|---|---|---|
+| Email | `local@domain.tld` (TLD ≥ 2 alpha) | — |
+| JWT | `eyJ…`-prefixed 2–3 dot-separated base64url segments | only catches JWTs whose header starts `{"` (i.e. `eyJ`) |
+| Credit card | Visa 13/16, Mastercard 51–55, Amex 34/37, Discover 6011/65 digit runs, with optional single space/dash separators (`4111 1111 1111 1111`, `4111-1111-1111-1111`) | must pass a Luhn check *and* a known brand prefix — other lengths/brands and non-Luhn numbers pass through |
+| Bearer token | `Bearer <token68>` (case-insensitive) | — |
+| Authorization header | `Authorization: <value>` inside strings | stops at whitespace/comma |
+
+Add custom patterns with `init({ redact: { patterns: [/my-regex/g] } })`. Redaction does **not** parse query strings as key/value pairs — use the `query-allowlist` enricher for `http.search`.
 
 ## Sampling
 
@@ -84,6 +113,16 @@ Enrichers and redaction still run on `.emit()` even when sampling skips sink del
 - **`createLogger(initial?)`** — a new named wide-event spine when you want an explicit builder (same as `logger.create()` after `init()`).
 - **`createRequestLogger({ method, path, … })`** — HTTP request spine with `request_id` and `http.*`; middleware wraps handlers with `runWithLogger(createRequestLogger(…), …)`.
 - **`getLogger()`** — ambient request logger inside middleware-established `runWithLogger` scope (e.g. tRPC procedures, route handlers). Returns a no-op outside that scope.
+
+### `.child()` vs `.create()` vs `.event()` on a logger
+
+| Method | What you get | Use when |
+|---|---|---|
+| `.child(EventDef)` | **New row** correlated to this one: copies `request_id` only, fresh clock and seal | Domain events inside a request — the canonical spelling |
+| `.create(initial?)` | New independent logger that **copies all current fields**, fresh clock and seal | Forking a job/batch scope that should inherit context |
+| `.event(EventDef)` | **Binds the schema to this same row** (same data, same seal — emitting it consumes this logger) | Naming/typing a spine you own, e.g. `createLogger().event(Def)` |
+
+`.event(OtherDef)` on a logger that is already bound to a different event name (e.g. the request spine) behaves as `.child(OtherDef)` — a separate correlated row, spine preserved — with a dev notice. Earlier alphas rebound and sealed the spine (silently losing the request row); that footgun is gone, but spell it `.child()` to make the intent explicit.
 
 ## Recipes
 

@@ -64,16 +64,23 @@ function annotateTrpcProcedure(
     return;
   }
 
-  const first = updated[0] ?? entry;
+  // A batch has no single path — null the scalar fields so dashboards that
+  // group by trpc.path never mix "the request was for X" with "X happened to
+  // be first in a batch". The full list lives in trpc.procedures; a failing
+  // procedure lands in trpc.failed_path (see annotateTrpcError).
   logger.set({
     trpc: {
-      path: first.path,
-      type: first.type,
+      path: null,
+      type: null,
       batched: true,
       batch_size: updated.length,
       procedures: updated.map((item) => `${item.type} ${item.path}`),
     },
   });
+}
+
+function isBatchedRequest(logger: Logger): boolean {
+  return (batchedProcedures.get(logger)?.length ?? 0) > 1;
 }
 
 type ValidationIssue = { path: Array<string | number>; message: string };
@@ -138,8 +145,14 @@ function annotateTrpcError(
     if (issues) {
       logger.set({ error: { message: shortValidationMessage(issues), issues } });
     }
+    // On a batch, keep trpc.path null and record the failing procedure
+    // separately — overwriting the batch path with the failer made group-bys
+    // on trpc.path a half-truth.
+    const trpcPatch = isBatchedRequest(logger)
+      ? { failed_path: path, failed_type: type }
+      : { path, type };
     const patch: Record<string, unknown> = {
-      trpc: { path, type },
+      trpc: trpcPatch,
       status,
     };
     if (includeHttp) {

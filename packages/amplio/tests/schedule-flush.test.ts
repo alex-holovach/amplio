@@ -7,6 +7,11 @@ import {
   scheduleFlush,
 } from "../src/index.js";
 
+const CUTOFF_WARNING =
+  "[amplio] async sinks may be cut off without waitUntil/after; pass waitUntil to scheduleFlush or call flush()";
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
 beforeEach(() => {
   resetConfigForTests();
   resetScheduleFlushWarningForTests();
@@ -29,5 +34,45 @@ describe("scheduleFlush", () => {
     createLogger().emit();
 
     expect(() => scheduleFlush()).not.toThrow();
+  });
+
+  it("does not warn when all sinks are synchronous", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      init({ service: "api", env: "test", sinks: [() => {}] });
+      createLogger().set({ ok: true }).emit();
+
+      scheduleFlush();
+      await settle();
+
+      expect(warn).not.toHaveBeenCalledWith(CUTOFF_WARNING);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("warns once when async sink deliveries are pending and no waitUntil/after exists", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      init({ service: "api", env: "test", sinks: [async () => gate] });
+
+      createLogger().set({ ok: true }).emit();
+      scheduleFlush();
+      createLogger().set({ ok: true }).emit();
+      scheduleFlush();
+      await settle();
+      release();
+
+      const cutoffWarnings = warn.mock.calls.filter(
+        (call) => call[0] === CUTOFF_WARNING,
+      );
+      expect(cutoffWarnings).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

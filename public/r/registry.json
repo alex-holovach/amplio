@@ -94,6 +94,12 @@
       "description": "Enricher that adds request id / HTTP metadata."
     },
     {
+      "name": "integration-next-auth",
+      "type": "registry:lib",
+      "title": "NextAuth (Auth.js) Integration",
+      "description": "NextAuth v5 events hook that emits amplio auth events (uses local message types — no next-auth type imports needed)."
+    },
+    {
       "name": "integration-better-auth",
       "type": "registry:lib",
       "title": "Better Auth Integration",

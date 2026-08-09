@@ -4,9 +4,10 @@
   "title": "Better Auth Integration",
   "description": "Better Auth helpers that emit amplio auth events.",
   "type": "registry:lib",
+  "docs": "Wire the plugin: add `createBetterAuthAmplioPlugin()` to your betterAuth({ plugins: [...] }) config. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.12",
+    "@useamplio/amplio@^0.1.0-alpha.13",
     "better-auth@^1.2.0"
   ],
   "registryDependencies": [

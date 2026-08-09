@@ -4,8 +4,10 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { runInit } from "../src/commands/init.js";
 import {
+  T3_NEXTAUTH_ROUTE_FILE,
   T3_ROUTE_FILE,
   T3_TRPC_FILE,
+  wireT3NextAuthRoute,
   wireT3RouteHandler,
   wireT3TrpcProcedures,
 } from "../src/utils/wire-t3.js";
@@ -92,11 +94,21 @@ export const protectedProcedure = t.procedure
   });
 `;
 
+const T3_NEXTAUTH_ROUTE_SOURCE = `import { handlers } from "~/server/auth";
+
+export const { GET, POST } = handlers;
+`;
+
 async function scaffoldT3Files(cwd: string): Promise<void> {
   await mkdir(path.join(cwd, path.dirname(T3_ROUTE_FILE)), { recursive: true });
   await mkdir(path.join(cwd, path.dirname(T3_TRPC_FILE)), { recursive: true });
   await writeFile(path.join(cwd, T3_ROUTE_FILE), T3_ROUTE_SOURCE);
   await writeFile(path.join(cwd, T3_TRPC_FILE), T3_TRPC_SOURCE);
+}
+
+async function scaffoldNextAuthRoute(cwd: string): Promise<void> {
+  await mkdir(path.join(cwd, path.dirname(T3_NEXTAUTH_ROUTE_FILE)), { recursive: true });
+  await writeFile(path.join(cwd, T3_NEXTAUTH_ROUTE_FILE), T3_NEXTAUTH_ROUTE_SOURCE);
 }
 
 describe("wireT3RouteHandler", () => {
@@ -215,6 +227,49 @@ describe("wireT3TrpcProcedures", () => {
   });
 });
 
+describe("wireT3NextAuthRoute", () => {
+  it("wraps the NextAuth handlers with withAmplio", async () => {
+    const cwd = await makeTempDir("amplio-wire-nextauth-");
+    await scaffoldNextAuthRoute(cwd);
+
+    const result = await wireT3NextAuthRoute(cwd, "telemetry");
+
+    expect(result.status).toBe("wired");
+    const wired = await readFile(path.join(cwd, T3_NEXTAUTH_ROUTE_FILE), "utf8");
+    expect(wired).toContain(
+      'import { withAmplio } from "../../../../../telemetry/middleware/next";',
+    );
+    expect(wired).toContain("const { GET: authGet, POST: authPost } = handlers;");
+    expect(wired).toContain("export const GET = withAmplio(authGet);");
+    expect(wired).toContain("export const POST = withAmplio(authPost);");
+    expect(wired).not.toContain("export const { GET, POST } = handlers;");
+  });
+
+  it("is idempotent", async () => {
+    const cwd = await makeTempDir("amplio-wire-nextauth-idem-");
+    await scaffoldNextAuthRoute(cwd);
+
+    await wireT3NextAuthRoute(cwd, "telemetry");
+    const afterFirst = await readFile(path.join(cwd, T3_NEXTAUTH_ROUTE_FILE), "utf8");
+    const second = await wireT3NextAuthRoute(cwd, "telemetry");
+
+    expect(second.status).toBe("already");
+    expect(await readFile(path.join(cwd, T3_NEXTAUTH_ROUTE_FILE), "utf8")).toBe(afterFirst);
+  });
+
+  it("reports unrecognized when the export shape differs", async () => {
+    const cwd = await makeTempDir("amplio-wire-nextauth-unrec-");
+    await mkdir(path.join(cwd, path.dirname(T3_NEXTAUTH_ROUTE_FILE)), { recursive: true });
+    await writeFile(
+      path.join(cwd, T3_NEXTAUTH_ROUTE_FILE),
+      'import NextAuth from "next-auth";\nconst handler = NextAuth({});\nexport { handler as GET, handler as POST };\n',
+    );
+
+    const result = await wireT3NextAuthRoute(cwd, "telemetry");
+    expect(result.status).toBe("unrecognized");
+  });
+});
+
 describe("runInit auto-wiring", () => {
   it("wires route handler and tRPC procedures under --yes in a T3 layout", async () => {
     const cwd = await makeTempDir("amplio-init-wire-");
@@ -232,6 +287,7 @@ describe("runInit auto-wiring", () => {
       }),
     );
     await scaffoldT3Files(cwd);
+    await scaffoldNextAuthRoute(cwd);
 
     const logs: string[] = [];
     const log = vi.spyOn(console, "log").mockImplementation((...args) => {
@@ -242,9 +298,14 @@ describe("runInit auto-wiring", () => {
 
     const route = await readFile(path.join(cwd, T3_ROUTE_FILE), "utf8");
     const trpc = await readFile(path.join(cwd, T3_TRPC_FILE), "utf8");
+    const authRoute = await readFile(path.join(cwd, T3_NEXTAUTH_ROUTE_FILE), "utf8");
     expect(route).toContain("withAmplio(handler)");
     expect(trpc).toContain("use(amplioMiddleware)");
+    expect(authRoute).toContain("export const GET = withAmplio(authGet);");
+    expect(authRoute).toContain("export const POST = withAmplio(authPost);");
     expect(logs.join("\n")).toContain("Wiring create-t3-app layout");
+    // next-auth is in package.json but the integration is not installed yet.
+    expect(logs.join("\n")).toContain("amplio add integration next-auth");
   });
 
   it("prints a --wire hint instead of editing files without --yes/--wire", async () => {

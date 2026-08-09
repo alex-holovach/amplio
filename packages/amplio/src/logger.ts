@@ -30,7 +30,6 @@ type InternalLogger = Logger & {
   _skipValidation?: boolean;
   _startedAt: number;
   _seal: SealState;
-  _rebindFrom?: string;
 };
 
 const warnSealed = (action: "set" | "error" | "emit" | "create" | "event"): void => {
@@ -196,7 +195,6 @@ class InternalLoggerImpl implements InternalLogger {
   _event?: string;
   _shape?: EventDef["shape"];
   _skipValidation?: boolean;
-  _rebindFrom?: string;
 
   get sealed(): boolean {
     return this._seal.sealed;
@@ -210,7 +208,6 @@ class InternalLoggerImpl implements InternalLogger {
     _event?: string;
     _shape?: EventDef["shape"];
     _skipValidation?: boolean;
-    _rebindFrom?: string;
   }) {
     this._data = state._data;
     this._ownsData = state._ownsData;
@@ -219,7 +216,6 @@ class InternalLoggerImpl implements InternalLogger {
     this._event = state._event;
     this._shape = state._shape;
     this._skipValidation = state._skipValidation;
-    this._rebindFrom = state._rebindFrom;
   }
 
   set(partial: Record<string, unknown>): Logger {
@@ -302,11 +298,6 @@ class InternalLoggerImpl implements InternalLogger {
       }
       return null;
     }
-    if (this._rebindFrom && isDevelopment()) {
-      console.warn(
-        `[amplio] emitting .event("${this._event}") from a logger already bound to "${this._rebindFrom}" rebinds and seals it — no separate "${this._rebindFrom}" row will be emitted for this request. For a separate correlated domain event, use .child(EventDef) instead.`,
-      );
-    }
     const record = emitInternal(this);
     this._seal.sealed = true;
     return record;
@@ -335,7 +326,6 @@ class InternalLoggerImpl implements InternalLogger {
       _ownsData: boolean;
       _startedAt: number;
       _seal: SealState;
-      _rebindFrom?: string;
     },
   ): EventLogger<T> {
     const bound = new InternalLoggerImpl({
@@ -372,17 +362,24 @@ class InternalLoggerImpl implements InternalLogger {
     const parentEventName =
       this._event ??
       (typeof this._data["event"] === "string" ? this._data["event"] : undefined);
-    const rebindFrom =
-      parentEventName !== undefined && parentEventName !== def.name
-        ? parentEventName
-        : undefined;
+
+    // .event(OtherDef) on an already-named spine used to rebind + seal it,
+    // silently losing the request row — the classic footgun. Behave as
+    // .child() instead: a separate correlated row, spine preserved.
+    if (parentEventName !== undefined && parentEventName !== def.name) {
+      if (isDevelopment()) {
+        console.warn(
+          `[amplio] .event("${def.name}") on a logger already bound to "${parentEventName}" now emits a separate correlated row and keeps the "${parentEventName}" spine (same as .child()). Spell it .child(EventDef) to make the intent explicit.`,
+        );
+      }
+      return this.child(def);
+    }
 
     return this.bindEventLogger(def, {
       _data: this._data,
       _ownsData: false,
       _startedAt: this._startedAt,
       _seal: this._seal,
-      _rebindFrom: rebindFrom,
     });
   }
 

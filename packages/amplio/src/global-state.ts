@@ -11,6 +11,13 @@ export interface AmplioGlobalState {
   warnedUseLoggerOutsideScope: boolean;
   activeCompiled: CompiledRedactConfig | false | undefined;
   pendingAsyncSinks: Set<Promise<void>>;
+  // Next.js after() probe — shared on globalThis (like init/ALS state) so
+  // Turbopack's separate module graphs agree on availability and the
+  // "async sinks may be cut off" warning really fires only once.
+  // undefined = not probed yet, null = probed and unavailable.
+  nextAfter: ((task: () => unknown) => void) | null | undefined;
+  nextAfterProbe: Promise<void> | undefined;
+  warnedNoWaitUntil: boolean;
 }
 
 const createState = (): AmplioGlobalState => ({
@@ -20,6 +27,9 @@ const createState = (): AmplioGlobalState => ({
   warnedUseLoggerOutsideScope: false,
   activeCompiled: undefined,
   pendingAsyncSinks: new Set(),
+  nextAfter: undefined,
+  nextAfterProbe: undefined,
+  warnedNoWaitUntil: false,
 });
 
 type GlobalWithAmplioState = typeof globalThis & {

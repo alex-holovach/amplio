@@ -532,4 +532,50 @@ describe("runDoctor", () => {
     expect(verboseCode).toBe(0);
     expect(verboseLogs.join("\n")).toContain("Verify an event end-to-end");
   });
+
+  it("--fix coalesces one-export-per-line barrels into one statement per module", async () => {
+    const cwd = await makeTempDir("amplio-doctor-coalesce-");
+    await setupDoctorProject(cwd);
+
+    const authDir = path.join(cwd, "telemetry/events/auth");
+    await mkdir(authDir, { recursive: true });
+    await writeFile(
+      path.join(authDir, "user-signed-up.ts"),
+      'import { defineEvent } from "@useamplio/amplio";\nexport const AuthUserSignedUp = defineEvent("auth.user.signed_up");\n',
+    );
+    await writeFile(
+      path.join(authDir, "user-signed-in.ts"),
+      'import { defineEvent } from "@useamplio/amplio";\nexport const AuthUserSignedIn = defineEvent("auth.user.signed_in");\n',
+    );
+    await writeFile(
+      path.join(authDir, "index.ts"),
+      'export { AuthUserSignedUp } from "./user-signed-up";\nexport { AuthUserSignedIn } from "./user-signed-in";\n',
+    );
+    await writeFile(
+      path.join(cwd, "telemetry/events/index.ts"),
+      'export { AuthUserSignedUp } from "./auth";\nexport { AuthUserSignedIn } from "./auth";\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd, fix: true });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    const rootBarrel = await readFile(path.join(cwd, "telemetry/events/index.ts"), "utf8");
+    expect(rootBarrel).toContain(
+      'export { AuthUserSignedUp, AuthUserSignedIn } from "./auth";',
+    );
+    expect(rootBarrel.match(/from "\.\/auth"/g)).toHaveLength(1);
+    expect(logs.join("\n")).toContain("Coalesced duplicate module exports");
+
+    // Idempotent: a second --fix run leaves the barrel unchanged.
+    const silent = vi.spyOn(console, "log").mockImplementation(() => {});
+    await runDoctor({ cwd, fix: true });
+    silent.mockRestore();
+    const rerun = await readFile(path.join(cwd, "telemetry/events/index.ts"), "utf8");
+    expect(rerun).toBe(rootBarrel);
+  });
 });

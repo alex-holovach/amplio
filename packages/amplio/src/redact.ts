@@ -14,25 +14,66 @@ const DEFAULT_FIELD_KEYS = new Set([
   "token",
   "access_token",
   "refresh_token",
+  "card",
+  "card_number",
+  "credit_card",
+  "pan",
 ]);
 
 const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 const JWT_PATTERN =
   /\b(?:eyJ[A-Za-z0-9_-]*\.(?:eyJ[A-Za-z0-9_-]*\.)?[A-Za-z0-9_-]*)\b/g;
-const CC_PATTERN =
-  /\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b/g;
+// Candidate PANs: 13–19 digits with optional single space/dash separators
+// (real card data is very often "4111 1111 1111 1111"-grouped). Candidates are
+// verified against brand prefixes + Luhn in redactCardCandidate so ordinary
+// long numbers (timestamps, ids) do not get eaten.
+const CC_PATTERN = /\b\d(?:[ -]?\d){12,18}\b/g;
+const CC_VERIFY_PATTERN =
+  /^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})$/;
+// 13+ digits allowing single space/dash separators between them.
+const CC_GATE_PATTERN = /\d(?:[ -]?\d){12}/;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9\-._~+/]+=*\b/gi;
 const AUTH_HEADER_PATTERN = /\bAuthorization:\s*[^\s,]+/gi;
+
+const luhnValid = (digits: string): boolean => {
+  let sum = 0;
+  let double = false;
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    let digit = digits.charCodeAt(index) - 48;
+    if (double) {
+      digit *= 2;
+      if (digit > 9) {
+        digit -= 9;
+      }
+    }
+    sum += digit;
+    double = !double;
+  }
+  return sum % 10 === 0;
+};
+
+const redactCardCandidate = (match: string): string => {
+  const digits = match.replace(/[ -]/g, "");
+  if (!CC_VERIFY_PATTERN.test(digits) || !luhnValid(digits)) {
+    return match;
+  }
+  return REDACTED;
+};
 
 type GatedPattern = {
   test: (input: string) => boolean;
   pattern: RegExp;
+  replacement?: (match: string) => string;
 };
 
 const DEFAULT_GATED_PATTERNS: GatedPattern[] = [
   { test: (s) => s.includes("@"), pattern: EMAIL_PATTERN },
   { test: (s) => s.includes("eyJ"), pattern: JWT_PATTERN },
-  { test: (s) => /\d{13,}/.test(s), pattern: CC_PATTERN },
+  {
+    test: (s) => CC_GATE_PATTERN.test(s),
+    pattern: CC_PATTERN,
+    replacement: redactCardCandidate,
+  },
   {
     test: (s) => s.includes("Bearer") || s.includes("bearer"),
     pattern: BEARER_PATTERN,
@@ -130,7 +171,11 @@ const needsPatternScan = (input: string): boolean => {
         }
         continue;
       }
-      safeDigitRun = 0;
+      // Space/dash separators do not reset the digit run — "4111-1111-1111-1111"
+      // must still reach the PAN pattern scan.
+      if (ch !== 45) {
+        safeDigitRun = 0;
+      }
       if (
         (ch >= 97 && ch <= 122) ||
         ch === 95 ||
@@ -160,7 +205,8 @@ const needsPatternScan = (input: string): boolean => {
       if (digitRun >= 13) {
         return true;
       }
-    } else {
+    } else if (ch !== 32 && ch !== 45) {
+      // Spaced/dashed PANs keep counting: "4111 1111 1111 1111".
       digitRun = 0;
     }
     if (ch === 69 || ch === 101) {
@@ -180,11 +226,13 @@ const needsPatternScan = (input: string): boolean => {
 
 const applyGatedPatterns = (input: string, gatedPatterns: GatedPattern[]): string => {
   let out = input;
-  for (const { test, pattern } of gatedPatterns) {
+  for (const { test, pattern, replacement } of gatedPatterns) {
     if (!test(out)) {
       continue;
     }
-    const next = out.replace(pattern, REDACTED);
+    const next = replacement
+      ? out.replace(pattern, replacement)
+      : out.replace(pattern, REDACTED);
     if (next !== out) {
       out = next;
     }

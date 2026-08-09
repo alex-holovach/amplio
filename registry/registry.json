@@ -12,7 +12,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -32,7 +32,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -52,7 +52,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -72,7 +72,7 @@
       "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -89,15 +89,16 @@
       "title": "Hono Middleware",
       "description": "Hono middleware that attaches request-scoped amplio context.",
       "type": "registry:lib",
+      "docs": "Wire the middleware: `app.use(\"*\", amplioMiddleware())` in your Hono app. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
           "path": "registry/middleware/hono.ts",
           "target": "~/telemetry/middleware/hono.ts",
           "type": "registry:lib",
-          "content": "import type { Context, MiddlewareHandler, Next } from \"hono\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\nconst AMPLIO_KEY = \"amplio\";\n\nexport function amplioMiddleware(): MiddlewareHandler {\n  return async (c: Context, next: Next) => {\n    const requestLogger = createRequestLogger({\n      method: c.req.method,\n      path: c.req.path,\n    }).set({\n      http: {\n        route: c.req.routePath,\n      },\n    });\n\n    c.set(AMPLIO_KEY, requestLogger);\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        await next();\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: c.res.status },\n            status: c.res.status,\n          });\n          requestLogger.emit();\n        }\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n        }\n        throw error;\n      }\n    });\n  };\n}\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(c: Context): Logger {\n  return (c.get(AMPLIO_KEY) as Logger | undefined) ?? getLogger();\n}\n\n/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */\nexport const useRequestLogger = getRequestLogger;\n"
+          "content": "import type { Context, MiddlewareHandler, Next } from \"hono\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\nconst AMPLIO_KEY = \"amplio\";\n\nexport function amplioMiddleware(): MiddlewareHandler {\n  return async (c: Context, next: Next) => {\n    const requestLogger = createRequestLogger({\n      method: c.req.method,\n      path: c.req.path,\n    }).set({\n      http: {\n        route: c.req.routePath,\n      },\n    });\n\n    c.set(AMPLIO_KEY, requestLogger);\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        await next();\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: c.res.status },\n            status: c.res.status,\n          });\n          requestLogger.emit();\n        }\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n        }\n        throw error;\n      }\n    });\n  };\n}\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(c: Context): Logger {\n  return (c.get(AMPLIO_KEY) as Logger | undefined) ?? getLogger();\n}\n\n"
         }
       ]
     },
@@ -107,15 +108,16 @@
       "title": "Express Middleware",
       "description": "Express middleware that attaches request-scoped amplio context.",
       "type": "registry:lib",
+      "docs": "Wire the middleware: `app.use(amplioMiddleware())` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
           "path": "registry/middleware/express.ts",
           "target": "~/telemetry/middleware/express.ts",
           "type": "registry:lib",
-          "content": "import type { NextFunction, Request, Response } from \"express\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\ndeclare global {\n  namespace Express {\n    interface Request {\n      amplio?: Logger;\n    }\n  }\n}\n\nexport function amplioMiddleware() {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const requestLogger = createRequestLogger({\n      method: req.method,\n      path: req.path,\n    }).set({\n      http: {\n        route: req.route?.path,\n        ip: req.ip,\n        user_agent: req.get(\"user-agent\") ?? undefined,\n      },\n    });\n\n    req.amplio = requestLogger;\n\n    runWithLogger(requestLogger, () => {\n      res.on(\"finish\", () => {\n        if (requestLogger.sealed) {\n          return;\n        }\n        requestLogger.set({\n          http: { status: res.statusCode },\n          status: res.statusCode,\n        });\n        requestLogger.emit();\n      });\n\n      next();\n    });\n  };\n}\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(req: Request): Logger {\n  return req.amplio ?? getLogger();\n}\n\n/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */\nexport const useRequestLogger = getRequestLogger;\n"
+          "content": "import type { NextFunction, Request, Response } from \"express\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\ndeclare global {\n  namespace Express {\n    interface Request {\n      amplio?: Logger;\n    }\n  }\n}\n\nexport function amplioMiddleware() {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const requestLogger = createRequestLogger({\n      method: req.method,\n      path: req.path,\n    }).set({\n      http: {\n        route: req.route?.path,\n        ip: req.ip,\n        user_agent: req.get(\"user-agent\") ?? undefined,\n      },\n    });\n\n    req.amplio = requestLogger;\n\n    runWithLogger(requestLogger, () => {\n      res.on(\"finish\", () => {\n        if (requestLogger.sealed) {\n          return;\n        }\n        requestLogger.set({\n          http: { status: res.statusCode },\n          status: res.statusCode,\n        });\n        requestLogger.emit();\n      });\n\n      next();\n    });\n  };\n}\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(req: Request): Logger {\n  return req.amplio ?? getLogger();\n}\n\n"
         }
       ]
     },
@@ -127,14 +129,14 @@
       "type": "registry:lib",
       "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
           "path": "registry/middleware/next.ts",
           "target": "~/telemetry/middleware/next.ts",
           "type": "registry:lib",
-          "content": "// Side-effect import: ensures init() from telemetry/logger runs in every module\n// graph that uses this middleware (next dev --turbo compiles instrumentation.ts\n// and route bundles separately, which would otherwise drop events silently).\nimport \"../logger\";\n\nimport {\n  createRequestLogger,\n  getLogger,\n  runWithLogger,\n  scheduleFlush,\n  type Logger,\n} from \"@useamplio/amplio\";\nimport type { NextRequest } from \"next/server\";\n\nexport interface WithAmplioOptions {\n  waitUntil?: (promise: Promise<unknown>) => void;\n}\n\n// The `never[]` rest constraint accepts any handler shape (route context params\n// included) without resorting to `any`, which trips lint/suspicious/noExplicitAny.\nexport function withAmplio<\n  T extends (request: NextRequest, ...args: never[]) => Promise<Response>,\n>(handler: T, options?: WithAmplioOptions): T {\n  const wrapped = (async (request: NextRequest, ...rest: never[]) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.nextUrl.pathname,\n    }).set({\n      http: {\n        search: request.nextUrl.search || undefined,\n      },\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        const response = await handler(request, ...rest);\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: response.status },\n            status: response.status,\n          });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        return response;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        throw error;\n      }\n    });\n  }) as T;\n\n  return wrapped;\n}\n\n// Server-side accessor for the ambient request logger. Named get*, not use*:\n// this is not a React hook and never runs on the client.\nexport function getRequestLogger(): Logger {\n  return getLogger();\n}\n\n/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */\nexport const useRequestLogger = getRequestLogger;\n"
+          "content": "// Side-effect import: ensures init() from telemetry/logger runs in every module\n// graph that uses this middleware (next dev --turbo compiles instrumentation.ts\n// and route bundles separately, which would otherwise drop events silently).\nimport \"../logger\";\n\nimport {\n  createRequestLogger,\n  getLogger,\n  runWithLogger,\n  scheduleFlush,\n  type Logger,\n} from \"@useamplio/amplio\";\nimport type { NextRequest } from \"next/server\";\n\nexport interface WithAmplioOptions {\n  waitUntil?: (promise: Promise<unknown>) => void;\n}\n\n// The `never[]` rest constraint accepts any handler shape (route context params\n// included) without resorting to `any`, which trips lint/suspicious/noExplicitAny.\nexport function withAmplio<\n  T extends (request: NextRequest, ...args: never[]) => Promise<Response>,\n>(handler: T, options?: WithAmplioOptions): T {\n  const wrapped = (async (request: NextRequest, ...rest: never[]) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.nextUrl.pathname,\n    }).set({\n      http: {\n        search: request.nextUrl.search || undefined,\n      },\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        const response = await handler(request, ...rest);\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: response.status },\n            status: response.status,\n          });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        return response;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        throw error;\n      }\n    });\n  }) as T;\n\n  return wrapped;\n}\n\n// Server-side accessor for the ambient request logger. Named get*, not use*:\n// this is not a React hook and never runs on the client.\nexport function getRequestLogger(): Logger {\n  return getLogger();\n}\n"
         }
       ]
     },
@@ -144,8 +146,9 @@
       "title": "Fastify Middleware",
       "description": "Fastify plugin that attaches request-scoped amplio context.",
       "type": "registry:lib",
+      "docs": "Wire the plugin: `await app.register(amplioPlugin)` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12",
+        "@useamplio/amplio@^0.1.0-alpha.13",
         "fastify-plugin@^5.0.0"
       ],
       "files": [
@@ -153,7 +156,7 @@
           "path": "registry/middleware/fastify.ts",
           "target": "~/telemetry/middleware/fastify.ts",
           "type": "registry:lib",
-          "content": "import type { FastifyPluginAsync, FastifyRequest } from \"fastify\";\nimport fp from \"fastify-plugin\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\ndeclare module \"fastify\" {\n  interface FastifyRequest {\n    amplio?: Logger;\n  }\n}\n\nconst plugin: FastifyPluginAsync = async (app) => {\n  app.addHook(\"onRequest\", (request, _reply, done) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.url,\n    }).set({\n      http: {\n        route: request.routeOptions?.url,\n        ip: request.ip,\n        user_agent: request.headers[\"user-agent\"],\n      },\n    });\n\n    request.amplio = requestLogger;\n    runWithLogger(requestLogger, () => done());\n  });\n\n  app.addHook(\"onResponse\", async (request, reply) => {\n    const requestLogger = request.amplio;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.set({\n      http: { status: reply.statusCode },\n      status: reply.statusCode,\n    });\n    requestLogger.emit();\n  });\n\n  app.addHook(\"onError\", async (request, _reply, error) => {\n    const requestLogger = request.amplio;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.error(error, { status: 500 });\n    requestLogger.emit();\n  });\n};\n\nexport const amplioPlugin = fp(plugin, { name: \"amplio\" });\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(request: FastifyRequest): Logger {\n  return request.amplio ?? getLogger();\n}\n\n/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */\nexport const useRequestLogger = getRequestLogger;\n"
+          "content": "import type { FastifyPluginAsync, FastifyRequest } from \"fastify\";\nimport fp from \"fastify-plugin\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\ndeclare module \"fastify\" {\n  interface FastifyRequest {\n    amplio?: Logger;\n  }\n}\n\nconst plugin: FastifyPluginAsync = async (app) => {\n  app.addHook(\"onRequest\", (request, _reply, done) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.url,\n    }).set({\n      http: {\n        route: request.routeOptions?.url,\n        ip: request.ip,\n        user_agent: request.headers[\"user-agent\"],\n      },\n    });\n\n    request.amplio = requestLogger;\n    runWithLogger(requestLogger, () => done());\n  });\n\n  app.addHook(\"onResponse\", async (request, reply) => {\n    const requestLogger = request.amplio;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.set({\n      http: { status: reply.statusCode },\n      status: reply.statusCode,\n    });\n    requestLogger.emit();\n  });\n\n  app.addHook(\"onError\", async (request, _reply, error) => {\n    const requestLogger = request.amplio;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.error(error, { status: 500 });\n    requestLogger.emit();\n  });\n};\n\nexport const amplioPlugin = fp(plugin, { name: \"amplio\" });\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(request: FastifyRequest): Logger {\n  return request.amplio ?? getLogger();\n}\n\n"
         }
       ]
     },
@@ -165,14 +168,14 @@
       "type": "registry:lib",
       "docs": "Wire into your procedure bases: `const amplioMiddleware = t.middleware(amplioTrpcMiddleware())` then `.use(amplioMiddleware)` on publicProcedure/protectedProcedure. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/server/api/trpc.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
           "path": "registry/middleware/trpc.ts",
           "target": "~/telemetry/middleware/trpc.ts",
           "type": "registry:lib",
-          "content": "/**\n * Amplio tRPC middleware. Like create-t3-app's own trpc.ts, you likely never\n * need to read or modify this file — wire amplioTrpcMiddleware() into your\n * procedure bases and you're done.\n *\n * Product stance:\n * ONE wide event per unit of work: the HTTP wrapper (withAmplio) owns the request\n * wide event (the spine). This middleware ANNOTATES that event with trpc.* fields\n * instead of emitting a sibling record. Domain events emitted in procedures are\n * intentionally separate rows — do not duplicate fields across them.\n */\n// Side-effect import: ensures init() from telemetry/logger runs in every module\n// graph that uses this middleware (next dev --turbo compiles instrumentation.ts\n// and route bundles separately, which would otherwise drop events silently).\nimport \"../logger\";\n\nimport {\n  createLogger,\n  createRequestId,\n  getLogger,\n  hasAmbientLogger,\n  runWithLogger,\n  scheduleFlush,\n  trpcErrorHttpStatus,\n  type Logger,\n} from \"@useamplio/amplio\";\n\ntype TrpcProcedureType = \"query\" | \"mutation\" | \"subscription\";\n\ntype TrpcProcedureRef = { path: string; type: TrpcProcedureType };\n\nconst batchedProcedures = new WeakMap<Logger, TrpcProcedureRef[]>();\n\nfunction isFailedMiddlewareResult(\n  result: unknown,\n): result is { ok: false; error: unknown } {\n  return (\n    result !== null &&\n    typeof result === \"object\" &&\n    \"ok\" in result &&\n    (result as { ok: unknown }).ok === false &&\n    \"error\" in result\n  );\n}\n\nfunction annotateTrpcProcedure(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n): void {\n  if (logger.sealed) {\n    return;\n  }\n\n  // Count every invocation — a batch of two calls to the SAME procedure is two\n  // units of work and must not be deduplicated away.\n  const entry: TrpcProcedureRef = { path, type };\n  const seen = batchedProcedures.get(logger) ?? [];\n  const updated = [...seen, entry];\n  batchedProcedures.set(logger, updated);\n\n  if (updated.length === 1) {\n    logger.set({ trpc: { path, type } });\n    return;\n  }\n\n  const first = updated[0] ?? entry;\n  logger.set({\n    trpc: {\n      path: first.path,\n      type: first.type,\n      batched: true,\n      batch_size: updated.length,\n      procedures: updated.map((item) => `${item.type} ${item.path}`),\n    },\n  });\n}\n\ntype ValidationIssue = { path: Array<string | number>; message: string };\n\n// TRPCError wraps input-validation failures in a ZodError cause whose message\n// is the full pretty-printed issue list — a multiline JSON blob that is hostile\n// to columnar stores and log search. Detect that shape so the event can carry\n// structured error.issues plus a short error.message instead.\nfunction zodValidationIssues(error: unknown): ValidationIssue[] | null {\n  if (error === null || typeof error !== \"object\") {\n    return null;\n  }\n  const cause = (error as { cause?: unknown }).cause;\n  if (cause === null || typeof cause !== \"object\") {\n    return null;\n  }\n  const issues = (cause as { issues?: unknown }).issues;\n  if (!Array.isArray(issues) || issues.length === 0) {\n    return null;\n  }\n  const mapped: ValidationIssue[] = [];\n  for (const issue of issues) {\n    if (issue === null || typeof issue !== \"object\") {\n      return null;\n    }\n    const { path, message } = issue as { path?: unknown; message?: unknown };\n    if (typeof message !== \"string\" || !Array.isArray(path)) {\n      return null;\n    }\n    mapped.push({\n      path: path.filter(\n        (segment): segment is string | number =>\n          typeof segment === \"string\" || typeof segment === \"number\",\n      ),\n      message,\n    });\n  }\n  return mapped;\n}\n\nfunction shortValidationMessage(issues: ValidationIssue[]): string {\n  const parts = issues\n    .slice(0, 3)\n    .map((issue) =>\n      issue.path.length > 0 ? `${issue.path.join(\".\")}: ${issue.message}` : issue.message,\n    );\n  const suffix = issues.length > 3 ? ` (+${issues.length - 3} more)` : \"\";\n  return `input validation failed: ${parts.join(\"; \")}${suffix}`;\n}\n\nfunction annotateTrpcError(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n  error: unknown,\n  includeHttp: boolean,\n): void {\n  const status = trpcErrorHttpStatus(error);\n  if (!logger.sealed) {\n    logger.error(error, { status });\n    const issues = zodValidationIssues(error);\n    if (issues) {\n      logger.set({ error: { message: shortValidationMessage(issues), issues } });\n    }\n    const patch: Record<string, unknown> = {\n      trpc: { path, type },\n      status,\n    };\n    if (includeHttp) {\n      patch.http = { status };\n    }\n    logger.set(patch);\n  }\n}\n\nfunction finalizeStandaloneRequest(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n  result: unknown,\n): void {\n  if (logger.sealed) {\n    return;\n  }\n\n  if (isFailedMiddlewareResult(result)) {\n    annotateTrpcError(logger, path, type, result.error, false);\n  } else {\n    logger.set({\n      trpc: { path, type },\n      status: 200,\n    });\n  }\n\n  logger.emit();\n  scheduleFlush();\n}\n\nexport function amplioTrpcMiddleware() {\n  return async <TResult>(opts: {\n    path: string;\n    type: TrpcProcedureType;\n    next: () => Promise<TResult>;\n  } & Record<string, unknown>): Promise<TResult> => {\n    const { path, type, next } = opts;\n\n    if (hasAmbientLogger()) {\n      const logger = getLogger();\n      annotateTrpcProcedure(logger, path, type);\n\n      try {\n        const result = await next();\n        if (isFailedMiddlewareResult(result)) {\n          annotateTrpcError(logger, path, type, result.error, true);\n        }\n        return result;\n      } catch (error) {\n        annotateTrpcError(logger, path, type, error, true);\n        throw error;\n      }\n    }\n\n    const requestLogger = createLogger({\n      event: \"trpc.request\",\n      \"@event\": \"trpc.request\",\n      request_id: createRequestId(),\n      transport: \"server-caller\",\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      annotateTrpcProcedure(requestLogger, path, type);\n\n      try {\n        const result = await next();\n        finalizeStandaloneRequest(requestLogger, path, type, result);\n        return result;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          annotateTrpcError(requestLogger, path, type, error, false);\n          requestLogger.emit();\n          scheduleFlush();\n        }\n        throw error;\n      }\n    });\n  };\n}\n"
+          "content": "/**\n * Amplio tRPC middleware. Like create-t3-app's own trpc.ts, you likely never\n * need to read or modify this file — wire amplioTrpcMiddleware() into your\n * procedure bases and you're done.\n *\n * Product stance:\n * ONE wide event per unit of work: the HTTP wrapper (withAmplio) owns the request\n * wide event (the spine). This middleware ANNOTATES that event with trpc.* fields\n * instead of emitting a sibling record. Domain events emitted in procedures are\n * intentionally separate rows — do not duplicate fields across them.\n */\n// Side-effect import: ensures init() from telemetry/logger runs in every module\n// graph that uses this middleware (next dev --turbo compiles instrumentation.ts\n// and route bundles separately, which would otherwise drop events silently).\nimport \"../logger\";\n\nimport {\n  createLogger,\n  createRequestId,\n  getLogger,\n  hasAmbientLogger,\n  runWithLogger,\n  scheduleFlush,\n  trpcErrorHttpStatus,\n  type Logger,\n} from \"@useamplio/amplio\";\n\ntype TrpcProcedureType = \"query\" | \"mutation\" | \"subscription\";\n\ntype TrpcProcedureRef = { path: string; type: TrpcProcedureType };\n\nconst batchedProcedures = new WeakMap<Logger, TrpcProcedureRef[]>();\n\nfunction isFailedMiddlewareResult(\n  result: unknown,\n): result is { ok: false; error: unknown } {\n  return (\n    result !== null &&\n    typeof result === \"object\" &&\n    \"ok\" in result &&\n    (result as { ok: unknown }).ok === false &&\n    \"error\" in result\n  );\n}\n\nfunction annotateTrpcProcedure(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n): void {\n  if (logger.sealed) {\n    return;\n  }\n\n  // Count every invocation — a batch of two calls to the SAME procedure is two\n  // units of work and must not be deduplicated away.\n  const entry: TrpcProcedureRef = { path, type };\n  const seen = batchedProcedures.get(logger) ?? [];\n  const updated = [...seen, entry];\n  batchedProcedures.set(logger, updated);\n\n  if (updated.length === 1) {\n    logger.set({ trpc: { path, type } });\n    return;\n  }\n\n  // A batch has no single path — null the scalar fields so dashboards that\n  // group by trpc.path never mix \"the request was for X\" with \"X happened to\n  // be first in a batch\". The full list lives in trpc.procedures; a failing\n  // procedure lands in trpc.failed_path (see annotateTrpcError).\n  logger.set({\n    trpc: {\n      path: null,\n      type: null,\n      batched: true,\n      batch_size: updated.length,\n      procedures: updated.map((item) => `${item.type} ${item.path}`),\n    },\n  });\n}\n\nfunction isBatchedRequest(logger: Logger): boolean {\n  return (batchedProcedures.get(logger)?.length ?? 0) > 1;\n}\n\ntype ValidationIssue = { path: Array<string | number>; message: string };\n\n// TRPCError wraps input-validation failures in a ZodError cause whose message\n// is the full pretty-printed issue list — a multiline JSON blob that is hostile\n// to columnar stores and log search. Detect that shape so the event can carry\n// structured error.issues plus a short error.message instead.\nfunction zodValidationIssues(error: unknown): ValidationIssue[] | null {\n  if (error === null || typeof error !== \"object\") {\n    return null;\n  }\n  const cause = (error as { cause?: unknown }).cause;\n  if (cause === null || typeof cause !== \"object\") {\n    return null;\n  }\n  const issues = (cause as { issues?: unknown }).issues;\n  if (!Array.isArray(issues) || issues.length === 0) {\n    return null;\n  }\n  const mapped: ValidationIssue[] = [];\n  for (const issue of issues) {\n    if (issue === null || typeof issue !== \"object\") {\n      return null;\n    }\n    const { path, message } = issue as { path?: unknown; message?: unknown };\n    if (typeof message !== \"string\" || !Array.isArray(path)) {\n      return null;\n    }\n    mapped.push({\n      path: path.filter(\n        (segment): segment is string | number =>\n          typeof segment === \"string\" || typeof segment === \"number\",\n      ),\n      message,\n    });\n  }\n  return mapped;\n}\n\nfunction shortValidationMessage(issues: ValidationIssue[]): string {\n  const parts = issues\n    .slice(0, 3)\n    .map((issue) =>\n      issue.path.length > 0 ? `${issue.path.join(\".\")}: ${issue.message}` : issue.message,\n    );\n  const suffix = issues.length > 3 ? ` (+${issues.length - 3} more)` : \"\";\n  return `input validation failed: ${parts.join(\"; \")}${suffix}`;\n}\n\nfunction annotateTrpcError(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n  error: unknown,\n  includeHttp: boolean,\n): void {\n  const status = trpcErrorHttpStatus(error);\n  if (!logger.sealed) {\n    logger.error(error, { status });\n    const issues = zodValidationIssues(error);\n    if (issues) {\n      logger.set({ error: { message: shortValidationMessage(issues), issues } });\n    }\n    // On a batch, keep trpc.path null and record the failing procedure\n    // separately — overwriting the batch path with the failer made group-bys\n    // on trpc.path a half-truth.\n    const trpcPatch = isBatchedRequest(logger)\n      ? { failed_path: path, failed_type: type }\n      : { path, type };\n    const patch: Record<string, unknown> = {\n      trpc: trpcPatch,\n      status,\n    };\n    if (includeHttp) {\n      patch.http = { status };\n    }\n    logger.set(patch);\n  }\n}\n\nfunction finalizeStandaloneRequest(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n  result: unknown,\n): void {\n  if (logger.sealed) {\n    return;\n  }\n\n  if (isFailedMiddlewareResult(result)) {\n    annotateTrpcError(logger, path, type, result.error, false);\n  } else {\n    logger.set({\n      trpc: { path, type },\n      status: 200,\n    });\n  }\n\n  logger.emit();\n  scheduleFlush();\n}\n\nexport function amplioTrpcMiddleware() {\n  return async <TResult>(opts: {\n    path: string;\n    type: TrpcProcedureType;\n    next: () => Promise<TResult>;\n  } & Record<string, unknown>): Promise<TResult> => {\n    const { path, type, next } = opts;\n\n    if (hasAmbientLogger()) {\n      const logger = getLogger();\n      annotateTrpcProcedure(logger, path, type);\n\n      try {\n        const result = await next();\n        if (isFailedMiddlewareResult(result)) {\n          annotateTrpcError(logger, path, type, result.error, true);\n        }\n        return result;\n      } catch (error) {\n        annotateTrpcError(logger, path, type, error, true);\n        throw error;\n      }\n    }\n\n    const requestLogger = createLogger({\n      event: \"trpc.request\",\n      \"@event\": \"trpc.request\",\n      request_id: createRequestId(),\n      transport: \"server-caller\",\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      annotateTrpcProcedure(requestLogger, path, type);\n\n      try {\n        const result = await next();\n        finalizeStandaloneRequest(requestLogger, path, type, result);\n        return result;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          annotateTrpcError(requestLogger, path, type, error, false);\n          requestLogger.emit();\n          scheduleFlush();\n        }\n        throw error;\n      }\n    });\n  };\n}\n"
         }
       ]
     },
@@ -184,7 +187,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { consoleSink } from \"./sinks/console\"` to telemetry/logger.ts and append `consoleSink` to the init() sinks array. Prefer `npx @useamplio/cli@alpha add sink console` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -203,7 +206,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio.jsonl to .gitignore. Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -222,7 +225,7 @@
       "type": "registry:lib",
       "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (or OTEL_EXPORTER_OTLP_ENDPOINT) in your env. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -239,8 +242,9 @@
       "title": "Service Metadata Enricher",
       "description": "Enricher that adds service name / environment metadata.",
       "type": "registry:lib",
+      "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -257,8 +261,9 @@
       "title": "Query Allowlist Enricher",
       "description": "Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.",
       "type": "registry:lib",
+      "docs": "Wire the enricher: add `queryAllowlist()` to the init() enrichers array in telemetry/logger.ts (pass { allow: [\"page\"] } to keep specific params). Prefer `npx @useamplio/cli@alpha add enricher query-allowlist` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -275,8 +280,9 @@
       "title": "Request Metadata Enricher",
       "description": "Enricher that adds request id / HTTP metadata.",
       "type": "registry:lib",
+      "docs": "requestMetadata is a per-request enricher factory — use it inside middleware/wrappers (requestLogger.set(enrich({}))), not in the init() enrichers array.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "files": [
         {
@@ -289,13 +295,38 @@
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "integration-next-auth",
+      "title": "NextAuth (Auth.js) Integration",
+      "description": "NextAuth v5 events hook that emits amplio auth events (uses local message types — no next-auth type imports needed).",
+      "type": "registry:lib",
+      "docs": "Wire into your NextAuth config: `events: amplioNextAuthEvents()` (create-t3-app: src/server/auth/config.ts), and wrap src/app/api/auth/[...nextauth]/route.ts with withAmplio so rows share the request spine's request_id (`amplio init --wire` does this). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio@^0.1.0-alpha.13"
+      ],
+      "registryDependencies": [
+        "@useamplio/event-auth-user-signed-up",
+        "@useamplio/event-auth-user-signed-in"
+      ],
+      "files": [
+        {
+          "path": "registry/integrations/next-auth.ts",
+          "target": "~/telemetry/integrations/next-auth.ts",
+          "type": "registry:lib",
+          "content": "/**\n * NextAuth (Auth.js v5) → amplio auth events.\n *\n * Wire into your NextAuth config (create-t3-app: src/server/auth/config.ts):\n *\n *   import { amplioNextAuthEvents } from \"../../../telemetry/integrations/next-auth\";\n *\n *   export const authConfig = {\n *     providers: [...],\n *     events: amplioNextAuthEvents(),\n *   } satisfies NextAuthConfig;\n *\n * These events fire inside the [...nextauth] route handler. Wrap that route\n * with withAmplio so the rows share the request spine's request_id — in a\n * stock create-t3-app layout `amplio init --yes` (or `init --wire`) does it:\n *\n *   // src/app/api/auth/[...nextauth]/route.ts\n *   const { GET: authGet, POST: authPost } = handlers;\n *   export const GET = withAmplio(authGet);\n *   export const POST = withAmplio(authPost);\n *\n * Uses structural types for the NextAuth event messages instead of importing\n * from next-auth (its v5 type exports are still beta-unstable).\n */\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\ntype NextAuthUser = {\n  id?: string;\n  email?: string | null;\n};\n\ntype NextAuthAccount = {\n  provider?: string;\n  type?: string;\n} | null;\n\nexport type NextAuthSignInMessage = {\n  user: NextAuthUser;\n  account?: NextAuthAccount;\n  isNewUser?: boolean;\n};\n\ntype SignInMethod = \"password\" | \"oauth\" | \"magic_link\" | \"sso\";\n\nfunction signInMethod(account: NextAuthAccount | undefined): SignInMethod {\n  switch (account?.type) {\n    case \"credentials\":\n      return \"password\";\n    case \"email\":\n      return \"magic_link\";\n    default:\n      // oidc / oauth / webauthn all reach the app via a provider flow.\n      return \"oauth\";\n  }\n}\n\nfunction userFields(user: NextAuthUser): { id: string; email?: string } | null {\n  if (!user.id) {\n    return null;\n  }\n  return { id: user.id, ...(user.email ? { email: user.email } : {}) };\n}\n\nexport function trackNextAuthSignIn(message: NextAuthSignInMessage) {\n  const user = userFields(message.user);\n  if (!user) {\n    return null;\n  }\n\n  // NextAuth fires one signIn event for both flows; isNewUser distinguishes a\n  // first-time registration. Emit signed_up as an extra row so both funnels\n  // stay queryable on their own event name.\n  if (message.isNewUser) {\n    logger\n      .event(AuthUserSignedUp)\n      .set({\n        user,\n        signup: {\n          method: message.account?.type === \"credentials\" ? \"email\" : \"oauth\",\n        },\n      })\n      .emit();\n  }\n\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user,\n      session: { method: signInMethod(message.account) },\n    })\n    .emit();\n}\n\n/**\n * Drop-in `events` object for NextAuth(config). Inside a withAmplio-wrapped\n * route these rows correlate with the http.request spine via request_id;\n * outside one they still emit as standalone rows.\n */\nexport function amplioNextAuthEvents() {\n  return {\n    signIn: (message: NextAuthSignInMessage) => {\n      trackNextAuthSignIn(message);\n    },\n  };\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
       "name": "integration-better-auth",
       "title": "Better Auth Integration",
       "description": "Better Auth helpers that emit amplio auth events.",
       "type": "registry:lib",
+      "docs": "Wire the plugin: add `createBetterAuthAmplioPlugin()` to your betterAuth({ plugins: [...] }) config. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.12",
+        "@useamplio/amplio@^0.1.0-alpha.13",
         "better-auth@^1.2.0"
       ],
       "registryDependencies": [
@@ -317,9 +348,10 @@
       "title": "Clerk Integration",
       "description": "Clerk helpers that emit amplio auth events.",
       "type": "registry:lib",
+      "docs": "Call handleClerkWebhook from your Clerk webhook route (user.created / session.created). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.12",
+        "@useamplio/amplio@^0.1.0-alpha.13",
         "@clerk/backend@^1.25.0"
       ],
       "registryDependencies": [
@@ -341,9 +373,10 @@
       "title": "Resend Integration",
       "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).",
       "type": "registry:lib",
+      "docs": "Call trackResendEmail after sending, or handleResendWebhook from your Resend webhook route. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "registryDependencies": [
         "@useamplio/event-email-sent"
@@ -363,9 +396,10 @@
       "title": "Polar Integration",
       "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed).",
       "type": "registry:lib",
+      "docs": "Call handlePolarWebhook (or trackPolarOrderPaid) from your Polar webhook route (order.paid). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.12"
+        "@useamplio/amplio@^0.1.0-alpha.13"
       ],
       "registryDependencies": [
         "@useamplio/event-payment-order-paid"

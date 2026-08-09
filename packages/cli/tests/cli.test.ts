@@ -258,7 +258,8 @@ describe("runAddMiddleware", () => {
 
     const source = await readFile(middlewarePath, "utf8");
     expect(source).toContain("amplioPlugin");
-    expect(source).toContain("useRequestLogger");
+    expect(source).not.toContain("useRequestLogger");
+    expect(source).toContain("getRequestLogger");
   });
 
   it("add middleware fastify without init creates telemetry/middleware/fastify.ts", async () => {
@@ -278,7 +279,8 @@ describe("runAddMiddleware", () => {
 
     const source = await readFile(middlewarePath, "utf8");
     expect(source).toContain("amplioMiddleware");
-    expect(source).toContain("useRequestLogger");
+    expect(source).not.toContain("useRequestLogger");
+    expect(source).toContain("getRequestLogger");
   });
 
   it("add middleware express without init creates telemetry/middleware/express.ts", async () => {
@@ -298,7 +300,8 @@ describe("runAddMiddleware", () => {
 
     const source = await readFile(middlewarePath, "utf8");
     expect(source).toContain("withAmplio");
-    expect(source).toContain("useRequestLogger");
+    expect(source).not.toContain("useRequestLogger");
+    expect(source).toContain("getRequestLogger");
   });
 
 

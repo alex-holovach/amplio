@@ -362,7 +362,7 @@ describe("cli init --paths", () => {
     const result = runCli(["init", "--cwd", cwd, "--skip-install", "--paths"]);
     expectCliStatus(result, 0, "init --paths without tsconfig");
     expect(result.stdout).toContain("tsconfig.json not found");
-    expect(result.stdout).toContain("amplio init --paths");
+    expect(result.stdout).toContain("amplio paths");
   });
 
   it("suppresses ~telemetry paths hint on Next src layout when --paths is passed", async () => {
@@ -385,6 +385,59 @@ describe("cli init --paths", () => {
     expectCliStatus(result, 0, "init --yes --paths on Next src layout");
     expect(result.stdout).toContain("✓ tsconfig.json (~telemetry/* path alias)");
     expect(result.stdout).not.toContain("Optional: add to tsconfig.json compilerOptions.paths");
+  });
+});
+
+describe("cli paths (standalone)", () => {
+  it("writes only the tsconfig alias — no init scaffolding", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-paths-standalone-"));
+    await writeFile(path.join(cwd, "package.json"), JSON.stringify({ name: "paths-only" }));
+    await writeFile(
+      path.join(cwd, "tsconfig.json"),
+      `{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+`,
+    );
+
+    const result = runCli(["paths", "--cwd", cwd]);
+    expectCliStatus(result, 0, "standalone paths");
+    expect(result.stdout).toContain("amplio paths");
+    expect(result.stdout).toContain("✓ tsconfig.json (~telemetry/* path alias)");
+    // Nothing but the alias: the init flow did not run.
+    expect(result.stdout).not.toContain("components.json");
+    expect(existsSync(path.join(cwd, "telemetry"))).toBe(false);
+
+    const tsconfig = await readFile(path.join(cwd, "tsconfig.json"), "utf8");
+    expect(tsconfig).toContain('"~telemetry/*": ["./telemetry/*"]');
+  });
+
+  it("is idempotent", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-paths-idem-"));
+    await writeFile(path.join(cwd, "package.json"), JSON.stringify({ name: "paths-idem" }));
+    await writeFile(
+      path.join(cwd, "tsconfig.json"),
+      '{\n  "compilerOptions": {\n    "target": "es2017"\n  }\n}\n',
+    );
+
+    const first = runCli(["paths", "--cwd", cwd]);
+    expectCliStatus(first, 0, "first standalone paths");
+    const afterFirst = await readFile(path.join(cwd, "tsconfig.json"), "utf8");
+
+    const second = runCli(["paths", "--cwd", cwd]);
+    expectCliStatus(second, 0, "second standalone paths");
+    expect(second.stdout).toContain("· tsconfig.json already has ~telemetry/*");
+    expect(await readFile(path.join(cwd, "tsconfig.json"), "utf8")).toBe(afterFirst);
+  });
+
+  it("has command help", () => {
+    const result = runCli(["paths", "--help"]);
+    expectCliStatus(result, 0, "paths --help");
+    expect(result.stdout).toContain("amplio paths — write the ~telemetry/* tsconfig path alias");
   });
 });
 
@@ -741,7 +794,7 @@ describe("cli list", () => {
     expect(result.stdout).not.toContain("middlewares:");
     expect(result.stdout).not.toContain("middleware-hono");
     expect(result.stdout).toContain(`Total: ${integrationCount}`);
-    expect(integrationCount).toBe(4);
+    expect(integrationCount).toBe(5);
   });
 
   it("list middleware only shows middlewares", async () => {

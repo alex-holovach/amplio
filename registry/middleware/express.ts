@@ -46,5 +46,3 @@ export function getRequestLogger(req: Request): Logger {
   return req.amplio ?? getLogger();
 }
 
-/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */
-export const useRequestLogger = getRequestLogger;

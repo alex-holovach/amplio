@@ -42,5 +42,3 @@ export function getRequestLogger(c: Context): Logger {
   return (c.get(AMPLIO_KEY) as Logger | undefined) ?? getLogger();
 }
 
-/** @deprecated Use getRequestLogger() — same behavior, non-hook name. */
-export const useRequestLogger = getRequestLogger;

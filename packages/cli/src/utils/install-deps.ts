@@ -49,18 +49,25 @@ function installArgs(pm: PackageManager, packages: string[], dev = false): strin
   }
 }
 
+// Default: capture the package manager's output so its progress lines and
+// deprecated-subdependency warnings don't interleave with amplio's own
+// checklist. --verbose streams it through; failures always dump the capture.
 function runInstall(
   pm: PackageManager,
   cwd: string,
   packages: string[],
   dev: boolean,
-): boolean {
+  verbose: boolean,
+): { ok: boolean; output: string } {
   const result = spawnSync(pm, installArgs(pm, packages, dev), {
     cwd,
-    stdio: "inherit",
+    stdio: verbose ? "inherit" : "pipe",
     env: process.env,
+    encoding: "utf8",
   });
-  return !result.error && result.status === 0;
+  const ok = !result.error && result.status === 0;
+  const output = verbose ? "" : `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  return { ok, output };
 }
 
 export async function ensureRuntimeDependencies(options: {
@@ -69,6 +76,8 @@ export async function ensureRuntimeDependencies(options: {
   skipInstall?: boolean;
   /** Also install @useamplio/cli as a devDependency (init does this so the "amplio" npm script works out of the box). */
   withCliDevDependency?: boolean;
+  /** Stream the raw package-manager output instead of the one-line summary. */
+  verbose?: boolean;
 }): Promise<"installed" | "present" | "skipped" | "manual"> {
   const pm = options.packageManager;
   const pkg = await readPackageJson(options.cwd);
@@ -106,14 +115,29 @@ export async function ensureRuntimeDependencies(options: {
     ...missing,
     ...missingCli.map((name) => `${name} (dev)`),
   ];
-  console.log(`\nInstalling ${parts.join(", ")} with ${pm}…`);
+  const verbose = options.verbose ?? false;
+  if (verbose) {
+    console.log(`\nInstalling ${parts.join(", ")} with ${pm}…`);
+  }
 
-  let ok = missing.length === 0 || runInstall(pm, options.cwd, missing, false);
+  const startedAt = Date.now();
+  let failedOutput = "";
+  let ok = true;
+  if (missing.length > 0) {
+    const result = runInstall(pm, options.cwd, missing, false, verbose);
+    ok = result.ok;
+    failedOutput = result.output;
+  }
   if (ok && missingCli.length > 0) {
-    ok = runInstall(pm, options.cwd, missingCli, true);
+    const result = runInstall(pm, options.cwd, missingCli, true, verbose);
+    ok = result.ok;
+    failedOutput = result.output;
   }
 
   if (!ok) {
+    if (!verbose && failedOutput.trim()) {
+      console.log(`\n${failedOutput.trimEnd()}`);
+    }
     console.log("\nAutomatic install failed. Run:");
     if (missing.length > 0) {
       console.log(`  ${installCommand(pm, missing)}`);
@@ -124,6 +148,7 @@ export async function ensureRuntimeDependencies(options: {
     return "manual";
   }
 
-  console.log(`  ✓ installed ${parts.join(", ")}`);
+  const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+  console.log(`  ✓ installed ${parts.join(", ")} (${pm}, ${seconds}s)`);
   return "installed";
 }

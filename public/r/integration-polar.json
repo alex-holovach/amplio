@@ -4,9 +4,10 @@
   "title": "Polar Integration",
   "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed).",
   "type": "registry:lib",
+  "docs": "Call handlePolarWebhook (or trackPolarOrderPaid) from your Polar webhook route (order.paid). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.12"
+    "@useamplio/amplio@^0.1.0-alpha.13"
   ],
   "registryDependencies": [
     "@useamplio/event-payment-order-paid"
