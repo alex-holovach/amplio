@@ -137,6 +137,13 @@ describe("cli add unknown kind", () => {
       "Valid kinds: event, middleware, sink, enricher, integration",
     );
   });
+
+  it("exits non-zero with Unknown add kind for banana without id", () => {
+    const result = runCli(["add", "banana"]);
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}${result.stdout}`).toContain('Unknown add kind "banana"');
+    expect(`${result.stderr}${result.stdout}`).not.toContain("Missing add name");
+  });
 });
 
 describe("cli unknown command", () => {
@@ -168,6 +175,120 @@ describe("cli --force only with add", () => {
     const result = runCli(["list", "--force"]);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("error: --force is only valid with add");
+  });
+});
+
+describe("cli --fix only with doctor", () => {
+  it("exits 1 when --fix is used with init", () => {
+    const result = runCli(["init", "--fix"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --fix is only valid with doctor");
+  });
+
+  it("exits 1 when --fix is used with add", () => {
+    const result = runCli(["add", "event", "auth.user.signed_up", "--fix"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --fix is only valid with doctor");
+  });
+});
+
+describe("cli --paths only with init", () => {
+  it("exits 1 when --paths is used with doctor", () => {
+    const result = runCli(["doctor", "--paths"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --paths is only valid with init");
+  });
+
+  it("exits 1 when --paths is used with add", () => {
+    const result = runCli(["add", "sink", "console", "--paths"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("error: --paths is only valid with init");
+  });
+});
+
+describe("cli init --paths", () => {
+  it("adds alias to existing paths block while preserving JSONC comments", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-paths-jsonc-"));
+    await writeFile(
+      path.join(cwd, "tsconfig.json"),
+      `{
+  // create-t3-app style comment
+  "compilerOptions": {
+    "target": "es2017",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+`,
+    );
+    await writeFile(path.join(cwd, "package.json"), JSON.stringify({ name: "paths-app" }));
+
+    const result = runCli(["init", "--cwd", cwd, "--skip-install", "--paths"]);
+    expectCliStatus(result, 0, "init --paths with existing paths");
+
+    const tsconfig = await readFile(path.join(cwd, "tsconfig.json"), "utf8");
+    expect(tsconfig).toContain("// create-t3-app style comment");
+    expect(tsconfig).toContain('"~telemetry/*": ["./telemetry/*"]');
+    expect(tsconfig).toContain('"@/*": ["./src/*"]');
+    expect(result.stdout).toContain("✓ tsconfig.json (~telemetry/* path alias)");
+  });
+
+  it("inserts paths block when compilerOptions has no paths", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-paths-new-"));
+    await writeFile(
+      path.join(cwd, "tsconfig.json"),
+      `{
+  "compilerOptions": {
+    "target": "es2017"
+  }
+}
+`,
+    );
+    await writeFile(path.join(cwd, "package.json"), JSON.stringify({ name: "paths-new" }));
+
+    const result = runCli(["init", "--cwd", cwd, "--skip-install", "--paths"]);
+    expectCliStatus(result, 0, "init --paths without paths block");
+
+    const tsconfig = await readFile(path.join(cwd, "tsconfig.json"), "utf8");
+    expect(tsconfig).toContain('"paths": {');
+    expect(tsconfig).toContain('"~telemetry/*": ["./telemetry/*"]');
+    expect(result.stdout).toContain("✓ tsconfig.json (~telemetry/* path alias)");
+  });
+
+  it("is idempotent on second run", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-paths-idempotent-"));
+    await writeFile(
+      path.join(cwd, "tsconfig.json"),
+      `{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+`,
+    );
+    await writeFile(path.join(cwd, "package.json"), JSON.stringify({ name: "paths-idem" }));
+
+    const first = runCli(["init", "--cwd", cwd, "--skip-install", "--paths"]);
+    expectCliStatus(first, 0, "first init --paths");
+    const afterFirst = await readFile(path.join(cwd, "tsconfig.json"), "utf8");
+
+    const second = runCli(["init", "--cwd", cwd, "--skip-install", "--paths"]);
+    expectCliStatus(second, 0, "second init --paths");
+    expect(second.stdout).toContain("· tsconfig.json already has ~telemetry/*");
+    expect(await readFile(path.join(cwd, "tsconfig.json"), "utf8")).toBe(afterFirst);
+  });
+
+  it("prints hint when tsconfig.json is missing", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-paths-missing-"));
+    await writeFile(path.join(cwd, "package.json"), JSON.stringify({ name: "no-tsconfig" }));
+
+    const result = runCli(["init", "--cwd", cwd, "--skip-install", "--paths"]);
+    expectCliStatus(result, 0, "init --paths without tsconfig");
+    expect(result.stdout).toContain("tsconfig.json not found");
+    expect(result.stdout).toContain("amplio init --paths");
   });
 });
 

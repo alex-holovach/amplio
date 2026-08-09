@@ -46,16 +46,24 @@ import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
 
 app.post("/signup", async (c) => {
   const log = useRequestLogger(c);
-  log.event(AuthUserSignedUp).set({
+  log.child(AuthUserSignedUp).set({
     user: { id: "u_123" },
     signup: { method: "email" },
-  });
-  // middleware emits the request event when the response finishes
+  }).emit();
+  // two rows per signup request: the http.request spine (emitted by the middleware)
+  // and this auth.user.signed_up row, correlated via request_id
   return c.json({ ok: true });
 });
 ```
 
-You should see one JSON object on stdout per request (console sink from `telemetry/logger.ts`).
+To add fields to the request row itself (no separate domain event):
+
+```ts
+log.set({ user: { id: "u_123" } });
+// middleware emits the http.request spine when the response finishes
+```
+
+You should see JSON lines on stdout (console sink from `telemetry/logger.ts`) — one spine row plus any `.child(...).emit()` domain rows per request.
 
 ### Next.js (App Router)
 
@@ -73,15 +81,59 @@ import { NextResponse } from "next/server";
 
 export const GET = withAmplio(async () => {
   useLogger()
-    .event(AuthUserSignedUp)
-    .set({ user: { id: "u_123" }, signup: { method: "email" } });
+    .child(AuthUserSignedUp)
+    .set({ user: { id: "u_123" }, signup: { method: "email" } })
+    .emit();
+  // middleware still emits the http.request spine when the handler finishes
   return NextResponse.json({ ok: true });
 });
 ```
 
+To annotate the spine only: `useLogger().set({ user: { id: "u_123" } })`.
+
+### Turbopack / `next dev --turbo`
+
+Before `0.1.0-alpha.8`, Turbopack could compile `instrumentation.ts` and route handlers into **separate module graphs**. Each graph got its own copy of `@useamplio/amplio`, so `init()` in instrumentation was invisible to middleware — `.emit()` returned `null` with no obvious error.
+
+Fixes in alpha.8:
+
+1. **Runtime** — `init()` and ALS state live on `globalThis[Symbol.for('amplio.state.v1')]` so duplicated bundles share config.
+2. **Templates** — `telemetry/middleware/next.ts` and `trpc.ts` begin with a side-effect `import "../logger";` so that graph runs `init()` even when instrumentation is unreachable.
+3. **`amplio doctor`** — warns when those middleware files lack the `../logger` import (stale scaffolds from before alpha.8).
+
+Run `npx @useamplio/cli@alpha doctor` after upgrading; regenerate with `amplio add middleware next --force` (or `trpc --force`) if needed.
+
+### Server-only
+
+The runtime imports `node:async_hooks` at module top level. Do **not** import `telemetry/logger` or event defs from a `"use client"` component — the bundle will fail. For client-originated telemetry, POST to a route handler wrapped in `withAmplio` and emit server-side.
+
+## Correlated domain events
+
+One **spine** wide event per unit of work (`http.request` for HTTP, `trpc.request` for server-caller tRPC) plus **N domain events** that share its `request_id`.
+
+| API | Use when |
+|---|---|
+| `.child(EventDef)` | **Canonical.** Fresh seal and start time; copies `request_id` only (no `http.*` / `trpc.*`). Emitting the child does not seal the spine. |
+| `useLogger().set({ … })` | Add fields to the spine row (middleware emits it). |
+| `logger.event(Def).emit()` | Standalone row outside a request; inside ALS (since alpha.8) copies `request_id` only. |
+
+```ts
+// inside a request — two rows, same request_id:
+useLogger().child(PostCreated).set({ post: { id } }).emit();
+// spine: http.request (middleware) + domain: post.created
+```
+
+> **Wrong spellings (pre-alpha.8 footguns):**
+>
+> - `logger.event(Def).emit()` **before alpha.8** inside a request — lost `request_id` correlation.
+> - `useLogger().event(Def).emit()` — **rebinds** the spine to the domain schema and seals it on emit (no separate `http.request` row). Dev now warns loudly when you emit a rebind of an already-named spine.
+> - `.create().event(Def)` — duplicated transport fields on the domain row; `.create()` forks inherited the parent's start time before alpha.8 (fixed: fresh start time).
+
 ## tRPC (v11)
 
 When `init` detects `@trpc/server` alongside Next.js, it scaffolds `telemetry/middleware/trpc.ts` in addition to `telemetry/middleware/next.ts` (create-t3-app style: App Router + tRPC v11).
+
+**create-t3-app walkthrough:** [docs/t3.md](./docs/t3.md).
 
 ### Wiring (strict TypeScript)
 
@@ -123,7 +175,8 @@ export const publicProcedure = t.procedure.use(amplioMiddleware);
 
 - **`withAmplio`** owns the request wide event (the spine). It is named `event: "http.request"` / `@event: "http.request"` so you can filter all HTTP traffic on one key.
 - **`amplioTrpcMiddleware`** annotates that spine with `trpc.path`, `trpc.type`, and HTTP status — it does not emit a sibling request row.
-- **Domain events** you `.emit()` inside procedures (e.g. `auth.user.signed_up`) are separate rows. Keep business context on domain events; keep transport context on the spine.
+- **Server-caller path** (RSC `createCaller`, no HTTP request): when no ambient logger exists, the middleware creates a spine row named `trpc.request` with `transport: "server-caller"` and `trpc.path` / `trpc.type` — no fabricated `http.method: "TRPC"` or other `http.*` fields. Real HTTP tRPC requests through `withAmplio` are unchanged (`http.request`).
+- **Domain events** — use `useLogger().child(Def).set({ … }).emit()` inside procedures (e.g. `auth.user.signed_up`). Separate rows; keep business context on domain events; keep transport on the spine.
 
 ### Errors
 
@@ -164,6 +217,13 @@ Files land under `telemetry/…`.
 | `@useamplio/amplio` | Runtime (`defineEvent`, `init`, `.set()`, `.emit()`) |
 
 `@useamplio/core` is deprecated — use `@useamplio/amplio`.
+
+## CLI reference
+
+- `amplio doctor` — wiring checks (middleware exports, event schemas, tsconfig paths, Turbopack `../logger` import on `telemetry/middleware/next.ts` and `trpc.ts`, event barrel exports including shadcn-installed events).
+- `amplio doctor --fix` — regenerates missing event barrel `index.ts` exports.
+- `amplio init --paths` — writes the `~telemetry/*` tsconfig path alias (JSONC-comment-safe).
+- `amplio add <badkind> …` — errors with `Unknown add kind "…". Valid kinds: event, middleware, sink, enricher, integration.` (no silent fallthrough).
 
 ## Feedback
 

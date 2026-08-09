@@ -3,8 +3,9 @@
  * Register the returned function inside your request scope, not via init({ enrichers }).
  *
  * @example
+ * // inside your middleware/wrapper, before emit:
  * const enrich = requestMetadata({ method: req.method, path: req.path, ip: req.ip });
- * requestLogger.set(enrich(requestLogger.snapshot?.() ?? {})); // or merge at emit time
+ * requestLogger.set(enrich({}));
  */
 import type { LogRecord } from "@useamplio/amplio";
 

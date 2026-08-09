@@ -3,10 +3,7 @@ import { logger, type LoggerFacade } from "./logger.js";
 import { resetCompiledRedactForTests, setCompiledRedactFromConfig } from "./redact.js";
 import { resetPendingSinksForTests } from "./sinks.js";
 import { resetUseLoggerOutsideScopeWarningForTests } from "./context.js";
-
-let activeConfig: AmplioConfig | null = null;
-let alwaysSample = true;
-let warnedEmitBeforeInit = false;
+import { getGlobalState } from "./global-state.js";
 
 const computeAlwaysSample = (sampling?: SamplingConfig): boolean => {
   if (!sampling) {
@@ -20,7 +17,7 @@ const computeAlwaysSample = (sampling?: SamplingConfig): boolean => {
 };
 
 export function resolveAlwaysSample(): boolean {
-  return alwaysSample;
+  return getGlobalState().alwaysSample;
 }
 
 export function init(config: AmplioConfig): LoggerFacade {
@@ -36,7 +33,8 @@ export function init(config: AmplioConfig): LoggerFacade {
     throw new Error("init(): at least one sink is required");
   }
 
-  activeConfig = {
+  const state = getGlobalState();
+  state.activeConfig = {
     service,
     env,
     sinks: [...config.sinks],
@@ -55,12 +53,13 @@ export function init(config: AmplioConfig): LoggerFacade {
     ...(config.strict !== undefined ? { strict: config.strict } : {}),
   };
   setCompiledRedactFromConfig(config.redact);
-  alwaysSample = computeAlwaysSample(config.sampling);
+  state.alwaysSample = computeAlwaysSample(config.sampling);
 
   return logger;
 }
 
 export function getConfig(): AmplioConfig {
+  const activeConfig = getGlobalState().activeConfig;
   if (!activeConfig) {
     throw new Error("amplio is not initialized — call init() first");
   }
@@ -84,29 +83,21 @@ export function getConfig(): AmplioConfig {
 }
 
 export function isInitialized(): boolean {
-  return activeConfig !== null;
+  return getGlobalState().activeConfig !== null;
 }
 
 export function resolveConfig(): AmplioConfig {
-  return activeConfig ?? { service: "", env: "", sinks: [] };
-}
-
-export function warnEmitBeforeInitOnce(warn: () => void): void {
-  if (warnedEmitBeforeInit) {
-    return;
-  }
-  warnedEmitBeforeInit = true;
-  warn();
+  return getGlobalState().activeConfig ?? { service: "", env: "", sinks: [] };
 }
 
 export function resetEmitBeforeInitWarningForTests(): void {
-  warnedEmitBeforeInit = false;
+  // Public test hook; emit-before-init warns on every drop in development.
 }
 
 export function resetConfigForTests(): void {
-  activeConfig = null;
-  alwaysSample = true;
-  warnedEmitBeforeInit = false;
+  const state = getGlobalState();
+  state.activeConfig = null;
+  state.alwaysSample = true;
   resetUseLoggerOutsideScopeWarningForTests();
   resetCompiledRedactForTests();
   resetPendingSinksForTests();

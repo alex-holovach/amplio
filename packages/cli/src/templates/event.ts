@@ -7,6 +7,8 @@ export function renderEventTemplate(eventName: string, exportName?: string): str
   return `import { defineEvent } from "@useamplio/amplio";
 import { z } from "zod";
 
+// Starter shape — edit this schema to match your domain (e.g. numeric ids, extra fields).
+// 'amplio add event' will not overwrite your edits; re-run with --force to regenerate.
 export const ${exportSymbol} = defineEvent(
   "${eventName}",
   z.object({

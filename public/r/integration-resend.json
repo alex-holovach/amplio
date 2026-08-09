@@ -6,8 +6,8 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.7",
-    "resend"
+    "@useamplio/amplio@^0.1.0-alpha.8",
+    "resend@^4.0.0"
   ],
   "registryDependencies": [
     "@useamplio/event-email-sent"

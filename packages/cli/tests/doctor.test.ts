@@ -9,6 +9,36 @@ async function makeTempDir(prefix: string): Promise<string> {
   return mkdtemp(path.join(tmpdir(), prefix));
 }
 
+async function setupDoctorProject(cwd: string, options?: { turboDev?: boolean }): Promise<void> {
+  await writeFile(
+    path.join(cwd, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        next: "^15.0.0",
+        "@useamplio/amplio": "^0.1.0-alpha.7",
+        zod: "^3.24.0",
+      },
+      ...(options?.turboDev
+        ? { scripts: { dev: "next dev --turbo" } }
+        : {}),
+    }),
+  );
+  await writeFile(
+    path.join(cwd, "amplio.json"),
+    JSON.stringify({ telemetryDir: "telemetry", packageManager: "pnpm" }),
+  );
+  await mkdir(path.join(cwd, "telemetry/events"), { recursive: true });
+  await mkdir(path.join(cwd, "src"), { recursive: true });
+  await writeFile(
+    path.join(cwd, "telemetry/logger.ts"),
+    'import { init } from "@useamplio/amplio";\ninit({ service: "test", env: "test", sinks: [], enrichers: [] });\n',
+  );
+  await writeFile(
+    path.join(cwd, "src/instrumentation.ts"),
+    'export async function register() { await import("../telemetry/logger"); }\n',
+  );
+}
+
 describe("runDoctor", () => {
   it("passes for a well-wired Next project", async () => {
     const cwd = await makeTempDir("amplio-doctor-good-");
@@ -114,5 +144,101 @@ describe("runDoctor", () => {
 
     expect(code).toBe(0);
     expect(logs.join("\n")).not.toContain("amplioMiddleware is never imported");
+  });
+
+  it("warns when Next middleware lacks ../logger import for Turbopack", async () => {
+    const cwd = await makeTempDir("amplio-doctor-turbo-warn-");
+    await setupDoctorProject(cwd, { turboDev: true });
+    await mkdir(path.join(cwd, "telemetry/middleware"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/middleware/next.ts"),
+      "export function withAmplio() {}\n",
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    const output = logs.join("\n");
+    expect(output).toContain('does not import "../logger"');
+    expect(output).toContain("your dev script uses --turbo");
+    expect(output).toContain("amplio add middleware next --force");
+  });
+
+  it("passes Turbopack check when middleware imports ../logger", async () => {
+    const cwd = await makeTempDir("amplio-doctor-turbo-ok-");
+    await setupDoctorProject(cwd);
+    await mkdir(path.join(cwd, "telemetry/middleware"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/middleware/next.ts"),
+      'import "../logger";\nexport function withAmplio() {}\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).not.toContain('does not import "../logger"');
+  });
+
+  it("warns when event barrels are missing", async () => {
+    const cwd = await makeTempDir("amplio-doctor-barrel-warn-");
+    await setupDoctorProject(cwd);
+    await mkdir(path.join(cwd, "telemetry/events/payment"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/events/payment/order-paid.ts"),
+      'import { defineEvent } from "@useamplio/amplio";\nexport const PaymentOrderPaid = defineEvent("payment.order.paid", {} as never);\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    const output = logs.join("\n");
+    expect(output).toContain('Event "payment.order.paid" missing from barrel export(s)');
+    expect(output).toContain("amplio doctor --fix");
+  });
+
+  it("--fix regenerates missing domain and root barrels", async () => {
+    const cwd = await makeTempDir("amplio-doctor-barrel-fix-");
+    await setupDoctorProject(cwd);
+    await mkdir(path.join(cwd, "telemetry/events/payment"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "telemetry/events/payment/order-paid.ts"),
+      'import { defineEvent } from "@useamplio/amplio";\nexport const PaymentOrderPaid = defineEvent("payment.order.paid", {} as never);\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd, fix: true });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).toContain("Fixed barrel exports for payment.order.paid");
+
+    const domainBarrel = await readFile(
+      path.join(cwd, "telemetry/events/payment/index.ts"),
+      "utf8",
+    );
+    expect(domainBarrel).toContain("PaymentOrderPaid");
+    expect(domainBarrel).toContain('./order-paid"');
+
+    const rootBarrel = await readFile(path.join(cwd, "telemetry/events/index.ts"), "utf8");
+    expect(rootBarrel).toContain("PaymentOrderPaid");
+    expect(rootBarrel).toContain('./payment/index"');
   });
 });

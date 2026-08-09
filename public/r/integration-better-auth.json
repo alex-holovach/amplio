@@ -6,8 +6,8 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.7",
-    "better-auth"
+    "@useamplio/amplio@^0.1.0-alpha.8",
+    "better-auth@^1.2.0"
   ],
   "registryDependencies": [
     "@useamplio/event-auth-user-signed-up",

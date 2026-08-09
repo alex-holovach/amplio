@@ -1,9 +1,9 @@
 import { isDevelopment } from "./env.js";
+import { getGlobalState } from "./global-state.js";
 import type { LogRecord, Sink } from "./types.js";
 
-const pendingAsyncSinks = new Set<Promise<void>>();
-
 function trackAsyncSink(promise: Promise<unknown>): void {
+  const pendingAsyncSinks = getGlobalState().pendingAsyncSinks;
   const tracked = promise
     .catch((error) => {
       if (isDevelopment()) {
@@ -49,7 +49,7 @@ export async function runSinks(sinks: Sink[], record: LogRecord): Promise<void> 
 }
 
 export async function flush(): Promise<void> {
-  const pending = [...pendingAsyncSinks];
+  const pending = [...getGlobalState().pendingAsyncSinks];
   if (pending.length === 0) {
     return;
   }
@@ -57,5 +57,5 @@ export async function flush(): Promise<void> {
 }
 
 export function resetPendingSinksForTests(): void {
-  pendingAsyncSinks.clear();
+  getGlobalState().pendingAsyncSinks.clear();
 }

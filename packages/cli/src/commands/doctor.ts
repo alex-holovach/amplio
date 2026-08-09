@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { eventNameToRelativePath } from "../utils/event-name.js";
+import { updateEventBarrels } from "./add.js";
+import { eventNameToExport, eventNameToRelativePath } from "../utils/event-name.js";
 import { aliasPrefixFromComponentsJson } from "../utils/components-json.js";
 import { readAmplioConfig } from "../utils/config.js";
 import { detectFramework } from "../utils/detect-framework.js";
@@ -11,6 +12,7 @@ import { resolveProjectPaths } from "../utils/paths.js";
 
 export interface DoctorOptions {
   cwd: string;
+  fix?: boolean;
 }
 
 type CheckStatus = "passed" | "warning" | "failed";
@@ -22,6 +24,9 @@ interface Check {
 }
 
 const DEFINE_EVENT_RE = /defineEvent\s*\(\s*["']([^"']+)["']/g;
+const LOGGER_SIDE_EFFECT_IMPORT_RE =
+  /import\s+(?:[^;]*?from\s+)?["']\.\.\/logger["']/;
+const TURBOPACK_MIDDLEWARE_FILES = ["next.ts", "trpc.ts"] as const;
 
 const MIDDLEWARE_EXPORTS: Record<string, string> = {
   "next.ts": "withAmplio",
@@ -115,6 +120,15 @@ async function walkEventFiles(dir: string): Promise<string[]> {
   return files;
 }
 
+function barrelExportsName(barrelContent: string, exportName: string): boolean {
+  return new RegExp(`export\\s*\\{[^}]*\\b${exportName}\\b`).test(barrelContent);
+}
+
+function devScriptUsesTurbo(pkg: { scripts?: Record<string, string> }): boolean {
+  const dev = pkg.scripts?.dev ?? "";
+  return /--turbo\b|--turbopack\b/.test(dev);
+}
+
 async function tsconfigHasAliasPrefix(cwd: string, prefix: string): Promise<boolean> {
   const tsconfigPath = path.join(cwd, "tsconfig.json");
   if (!(await pathExists(tsconfigPath))) {
@@ -140,7 +154,7 @@ function printCheck(check: Check): void {
 }
 
 export async function runDoctor(options: DoctorOptions): Promise<number> {
-  const { cwd } = options;
+  const { cwd, fix = false } = options;
   const checks: Check[] = [];
   let hardFailures = 0;
 
@@ -238,6 +252,13 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
     hasNext = "next" in { ...pkg.dependencies, ...pkg.devDependencies };
   }
 
+  let pkgScripts: { scripts?: Record<string, string> } | null = null;
+  if (await pathExists(pkgPath)) {
+    pkgScripts = JSON.parse(await fs.readFile(pkgPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+  }
+
   if (hasNext) {
     const instrumentationCandidates = [
       path.join(cwd, "src/instrumentation.ts"),
@@ -274,11 +295,36 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
         });
       }
     }
+
+    const turboSuffix =
+      pkgScripts && devScriptUsesTurbo(pkgScripts) ? " (your dev script uses --turbo)" : "";
+    const middlewareDir = path.join(paths.telemetry, "middleware");
+
+    for (const middlewareFile of TURBOPACK_MIDDLEWARE_FILES) {
+      const middlewarePath = path.join(middlewareDir, middlewareFile);
+      if (!(await pathExists(middlewarePath))) {
+        continue;
+      }
+
+      const content = await fs.readFile(middlewarePath, "utf8");
+      if (LOGGER_SIDE_EFFECT_IMPORT_RE.test(content)) {
+        continue;
+      }
+
+      const relPath = path.relative(cwd, middlewarePath).replace(/\\/g, "/");
+      const middlewareId = middlewareFile.replace(/\.ts$/, "");
+      checks.push({
+        status: "warning",
+        message: `${relPath} does not import "../logger" — under next dev --turbo, init() from instrumentation.ts may not reach this module graph and events drop silently${turboSuffix}`,
+        fix: `Add \`import "../logger";\` at the top of the file, or regenerate with: amplio add middleware ${middlewareId} --force (templates now include it). Runtime >=0.1.0-alpha.8 also shares init() across module graphs.`,
+      });
+    }
   }
 
   const eventFiles = await walkEventFiles(paths.events);
   for (const file of eventFiles) {
     const source = await fs.readFile(file, "utf8");
+    DEFINE_EVENT_RE.lastIndex = 0;
     for (const match of source.matchAll(DEFINE_EVENT_RE)) {
       const eventName = match[1]!;
       const expected = eventNameToRelativePath(eventName);
@@ -289,6 +335,48 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
           message: `Event "${eventName}" path mismatch: ${actual} (expected ${expected})`,
           fix: `Rename to ${expected} or update defineEvent name to match the file path.`,
         });
+        continue;
+      }
+
+      const exportName = eventNameToExport(eventName);
+      const domainDir = path.dirname(expected);
+      const domainBarrelPath = path.join(paths.telemetry, domainDir, "index.ts");
+      const rootBarrelPath = path.join(paths.events, "index.ts");
+
+      let domainBarrelOk = false;
+      let rootBarrelOk = false;
+
+      if (await pathExists(domainBarrelPath)) {
+        const domainBarrel = await fs.readFile(domainBarrelPath, "utf8");
+        domainBarrelOk = barrelExportsName(domainBarrel, exportName);
+      }
+
+      if (await pathExists(rootBarrelPath)) {
+        const rootBarrel = await fs.readFile(rootBarrelPath, "utf8");
+        rootBarrelOk = barrelExportsName(rootBarrel, exportName);
+      }
+
+      if (!domainBarrelOk || !rootBarrelOk) {
+        if (fix) {
+          await updateEventBarrels(cwd, telemetryDir, expected, exportName);
+          checks.push({
+            status: "passed",
+            message: `Fixed barrel exports for ${eventName}`,
+          });
+        } else {
+          const missing: string[] = [];
+          if (!domainBarrelOk) {
+            missing.push(path.relative(cwd, domainBarrelPath).replace(/\\/g, "/"));
+          }
+          if (!rootBarrelOk) {
+            missing.push(path.relative(cwd, rootBarrelPath).replace(/\\/g, "/"));
+          }
+          checks.push({
+            status: "warning",
+            message: `Event "${eventName}" missing from barrel export(s): ${missing.join(", ")}`,
+            fix: `Run: amplio doctor --fix (regenerates barrel exports), or amplio add event ${eventName}.`,
+          });
+        }
       }
     }
   }

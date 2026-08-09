@@ -1,11 +1,8 @@
-import {
-  isInitialized,
-  resolveAlwaysSample,
-  resolveConfig,
-  warnEmitBeforeInitOnce,
-} from "./config.js";
+import { isInitialized, resolveAlwaysSample, resolveConfig } from "./config.js";
+import { hasAmbientLogger } from "./context.js";
 import { createError } from "./error.js";
 import { isDevelopment, isTest } from "./env.js";
+import { getGlobalState } from "./global-state.js";
 import { getSealedNoopLogger } from "./noop-logger.js";
 import { AmplioValidationError } from "./validation-error.js";
 import { deepMerge } from "./deep-merge.js";
@@ -33,6 +30,7 @@ type InternalLogger = Logger & {
   _skipValidation?: boolean;
   _startedAt: number;
   _seal: SealState;
+  _rebindFrom?: string;
 };
 
 const warnSealed = (action: "set" | "error" | "emit" | "create" | "event"): void => {
@@ -196,6 +194,7 @@ class InternalLoggerImpl implements InternalLogger {
   _event?: string;
   _shape?: EventDef["shape"];
   _skipValidation?: boolean;
+  _rebindFrom?: string;
 
   get sealed(): boolean {
     return this._seal.sealed;
@@ -209,6 +208,7 @@ class InternalLoggerImpl implements InternalLogger {
     _event?: string;
     _shape?: EventDef["shape"];
     _skipValidation?: boolean;
+    _rebindFrom?: string;
   }) {
     this._data = state._data;
     this._ownsData = state._ownsData;
@@ -217,6 +217,7 @@ class InternalLoggerImpl implements InternalLogger {
     this._event = state._event;
     this._shape = state._shape;
     this._skipValidation = state._skipValidation;
+    this._rebindFrom = state._rebindFrom;
   }
 
   set(partial: Record<string, unknown>): Logger {
@@ -261,6 +262,25 @@ class InternalLoggerImpl implements InternalLogger {
         input.code = String(code);
       }
       structuredError = createError(input);
+    } else if (isPlainObject(err) && typeof err.message === "string") {
+      const input: StructuredError = { message: err.message };
+      if (typeof err.name === "string") {
+        input.name = err.name;
+      }
+      if (typeof err.why === "string") {
+        input.why = err.why;
+      }
+      if (typeof err.fix === "string") {
+        input.fix = err.fix;
+      }
+      if (typeof err.link === "string") {
+        input.link = err.link;
+      }
+      const code = err.code;
+      if (typeof code === "string" || typeof code === "number") {
+        input.code = String(code);
+      }
+      structuredError = createError(input);
     } else {
       structuredError = createError({ message: String(err) });
     }
@@ -274,13 +294,16 @@ class InternalLoggerImpl implements InternalLogger {
     }
     if (!isInitialized()) {
       if (isDevelopment()) {
-        warnEmitBeforeInitOnce(() => {
-          console.warn(
-            "[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup - in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. See ALPHA.md.",
-          );
-        });
+        console.warn(
+          '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See ALPHA.md.',
+        );
       }
       return null;
+    }
+    if (this._rebindFrom && isDevelopment()) {
+      console.warn(
+        `[amplio] emitting .event("${this._event}") from a logger already bound to "${this._rebindFrom}" rebinds and seals it — no separate "${this._rebindFrom}" row will be emitted for this request. For a separate correlated domain event, use .child(EventDef) instead.`,
+      );
     }
     const record = emitInternal(this);
     this._seal.sealed = true;
@@ -295,7 +318,7 @@ class InternalLoggerImpl implements InternalLogger {
     return new InternalLoggerImpl({
       _data: merged,
       _ownsData: merged !== this._data,
-      _startedAt: this._startedAt,
+      _startedAt: Date.now(),
       _seal: { sealed: false },
       _event: this._event,
       _shape: this._shape,
@@ -303,15 +326,18 @@ class InternalLoggerImpl implements InternalLogger {
     });
   }
 
-  event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T> {
-    if (this._seal.sealed) {
-      return getSealedNoopLogger().event(def);
-    }
+  private bindEventLogger<T extends Record<string, unknown>>(
+    def: EventDef<T>,
+    options: {
+      _data: Record<string, unknown>;
+      _ownsData: boolean;
+      _startedAt: number;
+      _seal: SealState;
+      _rebindFrom?: string;
+    },
+  ): EventLogger<T> {
     const bound = new InternalLoggerImpl({
-      _data: this._data,
-      _ownsData: false,
-      _startedAt: this._startedAt,
-      _seal: this._seal,
+      ...options,
       _event: def.name,
       _shape: def.shape,
       _skipValidation: def.skipValidation,
@@ -335,6 +361,42 @@ class InternalLoggerImpl implements InternalLogger {
     };
 
     return eventLogger;
+  }
+
+  event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T> {
+    if (this._seal.sealed) {
+      return getSealedNoopLogger().event(def);
+    }
+    const parentEventName =
+      this._event ??
+      (typeof this._data["event"] === "string" ? this._data["event"] : undefined);
+    const rebindFrom =
+      parentEventName !== undefined && parentEventName !== def.name
+        ? parentEventName
+        : undefined;
+
+    return this.bindEventLogger(def, {
+      _data: this._data,
+      _ownsData: false,
+      _startedAt: this._startedAt,
+      _seal: this._seal,
+      _rebindFrom: rebindFrom,
+    });
+  }
+
+  child<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T> {
+    const initial: Record<string, unknown> = {};
+    const requestId = this._data.request_id;
+    if (typeof requestId === "string") {
+      initial.request_id = requestId;
+    }
+
+    return this.bindEventLogger(def, {
+      _data: initial,
+      _ownsData: true,
+      _startedAt: Date.now(),
+      _seal: { sealed: false },
+    });
   }
 }
 
@@ -360,7 +422,17 @@ export const logger: LoggerFacade = {
     return createLogger(initial);
   },
   event(def, initial) {
-    const bound = createLogger().event(def);
+    let base: Record<string, unknown> = {};
+    if (hasAmbientLogger()) {
+      const store = getGlobalState().storage.getStore();
+      if (store) {
+        const data = (store as Partial<InternalLogger>)._data;
+        if (data && typeof data.request_id === "string") {
+          base = { request_id: data.request_id };
+        }
+      }
+    }
+    const bound = createLogger(base).event(def);
     return initial ? bound.set(initial) : bound;
   },
 };

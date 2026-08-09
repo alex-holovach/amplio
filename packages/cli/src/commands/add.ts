@@ -150,7 +150,7 @@ async function installByName(
   await mergePackageDependencies(cwd, [...mergedDeps], [...mergedDevDeps]);
 }
 
-async function updateEventBarrels(
+export async function updateEventBarrels(
   cwd: string,
   telemetryDir: string,
   eventRelativePath: string,
@@ -290,6 +290,17 @@ export async function runAddEnricher(id: string, options: AddOptions): Promise<v
 
   if (enricherExists && !(options.force ?? false)) {
     console.log("  · skipped existing enricher file");
+  }
+
+  if (registryId === "request-metadata") {
+    console.log(
+      "  request-metadata is a per-request enricher factory — use it inside middleware/wrappers, not init():",
+    );
+    console.log(
+      "    const enrich = requestMetadata({ method: req.method, path: req.path });",
+    );
+    console.log("    requestLogger.set(enrich({}));");
+    return;
   }
 
   const loggerUpdated = await updateLoggerWithEnricher(paths.logger, registryId);

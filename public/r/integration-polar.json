@@ -6,8 +6,8 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.7",
-    "@polar-sh/sdk"
+    "@useamplio/amplio@^0.1.0-alpha.8",
+    "@polar-sh/sdk@^0.32.0"
   ],
   "registryDependencies": [
     "@useamplio/event-payment-order-paid"

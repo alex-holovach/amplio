@@ -15,12 +15,20 @@ import {
 import { runList } from "./commands/list.js";
 import { runDoctor } from "./commands/doctor.js";
 
+const VALID_ADD_KINDS = [
+  "event",
+  "middleware",
+  "sink",
+  "enricher",
+  "integration",
+] as const;
+
 function printHelp(): void {
   console.log(`amplio — schema-first wide-event telemetry scaffolding
 
 Usage:
   amplio init [options]
-  amplio doctor [options]
+  amplio doctor [--fix] [options]
   amplio list [kind]   List registry items (id, title, description)
   amplio add event <domain.entity.action>
   amplio add middleware <hono|express|next|fastify|trpc>
@@ -37,6 +45,8 @@ Options:
   --event <name|none>          Scaffold event on init (default: auth.user.signed_up when auto)
   --yes                        Non-interactive init: auto-scaffold detected middleware + event
   --skip-install               Skip installing @useamplio/amplio and zod (init)
+  --paths                      Write ~telemetry/* tsconfig path alias (init)
+  --fix                        Regenerate missing event barrel exports (doctor)
   --force                      Overwrite generated files (add)
   -h, --help                   Show help
   -V, --version                Print version
@@ -57,6 +67,8 @@ function parseCliArgs() {
         event: { type: "string" },
         yes: { type: "boolean", default: false },
         "skip-install": { type: "boolean", default: false },
+        paths: { type: "boolean", default: false },
+        fix: { type: "boolean", default: false },
         force: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
         version: { type: "boolean", short: "V", default: false },
@@ -96,6 +108,16 @@ async function main(): Promise<void> {
 
   if (values.force && command !== "add") {
     console.error("error: --force is only valid with add");
+    process.exit(1);
+  }
+
+  if (values.fix && command !== "doctor") {
+    console.error("error: --fix is only valid with doctor");
+    process.exit(1);
+  }
+
+  if (values.paths && command !== "init") {
+    console.error("error: --paths is only valid with init");
     process.exit(1);
   }
 
@@ -157,6 +179,7 @@ async function main(): Promise<void> {
         ...(event ? { event } : {}),
         ...(values.yes ? { yes: true } : {}),
         ...(values["skip-install"] ? { skipInstall: true } : {}),
+        ...(values.paths ? { paths: true } : {}),
       });
       return;
     }
@@ -178,22 +201,26 @@ async function main(): Promise<void> {
         throw new Error("Missing add target. Example: amplio add event auth.user.signed_up");
       }
 
+      if (!(VALID_ADD_KINDS as readonly string[]).includes(kind)) {
+        throw new Error(
+          `Unknown add kind "${kind}". Valid kinds: event, middleware, sink, enricher, integration.`,
+        );
+      }
+
       if (!id) {
-        const examples: Record<string, string> = {
+        const examples: Record<(typeof VALID_ADD_KINDS)[number], string> = {
           event: "amplio add event auth.user.signed_up",
           middleware: "amplio add middleware hono",
           sink: "amplio add sink console",
           enricher: "amplio add enricher service-metadata",
           integration: "amplio add integration better-auth",
         };
-        const example =
-          examples[kind] ?? "amplio add event auth.user.signed_up";
-        throw new Error(`Missing add name. Example: ${example}`);
+        throw new Error(`Missing add name. Example: ${examples[kind as (typeof VALID_ADD_KINDS)[number]]}`);
       }
 
       const options = { cwd, force: values.force ?? false };
 
-      switch (kind) {
+      switch (kind as (typeof VALID_ADD_KINDS)[number]) {
         case "event":
           await runAddEvent(id, options);
           return;
@@ -209,15 +236,11 @@ async function main(): Promise<void> {
         case "integration":
           await runAddIntegration(id, options);
           return;
-        default:
-          throw new Error(
-            `Unknown add kind "${kind}". Valid kinds: event, middleware, sink, enricher, integration.`,
-          );
       }
     }
 
     if (command === "doctor") {
-      const exitCode = await runDoctor({ cwd });
+      const exitCode = await runDoctor({ cwd, ...(values.fix ? { fix: true } : {}) });
       process.exit(exitCode);
     }
 

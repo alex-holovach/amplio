@@ -94,6 +94,7 @@ export interface Logger {
   emit(): LogRecord | null;
   create(initial?: Record<string, unknown>): Logger;
   event<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T>;
+  child<T extends Record<string, unknown>>(def: EventDef<T>): EventLogger<T>;
 }
 
 export interface EventLogger<T extends Record<string, unknown>> {

@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.8] - 2026-08-09
+
+### Runtime
+
+- **`Logger.child(EventDef)`** — first-class correlated domain event: fresh seal and start time (`duration_ms` measures the child's work), copies `request_id` only (no `http.*` / `trpc.*` duplication). Emitting the child does not seal the request spine.
+- **`logger.event(def)` (facade)** — inside request scope (ALS), copies `request_id` into the standalone event; outside a request unchanged.
+- **Instance `.event(def)`** — still rebinds the current wide event (shared seal/data); dev now warns loudly when emitting a rebind of an already-named spine (e.g. `http.request`).
+- **`.create()` forks** — fresh start time (no longer inherit parent elapsed time).
+- **`.error(createError({ … }))`** — structured errors record `message` / `why` / `fix` / `code` field-for-field (fixes `[object Object]`).
+- **`globalThis[Symbol.for('amplio.state.v1')]`** — `init()` and ALS state shared across bundler module graphs (e.g. `next dev --turbo` compiling instrumentation and routes separately).
+- **emit-before-init dev warning** — fires on every dropped emit (was warn-once); mentions Turbopack / separate module-graph cause.
+
+### CLI
+
+- **`amplio doctor`** — warns when `telemetry/middleware/next.ts` or `trpc.ts` lacks side-effect `import "../logger"` (Turbopack condition); checks event barrel exports (incl. shadcn-installed events).
+- **`amplio doctor --fix`** — regenerates missing event barrel exports.
+- **`amplio init --paths`** — writes `~telemetry/*` tsconfig path alias (JSONC-comment-safe).
+- **`amplio add <badkind>`** — errors with valid kinds instead of silent fallthrough.
+- **`amplio add enricher request`** — no longer inserts an unused import into `logger.ts`.
+
+### Templates & registry
+
+- **Next / tRPC middleware templates** — begin with side-effect `import "../logger";` (belt-and-braces with runtime global state).
+- **tRPC server-caller path** — spine row is `trpc.request` with `transport: "server-caller"` and `trpc.path` / `trpc.type`; no fabricated `http.method: "TRPC"` or `http.*` on non-HTTP invocations (RSC `createCaller`). HTTP tRPC through `withAmplio` unchanged (`http.request`).
+- **Registry integration deps** — pinned versions (no more `"resend": "*"` wildcards).
+
+### Docs
+
+- **ALPHA.md** — correlated domain events (`.child()`), fixed Hono/Next examples, Turbopack note, server-caller tRPC model, server-only caveat, CLI reference.
+- **README.md** — `.child()` recipe, updated API table, per-drop emit warning, server-only note.
+- **docs/t3.md** — create-t3-app / Next 15 / tRPC v11 walkthrough.
+
 ## [0.1.0-alpha.7] - 2026-08-09
 
 ### Added

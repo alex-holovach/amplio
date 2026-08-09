@@ -1,3 +1,4 @@
+import { getGlobalState } from "./global-state.js";
 import type { JsonValue, LogRecord, RedactConfig } from "./types.js";
 
 const REDACTED = "[REDACTED]";
@@ -74,26 +75,25 @@ export function compileRedactConfig(config?: RedactConfig): CompiledRedactConfig
 
 const DEFAULT_COMPILED = compileRedactConfig(undefined) as CompiledRedactConfig;
 
-let activeCompiled: CompiledRedactConfig | false | undefined;
-
 export function setCompiledRedactFromConfig(redact?: RedactConfig): void {
+  const state = getGlobalState();
   if (redact === false) {
-    activeCompiled = false;
+    state.activeCompiled = false;
     return;
   }
   if (redact === undefined) {
-    activeCompiled = DEFAULT_COMPILED;
+    state.activeCompiled = DEFAULT_COMPILED;
     return;
   }
-  activeCompiled = compileRedactConfig(redact);
+  state.activeCompiled = compileRedactConfig(redact);
 }
 
 export function resetCompiledRedactForTests(): void {
-  activeCompiled = undefined;
+  getGlobalState().activeCompiled = undefined;
 }
 
 export function getCompiledRedact(): CompiledRedactConfig | false {
-  return activeCompiled ?? DEFAULT_COMPILED;
+  return getGlobalState().activeCompiled ?? DEFAULT_COMPILED;
 }
 
 const fieldKeyRedacts = (fieldKey: string, fieldKeys: Set<string>): boolean => {

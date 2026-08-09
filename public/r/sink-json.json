@@ -5,7 +5,7 @@
   "description": "JSON sink that serializes wide events for streaming or files.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.7"
+    "@useamplio/amplio@^0.1.0-alpha.8"
   ],
   "files": [
     {

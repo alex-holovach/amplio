@@ -5,8 +5,14 @@
  * instead of emitting a sibling record. Domain events emitted in procedures are
  * intentionally separate rows — do not duplicate fields across them.
  */
+// Side-effect import: ensures init() from telemetry/logger runs in every module
+// graph that uses this middleware (next dev --turbo compiles instrumentation.ts
+// and route bundles separately, which would otherwise drop events silently).
+import "../logger";
+
 import {
-  createRequestLogger,
+  createLogger,
+  createRequestId,
   flush,
   hasAmbientLogger,
   runWithLogger,
@@ -107,15 +113,19 @@ function annotateTrpcError(
   path: string,
   type: TrpcProcedureType,
   error: unknown,
+  includeHttp: boolean,
 ): void {
   const status = trpcErrorStatus(error);
   if (!logger.sealed) {
     logger.error(error, { status });
-    logger.set({
+    const patch: Record<string, unknown> = {
       trpc: { path, type },
       status,
-      http: { status },
-    });
+    };
+    if (includeHttp) {
+      patch.http = { status };
+    }
+    logger.set(patch);
   }
 }
 
@@ -130,12 +140,11 @@ function finalizeStandaloneRequest(
   }
 
   if (isFailedMiddlewareResult(result)) {
-    annotateTrpcError(logger, path, type, result.error);
+    annotateTrpcError(logger, path, type, result.error, false);
   } else {
     logger.set({
       trpc: { path, type },
       status: 200,
-      http: { status: 200 },
     });
   }
 
@@ -176,16 +185,21 @@ export function amplioTrpcMiddleware() {
       try {
         const result = await next();
         if (isFailedMiddlewareResult(result)) {
-          annotateTrpcError(logger, path, type, result.error);
+          annotateTrpcError(logger, path, type, result.error, true);
         }
         return result;
       } catch (error) {
-        annotateTrpcError(logger, path, type, error);
+        annotateTrpcError(logger, path, type, error, true);
         throw error;
       }
     }
 
-    const requestLogger = createRequestLogger({ method: "TRPC", path });
+    const requestLogger = createLogger({
+      event: "trpc.request",
+      "@event": "trpc.request",
+      request_id: createRequestId(),
+      transport: "server-caller",
+    });
 
     return runWithLogger(requestLogger, async () => {
       annotateTrpcProcedure(requestLogger, path, type);
@@ -196,7 +210,7 @@ export function amplioTrpcMiddleware() {
         return result;
       } catch (error) {
         if (!requestLogger.sealed) {
-          annotateTrpcError(requestLogger, path, type, error);
+          annotateTrpcError(requestLogger, path, type, error, false);
           requestLogger.emit();
           scheduleFlush();
         }

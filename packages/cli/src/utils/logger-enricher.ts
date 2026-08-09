@@ -304,7 +304,7 @@ export async function updateLoggerWithEnricher(
   enricherId: string,
 ): Promise<boolean> {
   const meta = ENRICHER_META[enricherId];
-  if (!meta) {
+  if (!meta || !meta.wireIntoInit) {
     return false;
   }
 
@@ -323,9 +323,7 @@ export async function updateLoggerWithEnricher(
   }
 
   const withImport = insertImport(source, meta);
-  const updated = meta.wireIntoInit
-    ? wireEnricherIntoInit(withImport, meta)
-    : withImport;
+  const updated = wireEnricherIntoInit(withImport, meta);
 
   if (updated === source) {
     return false;

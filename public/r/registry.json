@@ -85,7 +85,7 @@
       "name": "enricher-request-metadata",
       "type": "registry:lib",
       "title": "Request Metadata Enricher",
-      "description": "Enricher that adds request id / HTTP metadata."
+      "description": "Enricher that adds request id / HTTP metadata. (CLI alias: amplio add enricher request)"
     },
     {
       "name": "integration-better-auth",

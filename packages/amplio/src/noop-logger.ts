@@ -4,7 +4,7 @@ import type { EventDef, EventLogger, LogRecord, Logger } from "./types.js";
 type NoopReason = "sealed" | "no-context";
 
 const warnNoop = (
-  action: "set" | "error" | "emit" | "create" | "event",
+  action: "set" | "error" | "emit" | "create" | "event" | "child",
   reason: NoopReason,
 ): void => {
   if (!isDevelopment() || reason !== "sealed") {
@@ -59,6 +59,10 @@ const createNoopLogger = (reason: NoopReason): Logger => {
     },
     event<T extends Record<string, unknown>>(_def: EventDef<T>): EventLogger<T> {
       warnNoop("event", reason);
+      return createNoopEventLogger<T>(reason);
+    },
+    child<T extends Record<string, unknown>>(_def: EventDef<T>): EventLogger<T> {
+      warnNoop("child", reason);
       return createNoopEventLogger<T>(reason);
     },
   };

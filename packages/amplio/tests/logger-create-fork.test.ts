@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createLogger,
   init,
@@ -74,6 +74,25 @@ describe("logger.create() fork", () => {
     expect(childRecord.user).toEqual({ id: "u_1", plan: "pro" });
     expect(childRecord.status).toBe(201);
     expect(records).toHaveLength(1);
+  });
+
+  it("create() uses a fresh start time for duration_ms", () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+
+    const nowSpy = vi.spyOn(Date, "now");
+    nowSpy.mockReturnValueOnce(2_000);
+    const parent = createLogger({ request_id: "req_fork_duration" });
+
+    nowSpy.mockReturnValueOnce(2_000);
+    const child = parent.create({ child: true });
+
+    nowSpy.mockReturnValueOnce(2_030);
+    child.set({ status: 201 }).emit();
+
+    expect(records[0]?.duration_ms).toBe(30);
+
+    nowSpy.mockRestore();
   });
 
   it("child.emit() does not seal parent — parent can still set/emit", () => {

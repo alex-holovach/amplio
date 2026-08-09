@@ -5,7 +5,7 @@
   "description": "Express middleware that attaches request-scoped amplio context.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.7"
+    "@useamplio/amplio@^0.1.0-alpha.8"
   ],
   "files": [
     {

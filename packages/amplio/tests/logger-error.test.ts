@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  createError,
   createLogger,
   defineEvent,
   init,
@@ -66,6 +67,48 @@ describe("logger.error", () => {
     init({ service: "api", env: "test", sinks: [() => {}] });
     const log = createLogger();
     expect(log.error(new Error("x"))).toBe(log);
+  });
+
+  it("structures createError plain objects with message, why, fix, and code", () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+
+    const log = createLogger();
+    log.error(
+      {
+        message: "payment declined",
+        why: "insufficient funds",
+        fix: "use another card",
+        code: 402,
+      },
+      { status: 402 },
+    );
+    const record = log.emit();
+
+    expect(record?.error).toEqual({
+      message: "payment declined",
+      why: "insufficient funds",
+      fix: "use another card",
+      code: "402",
+    });
+    expect(records).toHaveLength(1);
+  });
+
+  it("createError({...}) passed to error() preserves message instead of [object Object]", () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+
+    const record = createLogger()
+      .error(createError({ message: "structured", why: "because", fix: "retry", code: "E1" }))
+      .emit();
+
+    expect(record?.error).toEqual({
+      message: "structured",
+      why: "because",
+      fix: "retry",
+      code: "E1",
+    });
+    expect(records).toHaveLength(1);
   });
 });
 

@@ -15,7 +15,7 @@ import {
 import { getContextNoopLogger } from "../src/noop-logger.js";
 
 const EMIT_BEFORE_INIT_WARNING =
-  "[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup - in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. See ALPHA.md.";
+  '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See ALPHA.md.';
 const USE_LOGGER_OUTSIDE_SCOPE_WARNING =
   "[amplio] useLogger() called outside runWithLogger(); fields will be dropped. Establish request scope with middleware (runWithLogger), or use the logger facade for one-shot scripts.";
 
@@ -36,14 +36,15 @@ beforeEach(() => {
 });
 
 describe("dev warnings", () => {
-  it("emit before init warns exactly once in dev-mode and drops the record without throwing", () => {
+  it("emit before init warns on every drop in dev-mode and drops the record without throwing", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect(() => createLogger().set({ a: 1 }).emit()).not.toThrow();
     expect(() => createLogger().set({ b: 2 }).emit()).not.toThrow();
 
-    expect(warn).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalledWith(EMIT_BEFORE_INIT_WARNING);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenNthCalledWith(1, EMIT_BEFORE_INIT_WARNING);
+    expect(warn).toHaveBeenNthCalledWith(2, EMIT_BEFORE_INIT_WARNING);
 
     warn.mockRestore();
   });

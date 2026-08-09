@@ -1,3 +1,8 @@
+// Side-effect import: ensures init() from telemetry/logger runs in every module
+// graph that uses this middleware (next dev --turbo compiles instrumentation.ts
+// and route bundles separately, which would otherwise drop events silently).
+import "../logger";
+
 import {
   createRequestLogger,
   flush,

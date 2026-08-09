@@ -128,7 +128,7 @@
     },
     {
       "name": "enricher-request-metadata",
-      "description": "Enricher that adds request id / HTTP metadata.",
+      "description": "Enricher that adds request id / HTTP metadata. (CLI alias: amplio add enricher request)",
       "source": "enrichers/request-metadata.ts",
       "target": "telemetry/enrichers/request-metadata.ts",
       "dependencies": [
@@ -143,7 +143,7 @@
       "dependencies": [
         "zod",
         "@useamplio/amplio",
-        "better-auth"
+        "better-auth@^1.2.0"
       ],
       "registryDependencies": [
         "event-auth-user-signed-up",
@@ -158,7 +158,7 @@
       "dependencies": [
         "zod",
         "@useamplio/amplio",
-        "@clerk/backend"
+        "@clerk/backend@^1.25.0"
       ],
       "registryDependencies": [
         "event-auth-user-signed-up",
@@ -173,7 +173,7 @@
       "dependencies": [
         "zod",
         "@useamplio/amplio",
-        "resend"
+        "resend@^4.0.0"
       ],
       "registryDependencies": [
         "event-email-sent"
@@ -187,7 +187,7 @@
       "dependencies": [
         "zod",
         "@useamplio/amplio",
-        "@polar-sh/sdk"
+        "@polar-sh/sdk@^0.32.0"
       ],
       "registryDependencies": [
         "event-payment-order-paid"

@@ -64,6 +64,24 @@ Example emitted record (fields vary by schema and enrichers):
 
 Default redaction masks emails and other sensitive patterns when those fields are present.
 
+### Correlated domain events
+
+Inside request middleware scope, emit domain rows with `.child()` — fresh seal and start time, copies `request_id` only (no `http.*` duplication):
+
+```typescript
+import { useLogger } from "@useamplio/amplio";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up.js";
+
+// inside withAmplio / hono middleware:
+useLogger()
+  .child(AuthUserSignedUp)
+  .set({ user: { id: "u_123" }, signup: { method: "email" } })
+  .emit();
+// two rows: http.request spine (middleware) + auth.user.signed_up (same request_id)
+```
+
+`logger.event(Def).emit()` outside a request is unchanged. Inside request scope (since `0.1.0-alpha.8`) it also copies `request_id` — but `.child()` is the canonical API for separate domain rows without touching the spine. See [ALPHA.md](./ALPHA.md#correlated-domain-events).
+
 ## After init
 
 `@useamplio/cli` is a scaffolder. Once `telemetry/` exists, you can remove the CLI and keep editing events/middleware/sinks with only `@useamplio/amplio` installed.
@@ -117,17 +135,20 @@ Frozen public surface from `@useamplio/amplio`:
 |---|---|
 | `defineEvent` | Declare a named event schema |
 | `init` | Configure service, env, sinks, sampling (`rate`, `keep` rules) — call once from `telemetry/logger.ts` |
-| `logger.event(def, initial?)` | Bind a schema; optionally seed context |
-| `logger.create(initial?)` | Standalone wide-event scope (jobs, scripts, CLI runs) |
+| `.child(def)` | Correlated domain event: fresh seal + start time, copies `request_id` only — emit domain rows from inside requests without touching the spine |
+| `logger.event(def, initial?)` | Standalone schema event; inside request scope it copies `request_id` |
+| `logger.create(initial?)` | Standalone wide-event scope (jobs, scripts, CLI runs); forks get a fresh start time |
 | `useLogger` | Request-scoped logger from middleware context |
 | `.set()` | Merge nested context into the active wide event (mutates in place; returns same instance so `useLogger()` stays valid in middleware ALS) |
-| `.error(err, ctx?)` | Record a structured error (`success: false`); does not emit — call `.emit()` after. For `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when the thrown value carries a real string/number `code` (e.g. Node `ENOENT`) — plain `Error` has no `code` field |
+| `.error(err, ctx?)` | Record a structured error (`success: false`); does not emit — call `.emit()` after. For `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when the thrown value carries a real string/number `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field (not `[object Object]`) |
 | `.emit()` | Finalize, validate, drain sinks; seals the instance |
 | `flush()` | Await pending async sink deliveries (use with serverless `waitUntil` / Next.js `after`) |
 
 When `success` is unset it defaults to `true`; if `status` is set, numeric codes in `[200, 400)` and the exact string `"ok"` (case-sensitive; `"OK"` → `false`) derive `success` (explicit `success` wins).
 
-**Library-first silence:** Import `@useamplio/amplio` and call `.set()` / `.emit()` before you wire `telemetry/logger.ts`. Without `init()` and sinks, `.emit()` returns `null` (event dropped), no sinks run, and dev builds warn once — it never throws. Call `init()` with at least one sink when you want output. `getConfig()` is stricter: it throws if you call it before `init()`.
+**Library-first silence:** Import `@useamplio/amplio` and call `.set()` / `.emit()` before you wire `telemetry/logger.ts`. Without `init()` and sinks, `.emit()` returns `null` (event dropped), no sinks run, and dev builds warn **on every dropped emit** (mentions Turbopack / separate module graphs as a common cause) — it never throws. Call `init()` with at least one sink when you want output. `getConfig()` is stricter: it throws if you call it before `init()`.
+
+**Server-only:** the runtime imports `node:async_hooks` at module top level — do not import the logger or event defs from `"use client"` components.
 
 Enricher errors are isolated — a throwing enricher is skipped; later enrichers and sinks still run.
 
@@ -179,7 +200,7 @@ logger.create({ job: "nightly-sync" })
 
 ### useLogger (middleware)
 
-Request middleware creates one wide event per HTTP unit of work named `http.request` (`event` and `@event` both set). Filter on `@event = "http.request"` for the request spine; domain events from `.event(SomeSchema).emit()` are separate rows.
+Request middleware creates one wide event per HTTP unit of work named `http.request` (`event` and `@event` both set). Filter on `@event = "http.request"` for the request spine; domain events from `.child(SomeSchema).emit()` are separate rows sharing `request_id`.
 
 ```typescript
 import { useLogger } from "@useamplio/amplio";
@@ -340,6 +361,9 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md); for the first npm publish, follow **Fi
 - `amplio init --no-typescript` sets `typescript: false` in `amplio.json`.
 - `--service`, `--package-manager`, and `--no-typescript` are only valid with `init` (rejected on `add` / `list`). Whitespace-only `--service` / `--package-manager` on non-init commands are ignored (not rejected).
 - `init --cwd <path>` and `add --cwd <path>` create missing directories (`mkdir -p`).
+- `amplio init --paths` writes the `~telemetry/*` tsconfig path alias (JSONC-comment-safe).
+- `amplio doctor` checks wiring (middleware, barrels, Turbopack `../logger` import); `amplio doctor --fix` regenerates missing event barrel exports.
+- `amplio add <badkind> …` errors with valid kinds (`event`, `middleware`, `sink`, `enricher`, `integration`).
 - Event names must be lowercase dot-separated segments (e.g. `auth.user.signed_up`); no leading/trailing dots or uppercase.
 - `amplio add event …` and other `add` kinds can scaffold from the registry without running `init` first — the telemetry tree is created as needed.
 - Re-run `amplio add` with `--force` to overwrite existing scaffold files instead of skipping them. `--force` is only valid with `add` (rejected on `init` / `list`).

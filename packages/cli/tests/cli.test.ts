@@ -474,7 +474,10 @@ describe("runAddEnricher", () => {
   it("scaffolds request-metadata enricher when alias request is used", async () => {
     const cwd = await makeTempDir("amplio-enricher-");
     await initWithRegistry(cwd);
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await runAddEnricher("request", { cwd });
+    logSpy.mockRestore();
 
     const enricherPath = path.join(cwd, "telemetry/enrichers/request-metadata.ts");
     await access(enricherPath);
@@ -483,8 +486,8 @@ describe("runAddEnricher", () => {
     expect(source).toContain("requestMetadata");
 
     const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
-    expect(loggerSource).toContain("requestMetadata");
-    expect(loggerSource).toContain("./enrichers/request-metadata");
+    expect(loggerSource).not.toContain("requestMetadata");
+    expect(loggerSource).not.toContain("./enrichers/request-metadata");
   });
 
   it("scaffolds service-metadata enricher after init", async () => {
