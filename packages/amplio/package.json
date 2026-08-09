@@ -1,6 +1,6 @@
 {
-  "name": "@amplio/amplio",
-  "version": "0.1.0-alpha.3",
+  "name": "@useamplio/amplio",
+  "version": "0.1.0-alpha.4",
   "description": "Tiny schema-first wide-event telemetry runtime",
   "type": "module",
   "license": "MIT",

@@ -1,4 +1,4 @@
-# @amplio/cli
+# @useamplio/cli
 
 CLI for scaffolding amplio telemetry in your repo (`init`, `add`).
 
@@ -23,4 +23,4 @@ The CLI **bundles** a copy of `registry/` (copied at build time into `packages/c
 2. **Bundled package registry** — `registry/registry.json` next to the installed package (`dist/`).
 3. **Monorepo checkout fallback** — repo-root `registry/` when developing from source.
 
-Run `pnpm registry:build` from the monorepo root to refresh hosted `public/r/` JSON; `pnpm --filter @amplio/cli build` refreshes the CLI bundle.
+Run `pnpm registry:build` from the monorepo root to refresh hosted `public/r/` JSON; `pnpm --filter @useamplio/cli build` refreshes the CLI bundle.

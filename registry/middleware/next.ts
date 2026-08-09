@@ -4,7 +4,7 @@ import {
   runWithLogger,
   useLogger,
   type Logger,
-} from "@amplio/amplio";
+} from "@useamplio/amplio";
 import type { NextRequest, NextResponse } from "next/server";
 
 export interface WithAmplioOptions {

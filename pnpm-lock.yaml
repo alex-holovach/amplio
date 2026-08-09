@@ -14,12 +14,12 @@ importers:
 
   examples/basic:
     dependencies:
-      '@amplio/amplio':
-        specifier: workspace:*
-        version: link:../../packages/amplio
       '@hono/node-server':
         specifier: ^1.14.0
         version: 1.19.17(hono@4.13.0)
+      '@useamplio/amplio':
+        specifier: workspace:*
+        version: link:../../packages/amplio
       hono:
         specifier: ^4.7.4
         version: 4.13.0
@@ -39,7 +39,7 @@ importers:
 
   examples/express-smoke:
     dependencies:
-      '@amplio/amplio':
+      '@useamplio/amplio':
         specifier: workspace:*
         version: link:../../packages/amplio
       express:
@@ -61,7 +61,7 @@ importers:
 
   examples/fastify-smoke:
     dependencies:
-      '@amplio/amplio':
+      '@useamplio/amplio':
         specifier: workspace:*
         version: link:../../packages/amplio
       fastify:
@@ -83,7 +83,7 @@ importers:
 
   examples/next-smoke:
     dependencies:
-      '@amplio/amplio':
+      '@useamplio/amplio':
         specifier: workspace:*
         version: link:../../packages/amplio
       next:
@@ -108,7 +108,7 @@ importers:
 
   examples/standalone:
     dependencies:
-      '@amplio/amplio':
+      '@useamplio/amplio':
         specifier: workspace:*
         version: link:../../packages/amplio
       zod:
@@ -145,12 +145,12 @@ importers:
 
   packages/cli:
     devDependencies:
-      '@amplio/amplio':
-        specifier: workspace:*
-        version: link:../amplio
       '@types/node':
         specifier: ^22.13.10
         version: 22.20.1
+      '@useamplio/amplio':
+        specifier: workspace:*
+        version: link:../amplio
       prettier:
         specifier: '3'
         version: 3.9.6

@@ -1,4 +1,4 @@
-import type { LogRecord } from "@amplio/amplio";
+import type { LogRecord } from "@useamplio/amplio";
 import { describe, expect, it } from "vitest";
 import { requestMetadata } from "../../../registry/enrichers/request-metadata.ts";
 

@@ -1,5 +1,5 @@
 {
-  "name": "@amplio/example-next-smoke",
+  "name": "@useamplio/example-next-smoke",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@amplio/amplio": "workspace:*",
+    "@useamplio/amplio": "workspace:*",
     "next": "^15.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -11,7 +11,7 @@ Instructions for AI agents and contributors working on the **amplio** monorepo.
 | Open code | Events, middleware, sinks, enrichers, integrations live in `telemetry/` and are owned by the app |
 | Schema-first | Every important event is declared with `defineEvent` before use |
 | Wide events | Accumulate context with `.set()`, emit once with `.emit()` per unit of work |
-| Less is more | Tiny runtime (`@amplio/amplio`); no sprawling logger surface |
+| Less is more | Tiny runtime (`@useamplio/amplio`); no sprawling logger surface |
 | shadcn-native | Registry items scaffold typed files into `telemetry/` |
 
 **Not evlog.** evlog ships a closed npm runtime and optional module augmentation. amplio ships **schemas + generated code in the repo** and a tiny immutable core. Users read, edit, and review their telemetry like application code.
@@ -21,22 +21,22 @@ Instructions for AI agents and contributors working on the **amplio** monorepo.
 ```
 amplio/
 ├── packages/
-│   ├── core/          # @amplio/amplio — runtime only (defineEvent, init, wide-event lifecycle)
-│   └── cli/           # @amplio/cli — init, add, registry resolution
+│   ├── core/          # @useamplio/amplio — runtime only (defineEvent, init, wide-event lifecycle)
+│   └── cli/           # @useamplio/cli — init, add, registry resolution
 ├── registry/          # shadcn-compatible registry JSON + item sources
 ├── examples/          # runnable reference apps (Hono, Express, Fastify, Next.js, standalone)
-├── benchmarks/        # perf + bundle size gates for @amplio/amplio
+├── benchmarks/        # perf + bundle size gates for @useamplio/amplio
 ├── scripts/           # registry build, codegen helpers
 ├── AGENTS.md          # this file
 ├── REQUIREMENTS.md    # product requirements
 └── SPEC.md            # technical spec + acceptance criteria
 ```
 
-Work in the smallest package that owns the change. Do not leak CLI or codegen logic into `@amplio/amplio`.
+Work in the smallest package that owns the change. Do not leak CLI or codegen logic into `@useamplio/amplio`.
 
 ## Public API (frozen surface)
 
-Only these symbols are public from `@amplio/amplio`:
+Only these symbols are public from `@useamplio/amplio`:
 
 | Symbol | Role |
 |---|---|
@@ -80,7 +80,7 @@ CLI and registry items **write into** this tree. Generated code must be readable
 | Event file | kebab-case | `auth-user-signed-up.ts` |
 | Event type / schema export | PascalCase | `AuthUserSignedUp` |
 | Middleware / sink / enricher files | kebab-case | `hono.ts`, `axiom.ts` |
-| Registry item id | `@amplio/<kind>-<kebab-name>` | `@amplio/event-auth-user-signed-up` |
+| Registry item id | `@useamplio/<kind>-<kebab-name>` | `@useamplio/event-auth-user-signed-up` |
 
 ## Codegen & registry rules
 
@@ -89,7 +89,7 @@ CLI and registry items **write into** this tree. Generated code must be readable
 3. **Schema in repo** — `defineEvent` calls and Zod (or compatible) schemas stay in `telemetry/events/`.
 4. **Nested objects** — generated types and docs encourage grouping (`user`, `cart`, `error`), not flat `userId`, `userPlan`, …
 5. **Idempotent add** — re-running `amplio add` must not destroy user edits; merge or skip with a clear message.
-6. **Dependencies** — prefer peer deps on framework packages; `@amplio/amplio` stays dependency-free or near-zero.
+6. **Dependencies** — prefer peer deps on framework packages; `@useamplio/amplio` stays dependency-free or near-zero.
 
 ## Anti-slop (enforce in reviews)
 
@@ -104,7 +104,7 @@ CLI and registry items **write into** this tree. Generated code must be readable
 
 When building features, prefer this order:
 
-1. `@amplio/amplio` lifecycle (create → set → emit → seal)
+1. `@useamplio/amplio` lifecycle (create → set → emit → seal)
 2. `defineEvent` + typed `.set()` inference
 3. CLI `init` + `add event`
 4. Registry build + one reference event item
@@ -122,7 +122,7 @@ After enrichers, event validation merge: validated shape fields overwrite enrich
 
 - **Unit tests** in `packages/amplio` for lifecycle, sealing, merge semantics, and schema validation at emit time.
 - **CLI tests** for init/add against a temp directory (snapshot the generated tree structure, not necessarily every line).
-- **Benchmarks** track `@amplio/amplio` bundle size and hot-path `set`/`emit` cost.
+- **Benchmarks** track `@useamplio/amplio` bundle size and hot-path `set`/`emit` cost.
 - **Examples** must run and emit at least one wide event end-to-end.
 
 ## Commands

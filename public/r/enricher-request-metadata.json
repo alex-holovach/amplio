@@ -5,14 +5,14 @@
   "description": "Enricher that adds request id / HTTP metadata.",
   "type": "registry:lib",
   "dependencies": [
-    "@amplio/amplio"
+    "@useamplio/amplio"
   ],
   "files": [
     {
       "path": "registry/enrichers/request-metadata.ts",
       "target": "~/enrichers/request-metadata.ts",
       "type": "registry:lib",
-      "content": "import type { LogRecord } from \"@amplio/amplio\";\n\nexport interface RequestContext {\n  method: string;\n  path: string;\n  route?: string;\n  status?: number;\n  ip?: string;\n  userAgent?: string;\n  requestId?: string;\n}\n\nfunction nonEmpty(value: string | undefined): string | undefined {\n  return value !== undefined && value !== \"\" ? value : undefined;\n}\n\nexport function requestMetadata(context: RequestContext) {\n  return (record: LogRecord): LogRecord => {\n    const route = nonEmpty(context.route);\n    const ip = nonEmpty(context.ip);\n    const userAgent = nonEmpty(context.userAgent);\n    const requestId = nonEmpty(context.requestId) ?? record.request_id;\n\n    return {\n      ...record,\n      request_id: requestId,\n      http: {\n        method: context.method,\n        path: context.path,\n        ...(route !== undefined ? { route } : {}),\n        ...(context.status !== undefined ? { status: context.status } : {}),\n        ...(ip !== undefined ? { ip } : {}),\n        ...(userAgent !== undefined ? { user_agent: userAgent } : {}),\n      },\n    };\n  };\n}\n"
+      "content": "import type { LogRecord } from \"@useamplio/amplio\";\n\nexport interface RequestContext {\n  method: string;\n  path: string;\n  route?: string;\n  status?: number;\n  ip?: string;\n  userAgent?: string;\n  requestId?: string;\n}\n\nfunction nonEmpty(value: string | undefined): string | undefined {\n  return value !== undefined && value !== \"\" ? value : undefined;\n}\n\nexport function requestMetadata(context: RequestContext) {\n  return (record: LogRecord): LogRecord => {\n    const route = nonEmpty(context.route);\n    const ip = nonEmpty(context.ip);\n    const userAgent = nonEmpty(context.userAgent);\n    const requestId = nonEmpty(context.requestId) ?? record.request_id;\n\n    return {\n      ...record,\n      request_id: requestId,\n      http: {\n        method: context.method,\n        path: context.path,\n        ...(route !== undefined ? { route } : {}),\n        ...(context.status !== undefined ? { status: context.status } : {}),\n        ...(ip !== undefined ? { ip } : {}),\n        ...(userAgent !== undefined ? { user_agent: userAgent } : {}),\n      },\n    };\n  };\n}\n"
     }
   ]
 }

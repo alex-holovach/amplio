@@ -16,7 +16,7 @@ From the monorepo root:
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @amplio/example-basic dev
+pnpm --filter @useamplio/example-basic dev
 ```
 
 Try it:
@@ -40,7 +40,7 @@ Items land under `telemetry/` and stay editable like normal app code.
 ## Smoke
 
 ```bash
-pnpm --filter @amplio/example-basic smoke
+pnpm --filter @useamplio/example-basic smoke
 ```
 
 Starts the Hono app, hits `GET /health`, asserts one JSON wide event with nested `http` and status 200.

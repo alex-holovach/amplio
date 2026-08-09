@@ -38,10 +38,10 @@ To use a local build outside this monorepo, pack core + CLI tarballs and install
 
 | Command | Purpose |
 |---|---|
-| `pnpm build` | Build `@amplio/amplio` + `@amplio/cli` |
+| `pnpm build` | Build `@useamplio/amplio` + `@useamplio/cli` |
 | `pnpm test` | Unit tests |
 | `pnpm typecheck` | TypeScript check across packages (CI) |
-| `pnpm size` | `@amplio/amplio` gzip budget (< 8 KB) |
+| `pnpm size` | `@useamplio/amplio` gzip budget (< 8 KB) |
 | `pnpm registry:build` | Regenerate `public/r/` |
 | `pnpm registry:serve` | Local HTTP server for `public/r/` JSON |
 | `pnpm format:check:events` | Generated events match Prettier defaults; root `.prettierrc` pins the config |
@@ -58,7 +58,7 @@ CI (`.github/workflows/ci.yml`) runs build, test, typecheck, size, registry buil
 - Event names: `domain.entity.action` (or shorter forms like `email.sent`).
 - Relative imports under `telemetry/` are **extensionless** (Next-safe): `./sinks/json` not `./sinks/json.js`.
 - Generated telemetry code lives in user repos under `telemetry/` — keep it readable and diff-friendly.
-- Do not expand the public `@amplio/amplio` API beyond the frozen surface in `AGENTS.md`.
+- Do not expand the public `@useamplio/amplio` API beyond the frozen surface in `AGENTS.md`.
 
 ## Pull requests
 
@@ -68,7 +68,7 @@ CI (`.github/workflows/ci.yml`) runs build, test, typecheck, size, registry buil
 
 ## First release
 
-Packages publish to npm as **`@amplio/amplio`** and **`@amplio/cli`** under the [`amplio`](https://www.npmjs.com/org/amplio) npm org (scope `@amplio`).
+Packages publish to npm as **`@useamplio/amplio`** and **`@useamplio/cli`** under the [`useamplio`](https://www.npmjs.com/org/useamplio) npm org (scope `@useamplio`).
 
 ### Release steps
 
@@ -82,5 +82,5 @@ Prerelease tags (`vX.Y.Z-alpha.N`, `vX.Y.Z-beta.N`, …) map to npm dist-tags fr
 ### Security
 
 - **`NPM_TOKEN`** is stored as an **environment secret** on GitHub environment **`npm-publish`**, which is restricted to deployment tags `v*` only.
-- After the first successful publish, configure npm **Trusted Publishing** (OIDC) for workflow **`publish.yml`** on both `@amplio/amplio` and `@amplio/cli`, then **revoke the classic token** and rely on OIDC for future releases.
+- After the first successful publish, configure npm **Trusted Publishing** (OIDC) for workflow **`publish.yml`** on both `@useamplio/amplio` and `@useamplio/cli`, then **revoke the classic token** and rely on OIDC for future releases.
 - If an npm token was ever pasted in chat or committed, **rotate it** before or immediately after setup.

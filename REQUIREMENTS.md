@@ -20,8 +20,8 @@ Teams want **structured, queryable observability** without:
 1. **Schema-first events** — important domain events are declared before use.
 2. **Wide events** — accumulate context, emit once per request/job/run.
 3. **Open code** — `telemetry/` is part of the application, not hidden in `node_modules`.
-4. **Tiny runtime** — `@amplio/amplio` stays small, dependency-light, and immutable in API shape.
-5. **shadcn-native DX** — `npx amplio add …` and `npx shadcn add @amplio/…` scaffold registry items.
+4. **Tiny runtime** — `@useamplio/amplio` stays small, dependency-light, and immutable in API shape.
+5. **shadcn-native DX** — `npx amplio add …` and `npx shadcn add @useamplio/…` scaffold registry items.
 6. **Agent-friendly output** — nested JSON, stable field names, self-describing event names.
 
 ## Non-goals (v0)
@@ -103,8 +103,8 @@ npx amplio add integration better-auth
 ### FR-4 shadcn registry
 
 - Registry builds from `registry/` via `pnpm registry:build`.
-- Items addressable as `@amplio/event-auth-user-signed-up`, `@amplio/middleware-hono`, etc.
-- Compatible with `npx shadcn@latest add @amplio/…`.
+- Items addressable as `@useamplio/event-auth-user-signed-up`, `@useamplio/middleware-hono`, etc.
+- Compatible with `npx shadcn@latest add @useamplio/…`.
 
 ### FR-5 Wide-event lifecycle
 
@@ -134,7 +134,7 @@ npx amplio add integration better-auth
 
 ## Public API requirements
 
-The **only** exported runtime API from `@amplio/amplio`:
+The **only** exported runtime API from `@useamplio/amplio`:
 
 - `defineEvent`
 - `init`
@@ -150,7 +150,7 @@ No `info` / `warn` / `debug` methods on the public logger.
 
 ### QR-1 Bundle size
 
-`@amplio/amplio` gzipped size budget: **≤ 8 KB** (benchmark enforced in CI).
+`@useamplio/amplio` gzipped size budget: **≤ 8 KB** (benchmark enforced in CI).
 
 ### QR-2 Performance
 
@@ -196,7 +196,7 @@ amplio may interoperate with evlog-shaped **ideas** (wide events, structured err
 
 1. `npx amplio init && npx amplio add event …` produces a compiling TypeScript tree in under 30 seconds.
 2. A new contributor can add an event schema and see it in emitted JSON without reading core source.
-3. `@amplio/amplio` passes size and bench gates.
+3. `@useamplio/amplio` passes size and bench gates.
 4. One example emits exactly one wide event per HTTP request in middleware mode.
 
 ## Open questions

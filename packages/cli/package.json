@@ -1,6 +1,6 @@
 {
-  "name": "@amplio/cli",
-  "version": "0.1.0-alpha.3",
+  "name": "@useamplio/cli",
+  "version": "0.1.0-alpha.4",
   "description": "Init and add commands for amplio telemetry scaffolding",
   "type": "module",
   "license": "MIT",
@@ -44,7 +44,7 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "@amplio/amplio": "workspace:*",
+    "@useamplio/amplio": "workspace:*",
     "@types/node": "^22.13.10",
     "prettier": "3",
     "tsup": "^8.4.0",

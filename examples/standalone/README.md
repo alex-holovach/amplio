@@ -7,13 +7,13 @@ Reference for scripts and workers: `logger.create()` + schema-bound `logger.even
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @amplio/example-standalone dev
+pnpm --filter @useamplio/example-standalone dev
 ```
 
 ## Smoke
 
 ```bash
-pnpm --filter @amplio/example-standalone smoke
+pnpm --filter @useamplio/example-standalone smoke
 ```
 
 Asserts one `logger.create()` wide event and one `job.completed` schema event.

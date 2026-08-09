@@ -22,8 +22,8 @@ function fail(msg) {
 }
 
 // Ensure builds + bundled registry
-run("pnpm", ["--filter", "@amplio/amplio", "build"], { cwd: repoRoot, stdio: "inherit" });
-run("pnpm", ["--filter", "@amplio/cli", "build"], { cwd: repoRoot, stdio: "inherit" });
+run("pnpm", ["--filter", "@useamplio/amplio", "build"], { cwd: repoRoot, stdio: "inherit" });
+run("pnpm", ["--filter", "@useamplio/cli", "build"], { cwd: repoRoot, stdio: "inherit" });
 
 if (!existsSync(path.join(cliPkg, "registry/registry.json"))) {
   fail("packages/cli/registry/registry.json missing after build");

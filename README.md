@@ -17,8 +17,8 @@ npx amplio add middleware hono
 Or pull registry items directly with shadcn:
 
 ```bash
-npx shadcn@latest add @amplio/event-auth-user-signed-up
-npx shadcn@latest add @amplio/middleware-hono
+npx shadcn@latest add @useamplio/event-auth-user-signed-up
+npx shadcn@latest add @useamplio/middleware-hono
 ```
 
 Registry items are published as shadcn-compatible JSON under `public/r/` (e.g. `event-auth-user-signed-up.json` with `~/events/...` targets → `telemetry/`).
@@ -58,7 +58,7 @@ Default redaction masks emails and other sensitive patterns when those fields ar
 
 ## After init
 
-`@amplio/cli` is a scaffolder. Once `telemetry/` exists, you can remove the CLI and keep editing events/middleware/sinks with only `@amplio/amplio` installed.
+`@useamplio/cli` is a scaffolder. Once `telemetry/` exists, you can remove the CLI and keep editing events/middleware/sinks with only `@useamplio/amplio` installed.
 
 ## Philosophy
 
@@ -67,7 +67,7 @@ Default redaction masks emails and other sensitive patterns when those fields ar
 | **Open code** | Events, middleware, sinks, and integrations live in `telemetry/` — you read, edit, and review them like app code |
 | **Schema-first** | Every important event is declared with `defineEvent` before use |
 | **Wide events** | One rich event per unit of work; context accumulates, then drains on `.emit()` |
-| **Less is more** | Tiny runtime (`@amplio/amplio`); frozen public API |
+| **Less is more** | Tiny runtime (`@useamplio/amplio`); frozen public API |
 | **shadcn-native** | Registry items scaffold typed files into your repo |
 
 ## Folder structure
@@ -93,8 +93,8 @@ Event names use dot-separated segments (`auth.user.signed_up`, `email.sent`). Fi
 
 ```bash
 pnpm build
-pnpm --filter @amplio/amplio pack
-pnpm --filter @amplio/cli pack
+pnpm --filter @useamplio/amplio pack
+pnpm --filter @useamplio/cli pack
 # then in your app:
 pnpm add /absolute/path/to/amplio-core-0.1.0.tgz
 pnpm add -D /absolute/path/to/amplio-cli-0.1.0.tgz
@@ -103,7 +103,7 @@ pnpm exec amplio init --service my-app
 
 ## API
 
-Frozen public surface from `@amplio/amplio`:
+Frozen public surface from `@useamplio/amplio`:
 
 | Symbol | Role |
 |---|---|
@@ -119,7 +119,7 @@ Frozen public surface from `@amplio/amplio`:
 
 When `success` is unset it defaults to `true`; if `status` is set, numeric codes in `[200, 400)` and the exact string `"ok"` (case-sensitive; `"OK"` → `false`) derive `success` (explicit `success` wins).
 
-**Library-first silence:** Import `@amplio/amplio` and call `.set()` / `.emit()` before you wire `telemetry/logger.ts`. Without `init()` and sinks, `.emit()` still returns a record and does not throw — nothing is written anywhere. Call `init()` with at least one sink when you want output. `getConfig()` is stricter: it throws if you call it before `init()`.
+**Library-first silence:** Import `@useamplio/amplio` and call `.set()` / `.emit()` before you wire `telemetry/logger.ts`. Without `init()` and sinks, `.emit()` still returns a record and does not throw — nothing is written anywhere. Call `init()` with at least one sink when you want output. `getConfig()` is stricter: it throws if you call it before `init()`.
 
 Enricher errors are isolated — a throwing enricher is skipped; later enrichers and sinks still run.
 
@@ -138,7 +138,7 @@ The JSON file sink writes to `AMPLIO_JSON_SINK_PATH` (or `options.path`) and cre
 ### defineEvent
 
 ```typescript
-import { defineEvent } from "@amplio/amplio";
+import { defineEvent } from "@useamplio/amplio";
 import { z } from "zod";
 
 export const AuthUserSignedUp = defineEvent(
@@ -171,7 +171,7 @@ logger.create({ job: "nightly-sync" })
 ### useLogger (middleware)
 
 ```typescript
-import { useLogger } from "@amplio/amplio";
+import { useLogger } from "@useamplio/amplio";
 
 app.get("/health", (c) => {
   useLogger().set({ route: { name: "health" } });
@@ -201,17 +201,17 @@ pnpm registry:serve   # local HTTP server for shadcn
 From the amplio repo after `pnpm registry:build`:
 
 ```bash
-npx shadcn@latest add @amplio/event-auth-user-signed-up
+npx shadcn@latest add @useamplio/event-auth-user-signed-up
 # or a single item file:
 npx shadcn@latest add ./public/r/middleware-hono.json
 ```
 
 Common items:
 
-- `@amplio/event-auth-user-signed-up`
-- `@amplio/middleware-hono`
-- `@amplio/sink-json`
-- `@amplio/integration-better-auth`
+- `@useamplio/event-auth-user-signed-up`
+- `@useamplio/middleware-hono`
+- `@useamplio/sink-json`
+- `@useamplio/integration-better-auth`
 
 ## Size and performance
 
@@ -219,7 +219,7 @@ Measured on Node 22 (`pnpm build && pnpm size && pnpm bench`). Higher ops/s is f
 
 | | |
 |---|---|
-| `@amplio/amplio` gzip | ~4.5 KB |
+| `@useamplio/amplio` gzip | ~4.5 KB |
 | Runtime deps | **0** (optional `zod` peer) |
 
 ### `pnpm bench` (default redaction ON)
@@ -256,20 +256,20 @@ Same wide-event model. Different ownership model.
 Runnable smoke apps (from repo root after `pnpm install` + `pnpm build`):
 
 ```bash
-pnpm --filter @amplio/example-basic dev            # Hono — http://127.0.0.1:3000
-pnpm --filter @amplio/example-express-smoke dev    # Express — http://127.0.0.1:3001
-pnpm --filter @amplio/example-fastify-smoke dev    # Fastify — http://127.0.0.1:3002
-pnpm --filter @amplio/example-next-smoke dev       # Next.js — http://127.0.0.1:3003
+pnpm --filter @useamplio/example-basic dev            # Hono — http://127.0.0.1:3000
+pnpm --filter @useamplio/example-express-smoke dev    # Express — http://127.0.0.1:3001
+pnpm --filter @useamplio/example-fastify-smoke dev    # Fastify — http://127.0.0.1:3002
+pnpm --filter @useamplio/example-next-smoke dev       # Next.js — http://127.0.0.1:3003
 ```
 
 Headless smoke (no long-lived server):
 
 ```bash
-pnpm --filter @amplio/example-basic smoke
-pnpm --filter @amplio/example-express-smoke smoke
-pnpm --filter @amplio/example-fastify-smoke smoke
-pnpm --filter @amplio/example-next-smoke smoke
-pnpm --filter @amplio/example-standalone smoke
+pnpm --filter @useamplio/example-basic smoke
+pnpm --filter @useamplio/example-express-smoke smoke
+pnpm --filter @useamplio/example-fastify-smoke smoke
+pnpm --filter @useamplio/example-next-smoke smoke
+pnpm --filter @useamplio/example-standalone smoke
 ```
 
 Or all at once: `pnpm smoke`.
@@ -281,15 +281,15 @@ See `examples/*/README.md` for curl commands and what each demo covers.
 
 | Package | Purpose |
 |---|---|
-| `@amplio/amplio` | Runtime: `defineEvent`, `init`, `logger`, wide-event lifecycle |
-| `@amplio/cli` | `init` / `add` scaffolding |
+| `@useamplio/amplio` | Runtime: `defineEvent`, `init`, `logger`, wide-event lifecycle |
+| `@useamplio/cli` | `init` / `add` scaffolding |
 
 ## Development
 
 ### Publish readiness
 
-- **`@amplio/amplio`** is packable as-is (`dist/` only; optional Zod peer).
-- **`@amplio/cli`** bundles `registry/` into the published tarball at build (`pnpm build` → `copy-registry.mjs`).
+- **`@useamplio/amplio`** is packable as-is (`dist/` only; optional Zod peer).
+- **`@useamplio/cli`** bundles `registry/` into the published tarball at build (`pnpm build` → `copy-registry.mjs`).
 - **Hosted shadcn registry URL** — still TODO; use `pnpm registry:build` and local `public/r/` (or the CLI bundle) until a CDN/base URL is published.
 
 ```bash
@@ -298,7 +298,7 @@ pnpm build
 pnpm test
 pnpm typecheck
 pnpm registry:build
-pnpm size          # @amplio/amplio gzip must stay under 8 KB
+pnpm size          # @useamplio/amplio gzip must stay under 8 KB
 pnpm run ci   # full local CI — not `pnpm ci` (pnpm clean-install)
 ```
 

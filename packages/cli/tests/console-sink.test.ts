@@ -1,4 +1,4 @@
-import type { LogRecord } from "@amplio/amplio";
+import type { LogRecord } from "@useamplio/amplio";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { consoleSink } from "../../../registry/sinks/console.ts";
 

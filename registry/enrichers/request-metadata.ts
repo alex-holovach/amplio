@@ -1,4 +1,4 @@
-import type { LogRecord } from "@amplio/amplio";
+import type { LogRecord } from "@useamplio/amplio";
 
 export interface RequestContext {
   method: string;

@@ -1,6 +1,6 @@
 export function renderLoggerTemplate(service = "my-app"): string {
-  return `import { init, logger } from "@amplio/amplio";
-import type { LogRecord, Sink } from "@amplio/amplio";
+  return `import { init, logger } from "@useamplio/amplio";
+import type { LogRecord, Sink } from "@useamplio/amplio";
 
 const consoleJsonSink: Sink = (record: LogRecord) => {
   console.log(JSON.stringify(record));

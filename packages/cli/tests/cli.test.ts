@@ -51,7 +51,7 @@ describe("runInit", () => {
     expect(config.telemetryDir).toBe("telemetry");
 
     const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
-    expect(loggerSource).toContain('import { init, logger } from "@amplio/amplio"');
+    expect(loggerSource).toContain('import { init, logger } from "@useamplio/amplio"');
     expect(loggerSource).toContain("consoleJsonSink");
     expect(loggerSource).toContain("enrichers: []");
     expect(loggerSource).toContain("export { logger }");
@@ -343,7 +343,7 @@ describe("runAddSink", () => {
     const loggerPath = path.join(cwd, "telemetry/logger.ts");
     await writeFile(
       loggerPath,
-      `import { init, logger, type LogRecord, type Sink } from "@amplio/amplio";
+      `import { init, logger, type LogRecord, type Sink } from "@useamplio/amplio";
 import { consoleSink } from "./sinks/console";
 
 type Enricher = (record: LogRecord) => LogRecord;

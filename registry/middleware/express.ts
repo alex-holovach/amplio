@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@amplio/amplio";
+import {createRequestLogger, runWithLogger, type Logger, useLogger} from "@useamplio/amplio";
 
 
 declare global {

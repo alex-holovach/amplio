@@ -1,5 +1,5 @@
 {
-  "name": "@amplio/example-express-smoke",
+  "name": "@useamplio/example-express-smoke",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@amplio/amplio": "workspace:*",
+    "@useamplio/amplio": "workspace:*",
     "express": "^4.21.2"
   },
   "devDependencies": {
