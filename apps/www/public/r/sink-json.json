@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "sink-json",
+  "title": "JSON Sink",
+  "description": "JSON sink that serializes wide events for streaming or files.",
+  "type": "registry:lib",
+  "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio*.jsonl to .gitignore (the default file name includes the env, e.g. amplio.development.jsonl). Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
+  "dependencies": [
+    "@useamplio/amplio@^0.1.0-alpha.15"
+  ],
+  "files": [
+    {
+      "path": "registry/sinks/json.ts",
+      "target": "~/telemetry/sinks/json.ts",
+      "type": "registry:lib",
+      "content": "/**\n * Dev-grade JSONL sink — appendFileSync blocks the event loop.\n * Use sink-otlp for production. Path from AMPLIO_JSON_SINK_PATH env or option;\n * defaults to amplio.<env>.jsonl (e.g. amplio.development.jsonl) so dev rows\n * and build/production rows never interleave in one file. Add amplio*.jsonl\n * to .gitignore (amplio add sink json does this).\n */\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport type { LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport interface JsonFileSinkOptions {\n  path?: string;\n}\n\nexport function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {\n  const explicitPath =\n    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined);\n\n  return (record: LogRecord) => {\n    const env = typeof record.env === \"string\" && record.env ? record.env : \"dev\";\n    const filePath = explicitPath ?? `amplio.${env}.jsonl`;\n    const dir = path.dirname(filePath);\n    if (dir && dir !== \".\") {\n      fs.mkdirSync(dir, { recursive: true });\n    }\n    fs.appendFileSync(filePath, `${JSON.stringify(record)}\\n`, \"utf8\");\n  };\n}\n"
+    }
+  ]
+}

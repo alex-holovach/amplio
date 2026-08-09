@@ -1,0 +1,20 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "event-page-viewed",
+  "title": "Page Viewed",
+  "description": "Wide event when a page is viewed (path only — query strings stay out).",
+  "type": "registry:lib",
+  "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.15"
+  ],
+  "files": [
+    {
+      "path": "registry/events/page/viewed.ts",
+      "target": "~/telemetry/events/page/viewed.ts",
+      "type": "registry:lib",
+      "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PageViewed = defineEvent(\n  \"page.viewed\",\n  z.object({\n    page: z.object({\n      // Pathname only (\"/pricing\") — query strings carry PII; if you need a\n      // param, add it as its own typed field instead.\n      path: z.string(),\n      title: z.string().optional(),\n      referrer: z.string().optional(),\n    }),\n    visitor: z\n      .object({\n        // Authenticated user id or anonymous visitor id — whichever you have.\n        // Optional so \"anonymous, but I know it's unauthenticated\" is valid:\n        //   visitor: { authenticated: false }\n        id: z.string().optional(),\n        authenticated: z.boolean().optional(),\n      })\n      .optional(),\n  }),\n);\n"
+    }
+  ]
+}

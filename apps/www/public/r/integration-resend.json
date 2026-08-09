@@ -1,0 +1,23 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "integration-resend",
+  "title": "Resend Integration",
+  "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).",
+  "type": "registry:lib",
+  "docs": "Call trackResendEmail after sending, or handleResendWebhook from your Resend webhook route. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.15"
+  ],
+  "registryDependencies": [
+    "@useamplio/event-email-sent"
+  ],
+  "files": [
+    {
+      "path": "registry/integrations/resend.ts",
+      "target": "~/telemetry/integrations/resend.ts",
+      "type": "registry:lib",
+      "content": "import { logger } from \"../logger\";\nimport { EmailSent } from \"../events/email/sent\";\n\ntype ResendEmailEventData = {\n  email_id: string;\n  to: string[];\n  subject: string;\n  tags?: Record<string, string> | Array<{ name: string; value: string }>;\n  template_id?: string;\n};\n\nexport type ResendWebhookEvent = {\n  type: \"email.sent\" | \"email.delivered\" | \"email.bounced\" | \"email.complained\";\n  created_at?: string;\n  data: ResendEmailEventData;\n};\n\nexport function trackResendEmail(input: {\n  message: { id: string; to: string; subject: string };\n  template: string;\n  status: \"queued\" | \"sent\" | \"failed\";\n}) {\n  return logger\n    .event(EmailSent)\n    .set({\n      email: {\n        id: input.message.id,\n        template: input.template,\n        to: input.message.to,\n        subject: input.message.subject,\n      },\n      delivery: {\n        provider: \"resend\",\n        status: input.status,\n      },\n    })\n    .emit();\n}\n\nfunction tagValue(\n  tags: ResendEmailEventData[\"tags\"],\n  name: string,\n): string | undefined {\n  if (!tags) {\n    return undefined;\n  }\n  if (Array.isArray(tags)) {\n    return tags.find((entry) => entry.name === name)?.value;\n  }\n  return tags[name];\n}\n\nfunction templateFromTags(\n  tags: ResendEmailEventData[\"tags\"],\n  templateId?: string,\n): string {\n  const tagged =\n    tagValue(tags, \"template\") ??\n    tagValue(tags, \"category\") ??\n    tagValue(tags, \"template_id\") ??\n    tagValue(tags, \"templateId\");\n  if (tagged) {\n    return tagged;\n  }\n  return templateId ?? \"unknown\";\n}\n\nfunction resendDeliveryStatus(\n  type: ResendWebhookEvent[\"type\"],\n): \"queued\" | \"sent\" | \"failed\" {\n  switch (type) {\n    case \"email.sent\":\n    case \"email.delivered\":\n      return \"sent\";\n    case \"email.bounced\":\n    case \"email.complained\":\n      return \"failed\";\n    default:\n      return \"queued\";\n  }\n}\n\nexport function handleResendWebhook(event: ResendWebhookEvent) {\n  switch (event.type) {\n    case \"email.sent\":\n    case \"email.delivered\":\n    case \"email.bounced\":\n    case \"email.complained\": {\n      const to = event.data.to[0];\n      if (!to) {\n        return undefined;\n      }\n      return trackResendEmail({\n        message: {\n          id: event.data.email_id,\n          to,\n          subject: event.data.subject,\n        },\n        template: templateFromTags(event.data.tags, event.data.template_id),\n        status: resendDeliveryStatus(event.type),\n      });\n    }\n    default:\n      return undefined;\n  }\n}\n"
+    }
+  ]
+}

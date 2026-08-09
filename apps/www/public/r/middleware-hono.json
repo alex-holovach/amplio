@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "middleware-hono",
+  "title": "Hono Middleware",
+  "description": "Hono middleware that attaches request-scoped amplio context.",
+  "type": "registry:lib",
+  "docs": "Wire the middleware: `app.use(\"*\", amplioMiddleware())` in your Hono app. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
+  "dependencies": [
+    "@useamplio/amplio@^0.1.0-alpha.15"
+  ],
+  "files": [
+    {
+      "path": "registry/middleware/hono.ts",
+      "target": "~/telemetry/middleware/hono.ts",
+      "type": "registry:lib",
+      "content": "import type { Context, MiddlewareHandler, Next } from \"hono\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\nconst AMPLIO_KEY = \"amplio\";\n\nexport function amplioMiddleware(): MiddlewareHandler {\n  return async (c: Context, next: Next) => {\n    const requestLogger = createRequestLogger({\n      method: c.req.method,\n      path: c.req.path,\n    }).set({\n      http: {\n        route: c.req.routePath,\n      },\n    });\n\n    c.set(AMPLIO_KEY, requestLogger);\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        await next();\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: c.res.status },\n            status: c.res.status,\n          });\n          requestLogger.emit();\n        }\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n        }\n        throw error;\n      }\n    });\n  };\n}\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(c: Context): Logger {\n  return (c.get(AMPLIO_KEY) as Logger | undefined) ?? getLogger();\n}\n\n"
+    }
+  ]
+}

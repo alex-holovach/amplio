@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "enricher-service-metadata",
+  "title": "Service Metadata Enricher",
+  "description": "Enricher that adds service name / environment metadata.",
+  "type": "registry:lib",
+  "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
+  "dependencies": [
+    "@useamplio/amplio@^0.1.0-alpha.15"
+  ],
+  "files": [
+    {
+      "path": "registry/enrichers/service-metadata.ts",
+      "target": "~/telemetry/enrichers/service-metadata.ts",
+      "type": "registry:lib",
+      "content": "import type { JsonValue, LogRecord } from \"@useamplio/amplio\";\n\nfunction envOrUndefined(key: string): string | undefined {\n  const value = process.env[key];\n  if (value === undefined || value === \"\") {\n    return undefined;\n  }\n  return value;\n}\n\nexport function serviceMetadata(record: LogRecord): LogRecord {\n  const service: Record<string, JsonValue> = {\n    name: envOrUndefined(\"AMPLIO_SERVICE\") ?? record.service ?? \"\",\n  };\n\n  const version = envOrUndefined(\"AMPLIO_SERVICE_VERSION\");\n  if (version !== undefined) {\n    service.version = version;\n  }\n\n  const region = envOrUndefined(\"AMPLIO_REGION\");\n  if (region !== undefined) {\n    service.region = region;\n  }\n\n  return {\n    ...record,\n    service,\n  };\n}\n"
+    }
+  ]
+}

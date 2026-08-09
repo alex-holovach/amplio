@@ -1,0 +1,20 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "event-email-sent",
+  "title": "Email Sent",
+  "description": "Wide event when an email is sent.",
+  "type": "registry:lib",
+  "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.15"
+  ],
+  "files": [
+    {
+      "path": "registry/events/email/sent.ts",
+      "target": "~/telemetry/events/email/sent.ts",
+      "type": "registry:lib",
+      "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const EmailSent = defineEvent(\n  \"email.sent\",\n  z.object({\n    email: z.object({\n      id: z.string(),\n      template: z.string(),\n      to: z.string().email(),\n      subject: z.string(),\n    }),\n    delivery: z.object({\n      provider: z.enum([\"resend\", \"sendgrid\", \"ses\", \"postmark\", \"other\"]),\n      status: z.enum([\"queued\", \"sent\", \"failed\"]),\n    }),\n  }),\n);\n"
+    }
+  ]
+}

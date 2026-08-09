@@ -1,0 +1,20 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "event-job-completed",
+  "title": "Job Completed",
+  "description": "Wide event when a background job finishes (success, failed, or cancelled).",
+  "type": "registry:lib",
+  "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.15"
+  ],
+  "files": [
+    {
+      "path": "registry/events/job/completed.ts",
+      "target": "~/telemetry/events/job/completed.ts",
+      "type": "registry:lib",
+      "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const JobCompleted = defineEvent(\n  \"job.completed\",\n  z.object({\n    job: z.object({\n      name: z.string(),\n      // Queue-assigned id (BullMQ, Inngest, pg-boss, …) when you have one.\n      id: z.union([z.string(), z.number()]).optional(),\n      queue: z.string().optional(),\n    }),\n    result: z.object({\n      status: z.enum([\"success\", \"failed\", \"cancelled\"]),\n      attempt: z.number().int().positive().optional(),\n      // Domain-level count (\"rows synced\"), not a timing — the auto\n      // duration_ms field already times the logger's lifetime.\n      records_processed: z.number().int().nonnegative().optional(),\n    }),\n  }),\n);\n"
+    }
+  ]
+}
