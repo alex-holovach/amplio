@@ -53,7 +53,7 @@ const parseOtlpHeaders = (raw: string | undefined): Record<string, string> => {
   return headers;
 };
 
-const toOtlpAttribute = (key: string, value: JsonValue): OtlpAttribute | undefined => {
+const toOtlpAttribute = (key: string, value: JsonValue | undefined): OtlpAttribute | undefined => {
   if (value === null || value === undefined) {
     return undefined;
   }
@@ -75,7 +75,6 @@ const toOtlpAttribute = (key: string, value: JsonValue): OtlpAttribute | undefin
 
   return undefined;
 };
-
 
 const toTimeUnixNano = (timestamp: JsonValue | undefined): string => {
   let ms: number;

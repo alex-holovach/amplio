@@ -31,7 +31,7 @@ export function requestMetadata(context: RequestContext) {
 
     return {
       ...record,
-      request_id: requestId,
+      ...(requestId !== undefined ? { request_id: requestId } : {}),
       http: {
         method: context.method,
         path: context.path,

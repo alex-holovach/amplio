@@ -6,12 +6,12 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.5"
+    "@useamplio/amplio@^0.1.0-alpha.7"
   ],
   "files": [
     {
       "path": "registry/events/payment/order-paid.ts",
-      "target": "telemetry/events/payment/order-paid.ts",
+      "target": "~/telemetry/events/payment/order-paid.ts",
       "type": "registry:lib",
       "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PaymentOrderPaid = defineEvent(\n  \"payment.order.paid\",\n  z.object({\n    order: z.object({\n      id: z.string(),\n      currency: z.string().length(3),\n      amount_cents: z.number().int().nonnegative(),\n    }),\n    customer: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    payment: z.object({\n      provider: z.enum([\"stripe\", \"polar\", \"paddle\", \"other\"]),\n      method: z.enum([\"card\", \"bank\", \"wallet\", \"other\"]).optional(),\n    }),\n  }),\n);\n"
     }

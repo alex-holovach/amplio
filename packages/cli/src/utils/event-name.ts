@@ -1,11 +1,20 @@
 const EVENT_NAME_RE = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)+$/;
 
+const EVENT_NAME_RULE =
+  "Event names need 2+ dot-separated segments; each segment starts with a lowercase letter, then lowercase alphanumerics and underscores (e.g. auth.user.signed_up or email.sent).";
+
 export function assertValidEventName(name: string): void {
-  if (!EVENT_NAME_RE.test(name)) {
+  if (EVENT_NAME_RE.test(name)) {
+    return;
+  }
+
+  if (/[A-Z]/.test(name)) {
     throw new Error(
-      `Invalid event name "${name}". Expected dot-separated segments (e.g. auth.user.signed_up or email.sent).`,
+      `Event names must be lowercase (got "${name}"; try "${name.toLowerCase()}").`,
     );
   }
+
+  throw new Error(`Invalid event name "${name}". ${EVENT_NAME_RULE}`);
 }
 
 export function eventNameToRegistryId(name: string): string {

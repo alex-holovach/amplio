@@ -5,7 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0-alpha.7] - 2026-08-09
+
+### Added
+- **tRPC v11 middleware** — rewritten for result inspection (`{ ok: false, error }` annotates the request spine); generic `amplioTrpcMiddleware()` plugs into `t.middleware(...)` / `procedure.use(...)` without casts; batched links set `trpc.batched: true` and `trpc.procedures` while `trpc.path` stays on the first procedure.
+- **`amplio doctor`** — wiring checks (middleware exports referenced, event schemas, tsconfig paths) with fix hints.
+- **Registry strict typecheck** — CI fixture typechecks all registry sources under create-t3-app-style strict `tsconfig` (incl. tRPC no-cast contract).
+- **Docs** — ALPHA.md `## tRPC (v11)` wiring guide; README accuracy for emit-before-init, error shape, `http.request` spine, query-string redaction caveat, registry `~/` targets.
+
+### Changed
+- **`.error(err)`** — records `error.name` (thrown class name); sets `error.code` only when the value carries a real string/number `code` (not on plain `Error`).
+- **Request wide events** — `createRequestLogger` sets `event` / `@event` to `http.request` (filterable HTTP spine).
+- **Registry build** — `registryDependencies` namespaced as `@useamplio/…`; file targets root-anchored as `~/telemetry/…` so shadcn and CLI agree on placement in `src/` layouts.
+- **emit() before init()** — returns `null` and drops the event (dev warns once); docs no longer claim a record is returned.
+- **CLI init** — default `--service` from `package.json` name; tRPC detected alongside Next scaffolds `telemetry/middleware/trpc.ts`; wiring snippets point at ALPHA.md.
+
+### Fixed
+- **OTLP sink** — type fixes for strict `tsconfig` (`JsonValue` attribute mapping, timestamp parsing).
+- **shadcn registry** — namespaced dependencies and `~/telemetry/…` targets fix misplaced installs in monorepos with `src/`.
 
 ### Performance
 - Redaction: compile config once at `init()` (gated regex prechecks, copy-on-write subtrees); `redact: false` stays zero-cost; nested emit uses an inline leaf walk with safe-string / pattern-scan gates (~166k ops/s on ~1 KB nested payload vs ~1M flat with redaction on).

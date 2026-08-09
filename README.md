@@ -60,6 +60,8 @@ Example emitted record (fields vary by schema and enrichers):
 }
 ```
 
+`@event` is the reserved canonical event name. `event` duplicates the same value for sinks and queries that avoid `@`-prefixed keys — both are set on schema-bound emits; request middleware uses `http.request` for both.
+
 Default redaction masks emails and other sensitive patterns when those fields are present.
 
 ## After init
@@ -119,13 +121,13 @@ Frozen public surface from `@useamplio/amplio`:
 | `logger.create(initial?)` | Standalone wide-event scope (jobs, scripts, CLI runs) |
 | `useLogger` | Request-scoped logger from middleware context |
 | `.set()` | Merge nested context into the active wide event (mutates in place; returns same instance so `useLogger()` stays valid in middleware ALS) |
-| `.error(err, ctx?)` | Record a structured error (`success: false`); does not emit — call `.emit()` after |
+| `.error(err, ctx?)` | Record a structured error (`success: false`); does not emit — call `.emit()` after. For `Error` instances: `error.message`, `error.name` (class name), and `error.code` only when the thrown value carries a real string/number `code` (e.g. Node `ENOENT`) — plain `Error` has no `code` field |
 | `.emit()` | Finalize, validate, drain sinks; seals the instance |
 | `flush()` | Await pending async sink deliveries (use with serverless `waitUntil` / Next.js `after`) |
 
 When `success` is unset it defaults to `true`; if `status` is set, numeric codes in `[200, 400)` and the exact string `"ok"` (case-sensitive; `"OK"` → `false`) derive `success` (explicit `success` wins).
 
-**Library-first silence:** Import `@useamplio/amplio` and call `.set()` / `.emit()` before you wire `telemetry/logger.ts`. Without `init()` and sinks, `.emit()` still returns a record and does not throw — nothing is written anywhere. Call `init()` with at least one sink when you want output. `getConfig()` is stricter: it throws if you call it before `init()`.
+**Library-first silence:** Import `@useamplio/amplio` and call `.set()` / `.emit()` before you wire `telemetry/logger.ts`. Without `init()` and sinks, `.emit()` returns `null` (event dropped), no sinks run, and dev builds warn once — it never throws. Call `init()` with at least one sink when you want output. `getConfig()` is stricter: it throws if you call it before `init()`.
 
 Enricher errors are isolated — a throwing enricher is skipped; later enrichers and sinks still run.
 
@@ -138,6 +140,7 @@ The JSON file sink writes to `AMPLIO_JSON_SINK_PATH` (or `options.path`) and cre
 - Sampling `rate` 0 drops events that do not match a `keep` rule (`keep` rules are OR'd — any match keeps); `rate` 1 always samples.
 - Sampling `keep.field` supports dotted paths (e.g. `user.plan`) with `equals`, `matches`, `gte`, or `lte`; `gte` and `lte` on the same rule form an inclusive AND range.
 - Redaction runs on every emit by default; pass `redact: false` to `init()` to disable it.
+- **Query strings:** request middleware records `http.search` verbatim (URL-encoded query text). Field-level redaction does not parse query strings — tokens or PII in `?…` params may leak. Drop or allowlist `http.search` in an enricher if that matters for your app.
 - `serviceMetadata` uses `AMPLIO_SERVICE` / `AMPLIO_SERVICE_VERSION` / `AMPLIO_REGION` (name falls back to `record.service`; unset or empty version/region omitted — empty env strings are treated as unset).
 - `requestMetadata` optional fields (`route` / `ip` / `userAgent` / `requestId`): empty strings are treated as unset (omitted from `http`); empty `requestId` does not overwrite an existing `request_id`.
 
@@ -176,6 +179,8 @@ logger.create({ job: "nightly-sync" })
 
 ### useLogger (middleware)
 
+Request middleware creates one wide event per HTTP unit of work named `http.request` (`event` and `@event` both set). Filter on `@event = "http.request"` for the request spine; domain events from `.event(SomeSchema).emit()` are separate rows.
+
 ```typescript
 import { useLogger } from "@useamplio/amplio";
 
@@ -188,6 +193,8 @@ app.get("/health", (c) => {
 ## Registry / shadcn
 
 Registry items install into `telemetry/` with the same layout the CLI produces. Items are declared in `registry/registry.manifest.json` and published to `public/r/`. The registry index (`public/r/registry.json`) includes title and description per item.
+
+Built registry JSON uses `@useamplio/…`-prefixed `registryDependencies` (e.g. `@useamplio/event-auth-user-signed-up`) and root-anchored file targets (`~/telemetry/…`). `npx shadcn add` therefore lands files in `telemetry/` at the repo root even when your app uses a `src/` layout — matching `amplio add` / `amplio init`.
 
 ```bash
 pnpm registry:build   # regenerate public/r/*.json

@@ -71,6 +71,11 @@ async function loadRegistryFromManifest(
   };
 }
 
+function normalizeRegistryDependencyName(depName: string): string {
+  const prefix = "@useamplio/";
+  return depName.startsWith(prefix) ? depName.slice(prefix.length) : depName;
+}
+
 export function findRegistryItem(
   manifest: RegistryManifest,
   name: string,
@@ -105,7 +110,7 @@ export async function resolveRegistryDependencies(
     resolved.add(current.name);
 
     for (const depName of current.registryDependencies ?? []) {
-      const dep = findRegistryItem(manifest, depName);
+      const dep = findRegistryItem(manifest, normalizeRegistryDependencyName(depName));
       if (!dep) {
         throw new Error(`Registry dependency "${depName}" not found in ${registryPath}`);
       }

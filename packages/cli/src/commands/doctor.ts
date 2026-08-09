@@ -23,6 +23,76 @@ interface Check {
 
 const DEFINE_EVENT_RE = /defineEvent\s*\(\s*["']([^"']+)["']/g;
 
+const MIDDLEWARE_EXPORTS: Record<string, string> = {
+  "next.ts": "withAmplio",
+  "trpc.ts": "amplioTrpcMiddleware",
+  "hono.ts": "amplioMiddleware",
+  "express.ts": "amplioMiddleware",
+  "fastify.ts": "amplioPlugin",
+};
+
+const APP_SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs"]);
+
+const WALK_SKIP_DIRS = new Set([
+  "node_modules",
+  ".next",
+  ".git",
+  "dist",
+  "build",
+  "coverage",
+]);
+
+async function walkAppSourceFiles(
+  root: string,
+  excludeDir: string,
+): Promise<string[]> {
+  const files: string[] = [];
+  if (!(await pathExists(root))) {
+    return files;
+  }
+
+  const excludeResolved = path.resolve(excludeDir);
+
+  async function walk(current: string): Promise<void> {
+    const entries = await fs.readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (WALK_SKIP_DIRS.has(entry.name)) {
+          continue;
+        }
+        if (path.resolve(full) === excludeResolved) {
+          continue;
+        }
+        await walk(full);
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name);
+        if (APP_SOURCE_EXTENSIONS.has(ext)) {
+          files.push(full);
+        }
+      }
+    }
+  }
+
+  await walk(root);
+  return files;
+}
+
+async function isMiddlewareExportReferenced(
+  cwd: string,
+  telemetryDir: string,
+  exportName: string,
+): Promise<boolean> {
+  const appFiles = await walkAppSourceFiles(cwd, path.join(cwd, telemetryDir));
+  for (const file of appFiles) {
+    const source = await fs.readFile(file, "utf8");
+    if (source.includes(exportName)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function walkEventFiles(dir: string): Promise<string[]> {
   const files: string[] = [];
   if (!(await pathExists(dir))) {
@@ -100,7 +170,7 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
       checks.push({
         status: "warning",
         message: '@useamplio/amplio range is "*"',
-        fix: "Pin to a semver range (e.g. ^0.1.0-alpha.6).",
+        fix: "Pin to a semver range (e.g. ^0.1.0-alpha.7).",
       });
     } else {
       checks.push({
@@ -281,6 +351,29 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
       }
     } catch {
       // best effort
+    }
+  }
+
+  const middlewareDir = path.join(paths.telemetry, "middleware");
+  if (await pathExists(middlewareDir)) {
+    const middlewareEntries = await fs.readdir(middlewareDir, { withFileTypes: true });
+    for (const entry of middlewareEntries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+      const exportName = MIDDLEWARE_EXPORTS[entry.name];
+      if (!exportName) {
+        continue;
+      }
+      const referenced = await isMiddlewareExportReferenced(cwd, telemetryDir, exportName);
+      if (!referenced) {
+        const relPath = path.relative(cwd, path.join(middlewareDir, entry.name)).replace(/\\/g, "/");
+        checks.push({
+          status: "warning",
+          message: `${relPath} scaffolded but ${exportName} is never imported by app code`,
+          fix: "Wire the middleware in your app entry or route handlers — see ALPHA.md for framework-specific snippets.",
+        });
+      }
     }
   }
 

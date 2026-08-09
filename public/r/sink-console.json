@@ -5,12 +5,12 @@
   "description": "Console sink that prints wide events as JSON.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.5"
+    "@useamplio/amplio@^0.1.0-alpha.7"
   ],
   "files": [
     {
       "path": "registry/sinks/console.ts",
-      "target": "telemetry/sinks/console.ts",
+      "target": "~/telemetry/sinks/console.ts",
       "type": "registry:lib",
       "content": "import type { LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport const consoleSink: Sink = (record: LogRecord) => {\n  console.log(JSON.stringify(record));\n};\n"
     }

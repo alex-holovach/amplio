@@ -56,6 +56,8 @@ describe("runInit", () => {
     expect(loggerSource).toContain('import { init, logger } from "@useamplio/amplio"');
     expect(loggerSource).toContain("consoleJsonSink");
     expect(loggerSource).toContain("enrichers: []");
+    expect(loggerSource).toContain("// sampling:");
+    expect(loggerSource).toContain("// see README # sampling");
     expect(loggerSource).toContain("export { logger }");
   });
   it("is idempotent — second init preserves events from add event", async () => {
@@ -350,6 +352,19 @@ describe("runAddSink", () => {
     const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
     const matches = loggerSource.match(/otlpSink/g) ?? [];
     expect(matches.length).toBe(2);
+  });
+
+  it("keeps a single blank line after repeated sink codemods", async () => {
+    const cwd = await makeTempDir("amplio-sink-blank-lines-");
+    await initWithRegistry(cwd);
+    await runAddSink("otlp", { cwd });
+    await runAddSink("json", { cwd });
+
+    const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
+    expect(loggerSource).not.toMatch(/\n{4,}/);
+    expect(loggerSource).toMatch(
+      /import \{ jsonFileSink \} from "\.\/sinks\/json";\n\nconst consoleJsonSink/,
+    );
   });
 
   it("updates composeSinks logger when adding otlp", async () => {
@@ -692,10 +707,29 @@ describe("runInit framework detect", () => {
       JSON.stringify({ dependencies: { next: "^15.0.0" } }),
     );
     await mkdir(path.join(cwd, "src/app"), { recursive: true });
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
     await runInit({ cwd, yes: true, skipInstall: true });
+    logSpy.mockRestore();
 
     const instrumentation = await readFile(path.join(cwd, "src/instrumentation.ts"), "utf8");
     expect(instrumentation).toContain("telemetry/logger");
     expect(instrumentation).toContain("register");
+    expect(logs.join("\n")).toContain("withAmplio");
+    expect(logs.join("\n")).toContain("~telemetry/*");
+  });
+
+  it("defaults service name from package.json when --service omitted", async () => {
+    const cwd = await makeTempDir("amplio-init-pkg-name-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ name: "my-cool-app", dependencies: {} }),
+    );
+    await runInit({ cwd, skipInstall: true });
+
+    const loggerSource = await readFile(path.join(cwd, "telemetry/logger.ts"), "utf8");
+    expect(loggerSource).toContain('service: "my-cool-app"');
   });
 });

@@ -30,7 +30,7 @@ function resolveTargetPath(
   target: string,
 ): string {
   if (target.startsWith("~/")) {
-    return path.join(path.resolve(cwd, telemetryDir), target.slice(2));
+    return path.join(cwd, target.slice(2));
   }
   if (target.startsWith("telemetry/")) {
     return path.join(cwd, target);

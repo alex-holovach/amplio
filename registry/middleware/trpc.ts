@@ -11,6 +11,7 @@ import {
   hasAmbientLogger,
   runWithLogger,
   useLogger,
+  type Logger,
 } from "@useamplio/amplio";
 
 const TRPC_HTTP_STATUS: Record<string, number> = {
@@ -35,6 +36,12 @@ const TRPC_HTTP_STATUS: Record<string, number> = {
   GATEWAY_TIMEOUT: 504,
 };
 
+type TrpcProcedureType = "query" | "mutation" | "subscription";
+
+type TrpcProcedureRef = { path: string; type: TrpcProcedureType };
+
+const batchedProcedures = new WeakMap<Logger, TrpcProcedureRef[]>();
+
 function trpcErrorStatus(error: unknown): number {
   if (
     error !== null &&
@@ -45,6 +52,95 @@ function trpcErrorStatus(error: unknown): number {
     return TRPC_HTTP_STATUS[(error as { code: string }).code] ?? 500;
   }
   return 500;
+}
+
+function isFailedMiddlewareResult(
+  result: unknown,
+): result is { ok: false; error: unknown } {
+  return (
+    result !== null &&
+    typeof result === "object" &&
+    "ok" in result &&
+    (result as { ok: unknown }).ok === false &&
+    "error" in result
+  );
+}
+
+function annotateTrpcProcedure(
+  logger: Logger,
+  path: string,
+  type: TrpcProcedureType,
+): void {
+  if (logger.sealed) {
+    return;
+  }
+
+  const entry: TrpcProcedureRef = { path, type };
+  const seen = batchedProcedures.get(logger) ?? [];
+
+  if (seen.length === 0) {
+    batchedProcedures.set(logger, [entry]);
+    logger.set({ trpc: { path, type } });
+    return;
+  }
+
+  const isDuplicate = seen.some((item) => item.path === path && item.type === type);
+  if (isDuplicate) {
+    return;
+  }
+
+  const updated = [...seen, entry];
+  batchedProcedures.set(logger, updated);
+  const first = seen[0]!;
+  logger.set({
+    trpc: {
+      path: first.path,
+      type: first.type,
+      batched: true,
+      procedures: updated.map((item) => `${item.type} ${item.path}`),
+    },
+  });
+}
+
+function annotateTrpcError(
+  logger: Logger,
+  path: string,
+  type: TrpcProcedureType,
+  error: unknown,
+): void {
+  const status = trpcErrorStatus(error);
+  if (!logger.sealed) {
+    logger.error(error, { status });
+    logger.set({
+      trpc: { path, type },
+      status,
+      http: { status },
+    });
+  }
+}
+
+function finalizeStandaloneRequest(
+  logger: Logger,
+  path: string,
+  type: TrpcProcedureType,
+  result: unknown,
+): void {
+  if (logger.sealed) {
+    return;
+  }
+
+  if (isFailedMiddlewareResult(result)) {
+    annotateTrpcError(logger, path, type, result.error);
+  } else {
+    logger.set({
+      trpc: { path, type },
+      status: 200,
+      http: { status: 200 },
+    });
+  }
+
+  logger.emit();
+  scheduleFlush();
 }
 
 let afterFn: ((task: () => unknown) => void) | undefined;
@@ -66,31 +162,25 @@ function scheduleFlush(): void {
 }
 
 export function amplioTrpcMiddleware() {
-  return async ({
-    path,
-    type,
-    next,
-  }: {
+  return async <TResult>(opts: {
     path: string;
-    type: "query" | "mutation" | "subscription";
-    next: () => Promise<unknown>;
-  }) => {
+    type: TrpcProcedureType;
+    next: () => Promise<TResult>;
+  } & Record<string, unknown>): Promise<TResult> => {
+    const { path, type, next } = opts;
+
     if (hasAmbientLogger()) {
       const logger = useLogger();
-      logger.set({ trpc: { path, type } });
+      annotateTrpcProcedure(logger, path, type);
 
       try {
-        return await next();
-      } catch (error) {
-        const status = trpcErrorStatus(error);
-        if (!logger.sealed) {
-          logger.error(error, { status });
-          logger.set({
-            trpc: { path, type },
-            status,
-            http: { status },
-          });
+        const result = await next();
+        if (isFailedMiddlewareResult(result)) {
+          annotateTrpcError(logger, path, type, result.error);
         }
+        return result;
+      } catch (error) {
+        annotateTrpcError(logger, path, type, error);
         throw error;
       }
     }
@@ -98,29 +188,15 @@ export function amplioTrpcMiddleware() {
     const requestLogger = createRequestLogger({ method: "TRPC", path });
 
     return runWithLogger(requestLogger, async () => {
-      requestLogger.set({ trpc: { path, type } });
+      annotateTrpcProcedure(requestLogger, path, type);
 
       try {
         const result = await next();
-        if (!requestLogger.sealed) {
-          requestLogger.set({
-            trpc: { path, type },
-            status: 200,
-            http: { status: 200 },
-          });
-          requestLogger.emit();
-          scheduleFlush();
-        }
+        finalizeStandaloneRequest(requestLogger, path, type, result);
         return result;
       } catch (error) {
-        const status = trpcErrorStatus(error);
         if (!requestLogger.sealed) {
-          requestLogger.error(error, { status });
-          requestLogger.set({
-            trpc: { path, type },
-            status,
-            http: { status },
-          });
+          annotateTrpcError(requestLogger, path, type, error);
           requestLogger.emit();
           scheduleFlush();
         }

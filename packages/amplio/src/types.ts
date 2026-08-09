@@ -44,6 +44,7 @@ export interface EventDef<T extends Record<string, unknown> = Record<string, unk
 
 export interface StructuredError {
   message: string;
+  name?: string;
   why?: string;
   fix?: string;
   code?: string;

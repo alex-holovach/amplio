@@ -1,4 +1,4 @@
-import type { LogRecord } from "@useamplio/amplio";
+import type { JsonValue, LogRecord } from "@useamplio/amplio";
 
 function envOrUndefined(key: string): string | undefined {
   const value = process.env[key];
@@ -9,8 +9,8 @@ function envOrUndefined(key: string): string | undefined {
 }
 
 export function serviceMetadata(record: LogRecord): LogRecord {
-  const service: Record<string, unknown> = {
-    name: envOrUndefined("AMPLIO_SERVICE") ?? record.service,
+  const service: Record<string, JsonValue> = {
+    name: envOrUndefined("AMPLIO_SERVICE") ?? record.service ?? "",
   };
 
   const version = envOrUndefined("AMPLIO_SERVICE_VERSION");

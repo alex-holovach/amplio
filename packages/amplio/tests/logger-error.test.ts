@@ -34,7 +34,7 @@ describe("logger.error", () => {
 
     expect(record?.success).toBe(false);
     expect(record?.status).toBe(500);
-    expect(record?.error).toEqual({ message: "bad type", code: "TypeError" });
+    expect(record?.error).toEqual({ message: "bad type", name: "TypeError" });
     expect(records).toHaveLength(1);
   });
 
@@ -86,7 +86,52 @@ describe("EventLogger.error", () => {
 
     expect(record?.success).toBe(false);
     expect(record?.status).toBe(500);
-    expect(record?.error).toEqual({ message: "signup failed", code: "Error" });
+    expect(record?.error).toEqual({ message: "signup failed", name: "Error" });
+    expect(records).toHaveLength(1);
+  });
+
+  it("sets name without code for plain Error instances", () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+
+    const record = createLogger().error(new Error("kaboom")).emit();
+
+    expect(record?.error).toEqual({ message: "kaboom", name: "Error" });
+    expect(record?.error).not.toHaveProperty("code");
+    expect(records).toHaveLength(1);
+  });
+
+  it("sets code from err.code when present", () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+
+    const err = new Error("missing file") as Error & { code: string };
+    err.code = "ENOENT";
+
+    const record = createLogger().error(err).emit();
+
+    expect(record?.error).toEqual({
+      message: "missing file",
+      name: "Error",
+      code: "ENOENT",
+    });
+    expect(records).toHaveLength(1);
+  });
+
+  it("stringifies numeric err.code", () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+
+    const err = new Error("constraint failed") as Error & { code: number };
+    err.code = 2002;
+
+    const record = createLogger().error(err).emit();
+
+    expect(record?.error).toEqual({
+      message: "constraint failed",
+      name: "Error",
+      code: "2002",
+    });
     expect(records).toHaveLength(1);
   });
 });

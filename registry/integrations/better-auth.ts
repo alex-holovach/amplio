@@ -97,10 +97,11 @@ function trackSignUpFromContext(ctx: AuthHookContext, method: "email" | "oauth" 
   if (!user) {
     return;
   }
+  const referrer = readReferrer(ctx);
   trackBetterAuthSignUp({
     user,
     method,
-    referrer: readReferrer(ctx),
+    ...(referrer !== undefined ? { referrer } : {}),
   });
 }
 

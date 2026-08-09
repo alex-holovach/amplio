@@ -14,6 +14,8 @@ init({
   service: "${service}",
   env: process.env.NODE_ENV ?? "development",
   enrichers: [],
+  // sampling: { rate: 0.1, keep: [{ field: "success", equals: false }] },
+  // see README # sampling
   sinks: [consoleJsonSink],
 });
 

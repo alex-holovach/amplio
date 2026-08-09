@@ -15,7 +15,7 @@ describe("runDoctor", () => {
     await writeFile(
       path.join(cwd, "package.json"),
       JSON.stringify({
-        dependencies: { next: "^15.0.0", "@useamplio/amplio": "^0.1.0-alpha.6", zod: "^3.24.0" },
+        dependencies: { next: "^15.0.0", "@useamplio/amplio": "^0.1.0-alpha.7", zod: "^3.24.0" },
       }),
     );
     await mkdir(path.join(cwd, "src/app"), { recursive: true });
@@ -33,7 +33,7 @@ describe("runDoctor", () => {
     await writeFile(
       path.join(cwd, "package.json"),
       JSON.stringify({
-        dependencies: { next: "^15.0.0", "@useamplio/amplio": "^0.1.0-alpha.6" },
+        dependencies: { next: "^15.0.0", "@useamplio/amplio": "^0.1.0-alpha.7" },
       }),
     );
     await mkdir(path.join(cwd, "src/app"), { recursive: true });
@@ -64,5 +64,55 @@ describe("runDoctor", () => {
     const code = await runDoctor({ cwd });
     log.mockRestore();
     expect(code).toBe(1);
+  });
+
+  it("warns when scaffolded middleware export is never imported", async () => {
+    const cwd = await makeTempDir("amplio-doctor-mw-unwired-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { hono: "^4.0.0", "@useamplio/amplio": "^0.1.0-alpha.7", zod: "^3.24.0" },
+      }),
+    );
+    await runInit({ cwd, skipInstall: true, middleware: "hono", event: "none" });
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).toContain(
+      "telemetry/middleware/hono.ts scaffolded but amplioMiddleware is never imported by app code",
+    );
+    expect(logs.join("\n")).toContain("ALPHA.md");
+  });
+
+  it("passes middleware wiring check when export is referenced in app code", async () => {
+    const cwd = await makeTempDir("amplio-doctor-mw-wired-");
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: { hono: "^4.0.0", "@useamplio/amplio": "^0.1.0-alpha.7", zod: "^3.24.0" },
+      }),
+    );
+    await mkdir(path.join(cwd, "src"), { recursive: true });
+    await runInit({ cwd, skipInstall: true, middleware: "hono", event: "none" });
+    await writeFile(
+      path.join(cwd, "src/server.ts"),
+      'import { amplioMiddleware } from "../telemetry/middleware/hono";\nexport { amplioMiddleware };\n',
+    );
+
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args) => {
+      logs.push(args.join(" "));
+    });
+    const code = await runDoctor({ cwd });
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(logs.join("\n")).not.toContain("amplioMiddleware is never imported");
   });
 });

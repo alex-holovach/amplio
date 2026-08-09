@@ -44,9 +44,22 @@ function titleFromName(name) {
   return titleCaseWords(segments);
 }
 
+const REGISTRY_PREFIX = "@useamplio/";
+
+function prefixRegistryDependencies(deps) {
+  if (!deps) {
+    return undefined;
+  }
+  return deps.map((dep) =>
+    dep.startsWith(REGISTRY_PREFIX) ? dep : `${REGISTRY_PREFIX}${dep}`,
+  );
+}
+
 function toRegistryTarget(target) {
-  // Explicit telemetry/ paths so shadcn writes into telemetry/, not project root.
-  return target;
+  if (target.startsWith("~/")) {
+    return target;
+  }
+  return `~/${target}`;
 }
 
 function pinAmplioDependencies(deps, amplioVersion) {
@@ -68,7 +81,9 @@ async function buildItem(item, amplioVersion) {
     type: "registry:lib",
     dependencies: pinAmplioDependencies(item.dependencies, amplioVersion),
     ...(item.devDependencies ? { devDependencies: item.devDependencies } : {}),
-    ...(item.registryDependencies ? { registryDependencies: item.registryDependencies } : {}),
+    ...(item.registryDependencies
+      ? { registryDependencies: prefixRegistryDependencies(item.registryDependencies) }
+      : {}),
     files: [
       {
         path: path.posix.join("registry", item.source),

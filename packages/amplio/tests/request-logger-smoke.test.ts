@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createRequestLogger, init, resetConfigForTests, type LogRecord, type Sink } from "../src/index.js";
+import { z } from "zod";
+import {
+  createRequestLogger,
+  defineEvent,
+  init,
+  logger,
+  resetConfigForTests,
+  type LogRecord,
+  type Sink,
+} from "../src/index.js";
 
 beforeEach(() => {
   resetConfigForTests();
@@ -26,5 +35,24 @@ describe("request logger smoke", () => {
     expect(record.path).toBeUndefined();
     expect(record.route).toEqual({ name: "health" });
     expect(record.status).toBe(200);
+    expect(record.event).toBe("http.request");
+    expect(record["@event"]).toBe("http.request");
+  });
+
+  it("domain events via logger.event keep their own event name", () => {
+    const records: LogRecord[] = [];
+    const sink: Sink = (record) => {
+      records.push(record);
+    };
+
+    init({ service: "smoke", env: "test", sinks: [sink] });
+
+    const def = defineEvent("auth.user.signed_up", z.object({ user: z.object({ id: z.string() }) }));
+
+    const record = logger.event(def).set({ user: { id: "u1" } }).emit();
+
+    expect(record?.event).toBe("auth.user.signed_up");
+    expect(record?.["@event"]).toBe("auth.user.signed_up");
+    expect(records).toHaveLength(1);
   });
 });

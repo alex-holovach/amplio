@@ -20,6 +20,7 @@ import type {
   LogRecord,
   Logger,
   AmplioConfig,
+  StructuredError,
 } from "./types.js";
 
 type SealState = { sealed: boolean };
@@ -252,10 +253,17 @@ class InternalLoggerImpl implements InternalLogger {
       warnSealed("error");
       return this;
     }
-    const structuredError =
-      err instanceof Error
-        ? createError({ message: err.message, code: err.name })
-        : createError({ message: String(err) });
+    let structuredError: StructuredError;
+    if (err instanceof Error) {
+      const input: StructuredError = { message: err.message, name: err.name };
+      const code = (err as Error & { code?: unknown }).code;
+      if (typeof code === "string" || typeof code === "number") {
+        input.code = String(code);
+      }
+      structuredError = createError(input);
+    } else {
+      structuredError = createError({ message: String(err) });
+    }
     return this.set({ error: structuredError, success: false, ...ctx });
   }
 

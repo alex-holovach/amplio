@@ -23,9 +23,10 @@ beforeEach(() => {
 });
 
 describe("createError", () => {
-  it("includes message, why, fix, code, link", () => {
+  it("includes message, name, why, fix, code, link", () => {
     const err = createError({
       message: "Invalid token",
+      name: "AuthError",
       why: "Token expired",
       fix: "Refresh session",
       code: "AUTH_EXPIRED",
@@ -34,6 +35,7 @@ describe("createError", () => {
 
     expect(err).toEqual({
       message: "Invalid token",
+      name: "AuthError",
       why: "Token expired",
       fix: "Refresh session",
       code: "AUTH_EXPIRED",
@@ -45,6 +47,7 @@ describe("createError", () => {
     const result = createError({ message: "boom" });
 
     expect(result).toEqual({ message: "boom" });
+    expect(result).not.toHaveProperty("name");
     expect(result).not.toHaveProperty("why");
     expect(result).not.toHaveProperty("fix");
     expect(result).not.toHaveProperty("code");

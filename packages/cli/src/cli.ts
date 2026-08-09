@@ -30,7 +30,7 @@ Usage:
 
 Options:
   --cwd <path>                 Project directory (default: .)
-  --service <name>             Service name for logger.ts (init)
+  --service <name>             Service name for logger.ts (init; defaults to package.json name)
   --package-manager <pm>       pnpm | npm | yarn | bun (init)
   --no-typescript              Disable TypeScript defaults in amplio.json (init)
   --middleware <name|none>     Scaffold middleware on init (auto-detect from package.json)
@@ -210,7 +210,9 @@ async function main(): Promise<void> {
           await runAddIntegration(id, options);
           return;
         default:
-          throw new Error(`Unknown add kind "${kind}".`);
+          throw new Error(
+            `Unknown add kind "${kind}". Valid kinds: event, middleware, sink, enricher, integration.`,
+          );
       }
     }
 

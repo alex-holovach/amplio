@@ -133,6 +133,9 @@ describe("cli add unknown kind", () => {
     const result = runCli(["add", "widget", "foo"]);
     expect(result.status).not.toBe(0);
     expect(`${result.stderr}${result.stdout}`).toContain("Unknown add kind");
+    expect(`${result.stderr}${result.stdout}`).toContain(
+      "Valid kinds: event, middleware, sink, enricher, integration",
+    );
   });
 });
 
@@ -606,6 +609,37 @@ describe("cli init --service", () => {
     expect(loggerSource).toContain('service: "my-app"');
   });
 
+  it("defaults --service to package.json name (strips scope)", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-pkg-service-"));
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ name: "@acme/checkout-api" }),
+    );
+
+    const result = runCli(["init", "--cwd", cwd, "--skip-install"]);
+    expectCliStatus(result, 0, "init with package.json name");
+
+    const loggerSource = await readFile(
+      path.join(cwd, "telemetry/logger.ts"),
+      "utf8",
+    );
+    expect(loggerSource).toContain('service: "checkout-api"');
+  });
+
+  it("falls back to my-app when package.json has no name", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-no-pkg-name-"));
+    await writeFile(path.join(cwd, "package.json"), JSON.stringify({ private: true }));
+
+    const result = runCli(["init", "--cwd", cwd, "--skip-install"]);
+    expectCliStatus(result, 0, "init without package.json name");
+
+    const loggerSource = await readFile(
+      path.join(cwd, "telemetry/logger.ts"),
+      "utf8",
+    );
+    expect(loggerSource).toContain('service: "my-app"');
+  });
+
   it("writes telemetry/logger.ts with default service my-app when --service is empty", async () => {
     const cwd = await mkdtemp(path.join(tmpdir(), "amplio-init-empty-service-"));
 
@@ -804,14 +838,26 @@ describe("cli add event idempotency", () => {
 });
 
 describe("cli add event invalid name", () => {
-  it.each(["BadName", "Checkout", "auth..user", ".auth.user", "auth.user.", "auth.User.signed_up", "auth", "1auth.user", "auth_user.signed_up", "auth.user-signed"])(
+  it("reports lowercase requirement for Post.Created", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-upper-event-"));
+    await initWithRegistry(cwd);
+    const result = runCli(["add", "event", "Post.Created", "--cwd", cwd]);
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}${result.stdout}`).toContain(
+      'Event names must be lowercase (got "Post.Created"; try "post.created")',
+    );
+  });
+
+  it.each(["BadName", "Checkout", "auth..user", ".auth.user", "auth.user.", "auth", "1auth.user", "auth_user.signed_up", "auth.user-signed"])(
     "rejects invalid event name %s after init",
     async (eventName) => {
       const cwd = await mkdtemp(path.join(tmpdir(), "amplio-add-invalid-event-"));
       await initWithRegistry(cwd);
       const result = runCli(["add", "event", eventName, "--cwd", cwd]);
       expect(result.status).not.toBe(0);
-      expect(`${result.stderr}${result.stdout}`).toMatch(/Invalid event name/);
+      expect(`${result.stderr}${result.stdout}`).toMatch(
+        /Invalid event name|Event names must be lowercase/,
+      );
     },
   );
 });

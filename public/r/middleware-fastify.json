@@ -5,13 +5,13 @@
   "description": "Fastify plugin that attaches request-scoped amplio context.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.5",
+    "@useamplio/amplio@^0.1.0-alpha.7",
     "fastify-plugin@^5.0.0"
   ],
   "files": [
     {
       "path": "registry/middleware/fastify.ts",
-      "target": "telemetry/middleware/fastify.ts",
+      "target": "~/telemetry/middleware/fastify.ts",
       "type": "registry:lib",
       "content": "import type { FastifyPluginAsync, FastifyRequest } from \"fastify\";\nimport fp from \"fastify-plugin\";\nimport { createRequestLogger, runWithLogger, type Logger, useLogger } from \"@useamplio/amplio\";\n\ndeclare module \"fastify\" {\n  interface FastifyRequest {\n    amplio?: Logger;\n  }\n}\n\nconst plugin: FastifyPluginAsync = async (app) => {\n  app.addHook(\"onRequest\", (request, _reply, done) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.url,\n    }).set({\n      http: {\n        route: request.routeOptions?.url,\n        ip: request.ip,\n        user_agent: request.headers[\"user-agent\"],\n      },\n    });\n\n    request.amplio = requestLogger;\n    runWithLogger(requestLogger, () => done());\n  });\n\n  app.addHook(\"onResponse\", async (request, reply) => {\n    const requestLogger = request.amplio;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.set({\n      http: { status: reply.statusCode },\n      status: reply.statusCode,\n    });\n    requestLogger.emit();\n  });\n\n  app.addHook(\"onError\", async (request, _reply, error) => {\n    const requestLogger = request.amplio;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.error(error, { status: 500 });\n    requestLogger.emit();\n  });\n};\n\nexport const amplioPlugin = fp(plugin, { name: \"amplio\" });\n\nexport function useRequestLogger(request: FastifyRequest): Logger {\n  return request.amplio ?? useLogger();\n}\n"
     }

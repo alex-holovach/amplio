@@ -68,6 +68,17 @@ describe("registry build", () => {
     const item = JSON.parse(await readFile(itemPath, "utf8"));
     const rootPkg = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
     expect(item.dependencies).toContain(`@useamplio/amplio@^${rootPkg.version}`);
+    expect(item.files?.[0]?.target).toMatch(/^~\/telemetry\//);
+  });
+
+  it("prefixes registryDependencies with @useamplio/ in built output", async () => {
+    const itemPath = path.join(repoRoot, "public/r/integration-better-auth.json");
+    const item = JSON.parse(await readFile(itemPath, "utf8"));
+    expect(item.registryDependencies).toEqual([
+      "@useamplio/event-auth-user-signed-up",
+      "@useamplio/event-auth-user-signed-in",
+    ]);
+    expect(item.files?.[0]?.target).toBe("~/telemetry/integrations/better-auth.ts");
   });
 
   it("middleware items omit framework devDependencies", async () => {

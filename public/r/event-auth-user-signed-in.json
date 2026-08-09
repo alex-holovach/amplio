@@ -6,12 +6,12 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.5"
+    "@useamplio/amplio@^0.1.0-alpha.7"
   ],
   "files": [
     {
       "path": "registry/events/auth/user-signed-in.ts",
-      "target": "telemetry/events/auth/user-signed-in.ts",
+      "target": "~/telemetry/events/auth/user-signed-in.ts",
       "type": "registry:lib",
       "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const AuthUserSignedIn = defineEvent(\n  \"auth.user.signed_in\",\n  z.object({\n    user: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    session: z.object({\n      id: z.string(),\n      method: z.enum([\"password\", \"oauth\", \"magic_link\", \"sso\"]),\n      mfa: z.boolean().optional(),\n    }),\n  }),\n);\n"
     }

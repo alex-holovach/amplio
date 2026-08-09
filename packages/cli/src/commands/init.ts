@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import { runAddEvent, runAddMiddleware } from "./add.js";
 import { renderAmplioConfig, renderInstrumentationTemplate, renderLoggerTemplate } from "../templates/init.js";
 import { upsertComponentsJson } from "../utils/components-json.js";
@@ -13,6 +14,8 @@ import { registryPathForConfig } from "../utils/registry-path.js";
 
 const DEFAULT_REGISTRY_URL = "https://amplio-ruddy.vercel.app/r/{name}.json";
 
+const DEFAULT_SERVICE = "my-app";
+
 export interface InitOptions {
   cwd: string;
   service?: string;
@@ -22,6 +25,61 @@ export interface InitOptions {
   event?: string;
   yes?: boolean;
   skipInstall?: boolean;
+}
+
+async function resolveDefaultService(cwd: string): Promise<string> {
+  const pkgPath = path.join(cwd, "package.json");
+  if (!(await pathExists(pkgPath))) {
+    return DEFAULT_SERVICE;
+  }
+
+  try {
+    const pkg = JSON.parse(await fs.readFile(pkgPath, "utf8")) as { name?: string };
+    const rawName = pkg.name?.trim();
+    if (!rawName) {
+      return DEFAULT_SERVICE;
+    }
+    return rawName.replace(/^@[^/]+\//, "");
+  } catch {
+    return DEFAULT_SERVICE;
+  }
+}
+
+function resolveExplicitService(explicit: string | undefined): string | undefined {
+  const trimmed = explicit?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+async function resolveServiceName(cwd: string, explicit: string | undefined): Promise<string> {
+  return resolveExplicitService(explicit) ?? (await resolveDefaultService(cwd));
+}
+
+function middlewareImportPath(telemetryDir: string, middlewareName: string, srcLayout: boolean): string {
+  const base = srcLayout ? "../../" : "./";
+  return `${base}${telemetryDir}/middleware/${middlewareName}`;
+}
+
+function printNextWiringSnippet(telemetryDir: string, srcLayout: boolean): void {
+  const importPath = middlewareImportPath(telemetryDir, "next", srcLayout);
+  console.log("\nWire Next.js route handlers:");
+  console.log(`  import { withAmplio } from "${importPath}";`);
+  console.log("  export const GET = withAmplio(async (request) => {");
+  console.log("    // handler body");
+  console.log("  });");
+}
+
+function printTrpcWiringSnippet(telemetryDir: string, srcLayout: boolean): void {
+  const importPath = middlewareImportPath(telemetryDir, "trpc", srcLayout);
+  console.log("\nWire tRPC middleware (see ALPHA.md ## tRPC (v11)):");
+  console.log(`  import { amplioTrpcMiddleware } from "${importPath}";`);
+  console.log("  const amplioMw = t.middleware(amplioTrpcMiddleware());");
+  console.log("  publicProcedure.use(amplioMw);");
+}
+
+function printTsconfigPathsHint(): void {
+  console.log("\nOptional: add to tsconfig.json compilerOptions.paths for shorter imports:");
+  console.log('  "~telemetry/*": ["./telemetry/*"]');
+  console.log("  Then import from \"~telemetry/middleware/next\" instead of relative paths.");
 }
 
 function resolveMiddlewareName(
@@ -130,9 +188,11 @@ export async function runInit(options: InitOptions): Promise<void> {
   const componentsPath = path.join(options.cwd, "components.json");
   const componentsResult = await upsertComponentsJson(options.cwd, DEFAULT_REGISTRY_URL);
 
+  const service = await resolveServiceName(options.cwd, options.service);
+
   const loggerResult = await writeFileIfMissing(
     paths.logger,
-    renderLoggerTemplate(options.service),
+    renderLoggerTemplate(service),
   );
 
   console.log("amplio init");
@@ -169,6 +229,15 @@ export async function runInit(options: InitOptions): Promise<void> {
 
   if (middlewareName) {
     await runAddMiddleware(middlewareName, { cwd: options.cwd });
+    const config = await readAmplioConfig(options.cwd);
+    const telemetryDir = config?.telemetryDir ?? "telemetry";
+    const srcLayout = (await resolveNextInstrumentationBase(options.cwd)) === "src";
+
+    if (middlewareName === "next") {
+      printNextWiringSnippet(telemetryDir, srcLayout);
+    } else if (middlewareName === "trpc") {
+      printTrpcWiringSnippet(telemetryDir, srcLayout);
+    }
   }
 
   if (
@@ -177,9 +246,10 @@ export async function runInit(options: InitOptions): Promise<void> {
     (await hasDependency(options.cwd, "@trpc/server"))
   ) {
     await runAddMiddleware("trpc", { cwd: options.cwd });
-    console.log(
-      "\ntRPC detected: see ALPHA.md for wiring tRPC middleware with the Next.js route-handler wrapper.",
-    );
+    const config = await readAmplioConfig(options.cwd);
+    const telemetryDir = config?.telemetryDir ?? "telemetry";
+    const srcLayout = (await resolveNextInstrumentationBase(options.cwd)) === "src";
+    printTrpcWiringSnippet(telemetryDir, srcLayout);
   }
 
   if (eventName) {
@@ -199,6 +269,10 @@ export async function runInit(options: InitOptions): Promise<void> {
     console.log("  2. curl any route wrapped with amplio middleware");
     console.log("  3. Expect one JSON line on stdout (console sink)");
     console.log("  4. npx @useamplio/cli@alpha doctor");
+
+    if ((await resolveNextInstrumentationBase(options.cwd)) === "src") {
+      printTsconfigPathsHint();
+    }
   }
 
   if (!middlewareName && !eventName) {

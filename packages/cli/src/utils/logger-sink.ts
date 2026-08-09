@@ -96,24 +96,30 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function normalizeAfterImportBlock(rest: string): string {
+  const trimmed = rest.replace(/^\n+/, "");
+  return trimmed.length > 0 ? `\n\n${trimmed}` : rest;
+}
+
 function insertImport(source: string, meta: SinkMeta): string {
   if (hasSinkImport(source, meta)) {
     return source;
   }
 
-  const importLine = `import { ${meta.exportName} } from "${meta.importPath}";\n`;
+  const importLine = `import { ${meta.exportName} } from "${meta.importPath}";`;
   const importMatches = [...source.matchAll(/^import\s.+;$/gm)];
 
   if (importMatches.length === 0) {
-    return `${importLine}${source}`;
+    return `${importLine}\n${source}`;
   }
 
   const lastImport = importMatches[importMatches.length - 1];
   if (!lastImport) {
-    return `${importLine}${source}`;
+    return `${importLine}\n${source}`;
   }
   const insertAt = (lastImport.index ?? 0) + lastImport[0].length;
-  return `${source.slice(0, insertAt)}\n${importLine}${source.slice(insertAt)}`;
+  const rest = normalizeAfterImportBlock(source.slice(insertAt));
+  return `${source.slice(0, insertAt)}\n${importLine}${rest}`;
 }
 
 function appendSinkToArray(source: string, meta: SinkMeta): string {

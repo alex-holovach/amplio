@@ -24,6 +24,7 @@ That command:
 
 ```bash
 pnpm add hono
+# or: npm install hono  |  yarn add hono
 npx @useamplio/cli@alpha init --service my-app --middleware hono --event auth.user.signed_up --yes
 ```
 
@@ -78,6 +79,60 @@ export const GET = withAmplio(async () => {
 });
 ```
 
+## tRPC (v11)
+
+When `init` detects `@trpc/server` alongside Next.js, it scaffolds `telemetry/middleware/trpc.ts` in addition to `telemetry/middleware/next.ts` (create-t3-app style: App Router + tRPC v11).
+
+### Wiring (strict TypeScript)
+
+**1. Route handler** — wrap the tRPC HTTP entry so the request wide event exists before procedures run:
+
+```ts
+// src/app/api/trpc/[trpc]/route.ts
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { withAmplio } from "../../../../../telemetry/middleware/next";
+import { appRouter } from "@/server/api/root";
+import { createTRPCContext } from "@/server/api/trpc";
+
+const handler = (request: Request) =>
+  fetchRequestHandler({
+    endpoint: "/api/trpc",
+    req: request,
+    router: appRouter,
+    createContext: () => createTRPCContext({ headers: request.headers }),
+  });
+
+export const GET = withAmplio(handler);
+export const POST = withAmplio(handler);
+```
+
+**2. tRPC init** — annotate the ambient request logger from procedures (no cast adapter):
+
+```ts
+// src/server/api/trpc.ts
+import { amplioTrpcMiddleware } from "../../../telemetry/middleware/trpc";
+
+const amplioMiddleware = t.middleware(amplioTrpcMiddleware());
+export const publicProcedure = t.procedure.use(amplioMiddleware);
+// repeat for protectedProcedure / other bases as needed
+```
+
+`amplioTrpcMiddleware()` is generic — `t.middleware(amplioTrpcMiddleware())` and `publicProcedure.use(...)` typecheck without casts under strict `tsconfig`.
+
+### Model
+
+- **`withAmplio`** owns the request wide event (the spine). It is named `event: "http.request"` / `@event: "http.request"` so you can filter all HTTP traffic on one key.
+- **`amplioTrpcMiddleware`** annotates that spine with `trpc.path`, `trpc.type`, and HTTP status — it does not emit a sibling request row.
+- **Domain events** you `.emit()` inside procedures (e.g. `auth.user.signed_up`) are separate rows. Keep business context on domain events; keep transport context on the spine.
+
+### Errors
+
+tRPC v11 returns `{ ok: false, error }` from `next()` instead of throwing for many procedure failures (including Zod input validation). The middleware inspects that result and annotates the spine via `.error()`: `error.message`, `error.name` (thrown class name), and `status` / `http.status` derived from the tRPC error code (`BAD_REQUEST` → 400, `UNAUTHORIZED` → 401, etc.). Thrown errors are handled the same way.
+
+### Batching
+
+With `httpBatchLink` / `httpBatchStreamLink`, multiple procedures share one HTTP request. The spine gets `trpc.batched: true` and `trpc.procedures: ["query post.hello", "mutation user.update", …]`; `trpc.path` / `trpc.type` stay on the **first** procedure in the batch. For clean per-procedure attribution, emit domain events inside each procedure rather than relying on the spine alone.
+
 ## shadcn registry
 
 Hosted at https://amplio-ruddy.vercel.app
@@ -120,4 +175,5 @@ Files land under `telemetry/…`.
 ```bash
 npx @useamplio/cli@alpha init --skip-install
 pnpm add @useamplio/amplio zod
+# or: npm install @useamplio/amplio zod  |  yarn add @useamplio/amplio zod
 ```

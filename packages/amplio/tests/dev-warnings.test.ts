@@ -93,6 +93,8 @@ describe("dev warnings", () => {
     expect(record?.http).toEqual({ method: "POST", path: "/users" });
     expect(record?.method).toBeUndefined();
     expect(record?.path).toBeUndefined();
+    expect(record?.event).toBe("http.request");
+    expect(record?.["@event"]).toBe("http.request");
     expect(records).toHaveLength(1);
   });
 });
