@@ -9,12 +9,14 @@ Define typed event schemas, accumulate context with `.set()`, emit once with `.e
 ## Quick start
 
 ```bash
-npx amplio@alpha init --service my-app --yes
-npx amplio@alpha add event auth.user.signed_up
-npx amplio@alpha add middleware hono
+npx @useamplio/cli@alpha init --service my-app --yes
+npx @useamplio/cli@alpha add event auth.user.signed_up
+npx @useamplio/cli@alpha add middleware hono
 ```
 
-> Alpha: use the `@alpha` tag (`npx @useamplio/cli@alpha …` also works). See [ALPHA.md](./ALPHA.md).
+> Alpha: prefer the `@alpha` dist-tag. See [ALPHA.md](./ALPHA.md).
+>
+> Note: the unscoped npm name `amplio` is blocked by npm’s typo-squatting rules, so the CLI entry is `npx @useamplio/cli@alpha`.
 
 `amplio init` detects your framework from `package.json` (Next.js, Hono, Express, Fastify) and can scaffold middleware plus a starter event in one shot (`--yes` or non-interactive).
 

@@ -164,12 +164,6 @@ importers:
         specifier: ^3.0.9
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.9)
 
-  packages/npx-amplio:
-    dependencies:
-      '@useamplio/cli':
-        specifier: workspace:*
-        version: link:../cli
-
 packages:
 
   '@emnapi/runtime@1.11.3':

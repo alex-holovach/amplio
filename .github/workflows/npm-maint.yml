@@ -1,0 +1,36 @@
+name: npm-maint
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to mark as latest (e.g. 0.1.0-alpha.5)"
+        required: true
+        default: "0.1.0-alpha.5"
+
+permissions: {}
+
+jobs:
+  maint:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Dist-tags + deprecate core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          umask 077
+          npmrc="${RUNNER_TEMP}/.npmrc"
+          printf '%s\n' "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > "$npmrc"
+          export NPM_CONFIG_USERCONFIG="$npmrc"
+          npm dist-tag add "@useamplio/amplio@$VERSION" latest
+          npm dist-tag add "@useamplio/amplio@$VERSION" alpha
+          npm dist-tag add "@useamplio/cli@$VERSION" latest
+          npm dist-tag add "@useamplio/cli@$VERSION" alpha
+          npm deprecate @useamplio/core "Use @useamplio/amplio — the core package was renamed." || true
+          shred -u "$npmrc" 2>/dev/null || rm -f "$npmrc"

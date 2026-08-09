@@ -9,7 +9,7 @@ Schema-first wide-event telemetry that installs as open code in your repo.
 From an existing Node 20+ app:
 
 ```bash
-npx amplio@alpha init --service my-app --yes
+npx @useamplio/cli@alpha init --service my-app --yes
 ```
 
 That command:
@@ -18,17 +18,13 @@ That command:
 2. Installs `@useamplio/amplio` and `zod`
 3. Auto-detects Next.js / Hono / Express / Fastify and scaffolds middleware + a starter event when possible
 
-Equivalent scoped form (same CLI):
-
-```bash
-npx @useamplio/cli@alpha init --service my-app --yes
-```
+> The unscoped name `amplio` cannot be published on npm (typo-squatting block). Always use `@useamplio/cli`.
 
 ### Hono
 
 ```bash
 pnpm add hono
-npx amplio@alpha init --service my-app --middleware hono --event auth.user.signed_up --yes
+npx @useamplio/cli@alpha init --service my-app --middleware hono --event auth.user.signed_up --yes
 ```
 
 Wire middleware:
@@ -63,7 +59,7 @@ You should see one JSON object on stdout per request (console sink from `telemet
 ### Next.js (App Router)
 
 ```bash
-npx amplio@alpha init --service my-app --middleware next --event auth.user.signed_up --yes
+npx @useamplio/cli@alpha init --service my-app --middleware next --event auth.user.signed_up --yes
 ```
 
 Wrap a route handler:
@@ -109,8 +105,7 @@ Files land under `telemetry/…`.
 
 | Package | Role |
 |---|---|
-| `amplio` | `npx amplio` entry (depends on CLI) |
-| `@useamplio/cli` | Scaffolding CLI |
+| `@useamplio/cli` | Scaffolding CLI (`npx @useamplio/cli@alpha`) |
 | `@useamplio/amplio` | Runtime (`defineEvent`, `init`, `.set()`, `.emit()`) |
 
 `@useamplio/core` is deprecated — use `@useamplio/amplio`.
@@ -123,6 +118,6 @@ Files land under `telemetry/…`.
 ## Skip auto-install
 
 ```bash
-npx amplio@alpha init --skip-install
+npx @useamplio/cli@alpha init --skip-install
 pnpm add @useamplio/amplio zod
 ```
