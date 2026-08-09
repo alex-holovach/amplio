@@ -9,5 +9,5 @@ export const gitConfig = {
   branch: 'main',
 };
 
-export const siteUrl = 'https://amplio.vercel.app';
+export const siteUrl = 'https://amplio-ruddy.vercel.app';
 export const registryUrl = `${siteUrl}/r/{name}.json`;
