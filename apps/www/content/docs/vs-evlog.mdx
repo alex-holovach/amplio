@@ -10,9 +10,9 @@ description: How amplio differs from evlog and traditional loggers.
 | Code location | Closed npm runtime + optional augmentation | Open `telemetry/` in your repo |
 | Event model | Logger methods + modules | Schema-first `defineEvent` + wide events |
 | Install | npm package | CLI scaffolds editable files (shadcn-style) |
-| API surface | `log.info`, plugins, etc. | `.set()`, `.error()`, `.emit()` only |
+| API surface | `log.info`, plugins, etc. | Frozen: `defineEvent`, `init`, `.set()` / `.error()` / `.emit()`, `flush()` |
 
-amplio is **not** evlog. You own the schemas, middleware, sinks, and integrations. The runtime (`@useamplio/amplio`) is tiny and dependency-free.
+amplio is **not** evlog. You own the schemas, middleware, sinks, and integrations — they scaffold as readable, typed files under `telemetry/` that you can diff in PRs. The runtime (`@useamplio/amplio`) is ~4.5 KB gzipped with zero runtime dependencies (optional `zod` peer).
 
 ## vs printf logging
 

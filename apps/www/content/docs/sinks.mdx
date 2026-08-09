@@ -1,6 +1,6 @@
 ---
 title: Sinks & enrichers
-description: Console, JSON file, OTLP sinks and enricher behavior.
+description: Console, JSON file, and OTLP sinks; enrichers, redaction, and sampling.
 ---
 
 ## Add a sink
@@ -25,7 +25,7 @@ Emits one JSON line per record to stdout.
 
 ## JSON file
 
-Default path includes env: `amplio.development.jsonl` / `amplio.production.jsonl`. Override with `AMPLIO_JSON_SINK_PATH`.
+Default path includes env: `amplio.development.jsonl` / `amplio.production.jsonl` — dev traffic and build/production rows never interleave in one file. Override with `AMPLIO_JSON_SINK_PATH` or `jsonFileSink({ path })` (`path` wins); missing parent directories are created.
 
 ```bash
 # .gitignore
@@ -40,14 +40,18 @@ Endpoint resolution (OTel spec order):
 2. `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` (full URL, used verbatim)
 3. `OTEL_EXPORTER_OTLP_ENDPOINT` (base URL, `/v1/logs` appended)
 
+With none set, the sink warns once and disables export.
+
 ```typescript
-otlpSink({ batch: true }) // 100 records / 1s for production
+otlpSink({ batch: true }) // 100 records / 1s — or { maxSize, maxWaitMs }
 await flush();            // don't lose the last batch on serverless
 ```
 
+Defaults: `throwOnError: false` (export failures log a one-time dev warning and are swallowed), one POST per emit (fine for dev — pass `batch` for production rates). `service` / `env` map to OTLP resource `service.name` / `deployment.environment`; `service`, `event`, `status`, `duration_ms`, `request_id`, and other key fields become typed OTLP attributes (override with `otlpSink({ attributes: […] })`); the full record always ships in the log body.
+
 ## Enrichers
 
-Run in order before validation. Return value **replaces** the payload (not deep-merge):
+Run in order at emit time; each sees fields from previous enrichers. The return value **replaces** the payload (not deep-merge) — return `{ ...record, … }` to keep prior fields. A throwing enricher is skipped (dev warn); later enrichers and sinks still run.
 
 ```typescript
 init({
@@ -57,24 +61,35 @@ init({
 });
 ```
 
+## Redaction
+
+Runs on every emit by default (`redact: false` in `init()` disables it). It is **value-level**, not just field-name matching: emails, JWTs, bearer tokens, and card numbers are masked inside free-text strings too — `"email me at a@b.co"` emits as `"email me at [REDACTED]"`. URL-decoded copies of percent-encoded strings are scanned as well.
+
+One gap: request middleware records `http.search` verbatim, and redaction does not parse query strings — tokens or PII in `?…` params can leak. Scaffold the fix:
+
 ```bash
 npx @useamplio/cli@alpha add enricher query-allowlist
 ```
 
-Drops `http.search` by default to avoid query-string PII.
+It drops `http.search` by default, or keeps only allowlisted params (`queryAllowlist({ allow: ["page"] })`).
 
 ## Sampling
+
+Keep every interesting event, sample the noise:
 
 ```typescript
 init({
   sampling: {
-    rate: 0.1,
+    rate: 0.1, // 10% of ordinary traffic
     keep: [
-      { field: "trpc.type", equals: "mutation" },
-      { field: "status", gte: 400 },
+      { field: "trpc.type", equals: "mutation" },  // every mutation
+      { field: "status", gte: 400 },               // every error
+      { field: "@event", equals: "post.created" }, // every row of one domain event
     ],
   },
 });
 ```
 
-`keep` rules are OR'd. On rate drop, `.emit()` still returns the record — only sink delivery is skipped.
+`keep` rules are OR'd — any match always delivers. `field` supports dotted paths (`user.plan`) with `equals`, `matches` (string regex), `gte`, or `lte`; `gte` + `lte` on one rule form an inclusive range. `rate: 0` drops everything that matches no rule; `rate: 1` always keeps.
+
+`.emit()` returns **`null`** when sampling skips delivery (enrichers and redaction still run; only sinks are skipped) — don't gate retries or metrics on a non-null return in sampled paths.

@@ -44,29 +44,70 @@ export const authRouter = createTRPCRouter({
 });
 ```
 
-Annotate every authenticated spine in one place:
+To time the work itself, create the child before it — or use `.time()`, which does that plus error recording:
+
+```typescript
+const user = await getLogger().time(AuthUserSignedUp, async (ev) => {
+  const user = await createUser();
+  ev.set({ user: { id: user.id } });
+  return user;
+}); // duration_ms = createUser() time
+```
+
+Annotate every authenticated spine in one place — one `.set()` in `protectedProcedure` makes every authenticated request row user-scoped:
 
 ```typescript
 export const protectedProcedure = t.procedure
-  .use(amplioMiddleware)
+  .use(amplioMiddleware) // init --wire adds this
   .use(({ ctx, next }) => {
-    getLogger().set({ user: { id: ctx.session.user.id } });
-    return next({ ctx });
+    if (!ctx.session?.user) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+    getLogger().set({ user: { id: ctx.session.user.id } }); // annotates the spine
+    return next({ ctx: { session: { ...ctx.session, user: ctx.session.user } } });
   });
 ```
 
+This annotates the ambient spine only — domain rows created afterwards with `.child()` do **not** inherit it (children copy only `request_id`); set `user` on them explicitly when the schema wants it.
+
 ## RSC page renders
 
-Wrap pages with `withAmplioRender` so server-caller tRPC and facade events share one `request_id`:
+Server-caller tRPC calls (`createCaller`, no HTTP request) get their own `trpc.request` spine with `transport: "server-caller"` — but by default, multiple calls in one render do **not** correlate. Wrap the page with `withAmplioRender` to create one `page.render` spine that server-caller procedures annotate and domain rows correlate with:
 
 ```tsx
 import { withAmplioRender } from "~telemetry/middleware/next";
 
 export default withAmplioRender("home", async function Home() {
-  const latest = await api.post.getLatest();
+  const latest = await api.post.getLatest(); // annotates the render spine
   return <div>{latest?.name}</div>;
 });
 ```
+
+`redirect()` / `notFound()` are recorded as `page.interrupted`, not as errors. Note that `next build` executes prerendered RSC pages, so events emitted there fire at build time — those rows are tagged `build_phase: true` (filter with `build_phase != true`), or set `AMPLIO_DISABLED=1` in CI to drop every emit.
+
+## NextAuth (Auth.js v5)
+
+NextAuth `events` callbacks run inside the `[...nextauth]` route — `init --yes` wraps it with `withAmplio` in a stock layout. Then install the integration and wire it:
+
+```bash
+npx @useamplio/cli@alpha add integration next-auth
+```
+
+```typescript
+// src/server/auth/config.ts
+import { amplioNextAuthEvents } from "../../../telemetry/integrations/next-auth";
+
+export const authConfig = {
+  providers: [/* … */],
+  events: amplioNextAuthEvents(),
+} satisfies NextAuthConfig;
+```
+
+Every sign-in emits `auth.user.signed_in` (plus `auth.user.signed_up` for first-time registrations), correlated with the request spine via `request_id`. `signOut` / `linkAccount` are not wired by default — the integration file carries commented recipes; it is open code, edit it.
+
+## Batched requests
+
+With `httpBatchLink` / `httpBatchStreamLink`, multiple procedures share one HTTP request. The spine gets `trpc.batched: true`, `trpc.batch_size`, and `trpc.procedures`; `trpc.path` / `trpc.type` are **`null`** on a batch (group-bys stay honest), and a failing procedure lands in `trpc.failed_path` / `trpc.failed_type`. `status` is the transport status of the shared response (often `207`). For clean per-procedure attribution, emit domain events inside each procedure.
 
 ## Verify
 
@@ -76,7 +117,11 @@ npx @useamplio/cli@alpha doctor
 pnpm amplio smoke 'http://localhost:3000/api/trpc/post.hello?batch=1&input=…'
 ```
 
-Requires JSON sink (`amplio add sink json`) for `smoke`.
+Requires JSON sink (`amplio add sink json`) for `smoke`. Confirm the port Next actually bound — it silently moves to 3001+ when 3000 is busy, and a wrong-port curl looks identical to dropped events (`smoke` turns that into an explicit FAIL).
+
+## Turbopack
+
+`next dev --turbo` can compile `instrumentation.ts` and route handlers into separate module graphs. The runtime shares `init()` / ALS state on `globalThis`, and the generated middleware files start with a side-effect `import "../logger";` so each graph runs `init()`. After a CLI upgrade, run `amplio doctor` — it flags stale scaffolds missing that import or the `NEXT_RUNTIME` guard; regenerate with `amplio add middleware next --force` (or `trpc --force`).
 
 ## Server-only rule
 

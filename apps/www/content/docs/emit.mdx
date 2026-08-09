@@ -13,7 +13,7 @@ log.set({ signup: { method: "oauth" } }); // deep-merge
 log.emit(); // validate, redact, drain sinks, seal
 ```
 
-`.set()` deep-merges nested objects. `null` overwrites; `undefined` in a patch is skipped.
+`.set()` deep-merges nested objects and mutates the logger in place (it returns the same instance, so `getLogger()` stays valid in middleware ALS). `null` overwrites; `undefined` in a patch is skipped; arrays are **replaced**, not concatenated.
 
 ## Errors
 
@@ -27,6 +27,8 @@ log.emit();
 ```
 
 `.error()` records structured failure (`success: false`) but does not emit — call `.emit()` after.
+
+For `Error` instances it records `error.message`, `error.name` (the thrown class name), and `error.code` only when the thrown value carries a real string/number `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field.
 
 ## Return value
 
@@ -56,7 +58,7 @@ await getLogger().time(PostCreated, async (ev) => {
 
 ## success field
 
-When unset, `success` is omitted from the record. Numeric `status` in `[200, 400)` derives `success: true`. Explicit `success` always wins.
+When neither `status` nor an explicit `success` is set, `success` is **omitted** from the record. Numeric `status` in `[200, 400)` or the exact string `"ok"` derives `success: true`. Explicit `success` always wins.
 
 For domain events without `status`, filter with `success != false` rather than `success = true`.
 
@@ -70,3 +72,30 @@ await flush(); // await pending async sink deliveries
 ```
 
 Use with serverless `waitUntil` / Next.js `after` when async sinks (OTLP batch) must complete.
+
+## Validation
+
+Schema validation runs at emit time and **soft-fails** outside `NODE_ENV=test`: a payload that violates its schema still emits, tagged with `validation.issues` and `success: false`. Pass `init({ strict: true })` to throw instead.
+
+## Testing events
+
+Under `NODE_ENV=test`, validation hard-throws `AmplioValidationError` (with `issues` naming the bad paths), and `init()` is re-runnable via `resetConfigForTests()`. Use `memorySink()` and assert on delivered records:
+
+```typescript
+import { beforeEach, expect, it } from "vitest";
+import { init, memorySink, resetConfigForTests } from "@useamplio/amplio";
+
+const sink = memorySink();
+
+beforeEach(() => {
+  resetConfigForTests();
+  init({ service: "test", env: "test", sinks: [sink] });
+  sink.clear();
+});
+
+it("emits post.created", async () => {
+  await createPost({ text: "hi" });
+  const row = sink.records.find((r) => r["@event"] === "post.created");
+  expect(row).toMatchObject({ post: { text: "hi" } });
+});
+```

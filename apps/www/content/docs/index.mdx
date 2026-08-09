@@ -40,12 +40,29 @@ Example record (fields vary by schema and enrichers):
   "env": "development",
   "timestamp": "2026-08-07T16:30:00.000Z",
   "duration_ms": 12,
-  "success": true,
   "event": "auth.user.signed_up",
   "@event": "auth.user.signed_up",
   "user": { "id": "u_123" },
   "signup": { "method": "email" }
 }
+```
+
+`@event` is the reserved canonical event name; `event` duplicates it for sinks and queries that avoid `@`-prefixed keys (pass `init({ canonicalKeyOnly: true })` to emit only `@event`). `success` appears only when `status` or an explicit `success` is set — clean domain rows omit it, so filter with `success != false`, not `success = true`.
+
+## Correlated domain events
+
+Inside request middleware scope, `.child()` emits a separate row that shares the request's `request_id`:
+
+```typescript
+import { getLogger } from "@useamplio/amplio";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up.js";
+
+// inside withAmplio / hono middleware:
+getLogger()
+  .child(AuthUserSignedUp)
+  .set({ user: { id: "u_123" }, signup: { method: "email" } })
+  .emit();
+// two rows: http.request spine (middleware) + auth.user.signed_up (same request_id)
 ```
 
 ## Packages

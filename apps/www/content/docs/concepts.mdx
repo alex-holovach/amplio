@@ -5,7 +5,7 @@ description: Wide events, schemas, open code, and the request spine model.
 
 ## Wide events
 
-One record per unit of work. Accumulate context with `.set()`, finalize with `.emit()`. After emit, the instance is **sealed** — further `.set()` / `.error()` are no-ops.
+One record per unit of work. Accumulate context with `.set()`, finalize with `.emit()`. After emit, the instance is **sealed** — further `.set()` / `.error()` are no-ops (with a dev warning) and repeat `.emit()` returns `null`.
 
 ## Schema-first
 
@@ -56,15 +56,23 @@ getLogger()
 
 | API | Use when |
 |---|---|
-| `.child(EventDef)` | Canonical domain row — copies `request_id` only |
-| `getLogger().set({ … })` | Annotate the spine (middleware emits it) |
-| `logger.event(Def).emit()` | Standalone row outside a request |
+| `.child(EventDef)` | **Canonical.** Fresh seal and start time; copies `request_id` only (no `http.*` duplication). Emitting the child does not seal the spine |
+| `getLogger().set({ … })` | Annotate the spine row (middleware emits it) |
+| `logger.event(Def).emit()` | Standalone row outside a request; inside request scope it also copies `request_id` (since alpha.8) |
+
+Since alpha.13, `getLogger().event(Def)` on an already-named spine behaves as `.child(Def)` — a separate correlated row, spine preserved — with a dev notice suggesting the explicit spelling. `.child()` remains the canonical API.
 
 ## Public runtime surface
 
-Only these symbols are public from `@useamplio/amplio`:
+The frozen public surface from `@useamplio/amplio`:
 
 - `defineEvent`, `init`, `logger.event`, `logger.create`, `getLogger`
-- `.set()`, `.error()`, `.emit()`, `flush()`
+- `.set()`, `.child()`, `.time()`, `.error()`, `.emit()`, `flush()`
+
+`getLogger()` returns the request-scoped logger from middleware context; outside request scope it returns a **no-op logger** (it does not throw). `useLogger` is a deprecated alias — renamed to `getLogger` in alpha.10 because it is not a React hook and `use*` naming trips React lint rules.
 
 No `log.info` / `log.warn` — use schema fields and `.error()` for structured failures.
+
+## Library-first silence
+
+Call `.set()` / `.emit()` before `init()` ran and `.emit()` returns `null` — no sinks run, nothing throws, and dev builds warn on every dropped emit. Call `init()` with at least one sink (from `telemetry/logger.ts`) when you want output.

@@ -19,15 +19,19 @@ app.use("*", amplioMiddleware());
 
 ```typescript
 import { getRequestLogger } from "./telemetry/middleware/hono";
+import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
 
 app.post("/signup", async (c) => {
   getRequestLogger(c)
     .child(AuthUserSignedUp)
     .set({ user: { id: "u_123" }, signup: { method: "email" } })
     .emit();
+  // two rows: http.request spine (middleware) + auth.user.signed_up, same request_id
   return c.json({ ok: true });
 });
 ```
+
+To add fields to the request row itself (no separate row): `getRequestLogger(c).set({ user: { id } })` — the middleware emits the `http.request` spine when the response finishes.
 
 ## Next.js App Router
 
@@ -38,29 +42,50 @@ npx @useamplio/cli@alpha init --service my-app --middleware next --yes
 ```typescript
 import { withAmplio } from "@/telemetry/middleware/next";
 import { getLogger } from "@useamplio/amplio";
+import { AuthUserSignedUp } from "@/telemetry/events/auth/user-signed-up";
+import { NextResponse } from "next/server";
 
 export const GET = withAmplio(async () => {
-  getLogger().child(AuthUserSignedUp).set({ user: { id: "u_123" } }).emit();
+  getLogger()
+    .child(AuthUserSignedUp)
+    .set({ user: { id: "u_123" }, signup: { method: "email" } })
+    .emit();
   return NextResponse.json({ ok: true });
 });
 ```
 
+The runtime imports `node:async_hooks` at module top level — never import `telemetry/logger` or call `getLogger()` from a `"use client"` component. Event definitions from `@useamplio/amplio/events` are client-safe.
+
 ## Express
 
 ```typescript
-import { amplioMiddleware } from "./telemetry/middleware/express";
+import { amplioMiddleware, getRequestLogger } from "./telemetry/middleware/express";
 
 app.use(amplioMiddleware());
-// req.amplio available in handlers
+
+app.post("/signup", (req, res) => {
+  getRequestLogger(req) // or req.amplio
+    .child(AuthUserSignedUp)
+    .set({ user: { id: "u_123" }, signup: { method: "email" } })
+    .emit();
+  res.json({ ok: true });
+});
 ```
 
 ## Fastify
 
 ```typescript
-import { amplioPlugin } from "./telemetry/middleware/fastify";
+import { amplioPlugin, getRequestLogger } from "./telemetry/middleware/fastify";
 
 await app.register(amplioPlugin);
-// request.amplio available in handlers
+
+app.post("/signup", async (request) => {
+  getRequestLogger(request) // or request.amplio
+    .child(AuthUserSignedUp)
+    .set({ user: { id: "u_123" }, signup: { method: "email" } })
+    .emit();
+  return { ok: true };
+});
 ```
 
 ## tRPC v11
