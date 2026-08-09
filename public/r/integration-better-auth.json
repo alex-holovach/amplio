@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/core",
+    "@amplio/amplio",
     "better-auth"
   ],
   "registryDependencies": [

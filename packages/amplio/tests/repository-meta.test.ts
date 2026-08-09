@@ -29,12 +29,12 @@ function expectPublishMeta(pkg: PackageJson, name: string, directory: string): v
 }
 
 describe("repository metadata", () => {
-  it("@useamplio/core has repository, license, homepage, and bugs.url", () => {
-    expectPublishMeta(readPackageJson("packages/core/package.json"), "@useamplio/core", "packages/core");
+  it("@amplio/amplio has repository, license, homepage, and bugs.url", () => {
+    expectPublishMeta(readPackageJson("packages/amplio/package.json"), "@amplio/amplio", "packages/amplio");
   });
 
-  it("@useamplio/cli has repository, license, homepage, and bugs.url", () => {
-    expectPublishMeta(readPackageJson("packages/cli/package.json"), "@useamplio/cli", "packages/cli");
+  it("@amplio/cli has repository, license, homepage, and bugs.url", () => {
+    expectPublishMeta(readPackageJson("packages/cli/package.json"), "@amplio/cli", "packages/cli");
   });
 
   it("root package.json declares MIT license and LICENSE file matches", () => {

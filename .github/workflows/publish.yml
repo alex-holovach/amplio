@@ -61,7 +61,7 @@ jobs:
           export NPM_CONFIG_PROVENANCE=true
 
           tag="${{ steps.dist-tag.outputs.tag }}"
-          pnpm --filter @useamplio/core publish --access public --tag "$tag" --no-git-checks
-          pnpm --filter @useamplio/cli publish --access public --tag "$tag" --no-git-checks
+          pnpm --filter @amplio/amplio publish --access public --tag "$tag" --no-git-checks
+          pnpm --filter @amplio/cli publish --access public --tag "$tag" --no-git-checks
 
           shred -u "$npmrc" 2>/dev/null || rm -f "$npmrc"

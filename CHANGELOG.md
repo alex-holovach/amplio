@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes
 - P1#9: Hero quick start omits email (uses `user.id` + `signup.method`); `AuthUserSignedUp` schema makes `user.email` optional in registry, CLI template, and example-basic.
 - P1#9: README redaction note no longer demos `[REDACTED]` in the hero JSON; example-basic `/signup` needs no request body.
-- Docs sync: AGENTS.md, SPEC.md, and packages/core/README.md match shipped API (no-op `useLogger` outside ALS, sealed no-op loggers, `.error()`/`flush()`, sync `emit()`, soft-fail validation, default redaction, `defineEvent(name, schema)`, Next middleware flush).
+- Docs sync: AGENTS.md, SPEC.md, and packages/amplio/README.md match shipped API (no-op `useLogger` outside ALS, sealed no-op loggers, `.error()`/`flush()`, sync `emit()`, soft-fail validation, default redaction, `defineEvent(name, schema)`, Next middleware flush).
 - P1#7: `flush()` tracks pending async sinks; Next middleware schedules flush via `after` / optional `waitUntil`; dev warns on async sink rejections.
 - P1#8: `amplio init` detects framework from package.json and auto-scaffolds middleware + event (`--middleware`, `--event`, `--yes`).
 - `EventLogger.error(err, ctx?)` delegates to bound logger; noop getters removed from public index.
@@ -132,13 +132,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--service` is trimmed (whitespace-only → `my-app`).
 - `--package-manager` is trimmed and case-insensitive (whitespace-only → default).
 - Hosted shadcn registry URL is still TODO (local `public/r/` and bundled CLI registry work today).
-- Scoped packages (`@useamplio/core`, `@useamplio/cli`) set `publishConfig.access=public` for npm publish.
+- Scoped packages (`@amplio/amplio`, `@amplio/cli`) set `publishConfig.access=public` for npm publish.
 - CLI registry copy (`packages/cli/scripts/copy-registry.mjs`) uses a file lock to avoid concurrent build races.
 - Local full check: `pnpm run ci` (not `pnpm ci` — that is pnpm's install builtin).
 - GitHub Actions CI runs `pnpm run ci` as a single step (same bundle as local).
 - `amplio init --no-typescript` works (CLI `parseArgs` uses `allowNegative`) and writes `typescript: false`.
 - `amplio init --package-manager` rejects unknown values (pnpm|npm|yarn|bun only).
-- `@useamplio/core` `peerDependencies.zod` is `"^3.0.0 || ^4.0.0"` (tested).
+- `@amplio/amplio` `peerDependencies.zod` is `"^3.0.0 || ^4.0.0"` (tested).
 - Invalid event names are rejected (leading/trailing dots, uppercase, single segment, double dots).
 - `amplio add` works without prior `init` for event/middleware/sink/enricher/integration.
 - `amplio init --cwd` creates missing directories (`mkdir -p`).
@@ -161,7 +161,7 @@ Initial publish-ready snapshot of the amplio monorepo.
 
 ### Added
 
-- **`@useamplio/core`** — schema-first wide-event runtime: `defineEvent`, `init`, `logger.event` / `logger.create`, `useLogger`, sampling, and redaction. Packaged as ESM with a frozen public API and optional Zod peer dependency.
-- **`@useamplio/cli`** — `amplio init`, `amplio add`, and `amplio list` for scaffolding typed telemetry into `telemetry/`. Bundles the registry at build time (`registry/` copied into the published package).
+- **`@amplio/amplio`** — schema-first wide-event runtime: `defineEvent`, `init`, `logger.event` / `logger.create`, `useLogger`, sampling, and redaction. Packaged as ESM with a frozen public API and optional Zod peer dependency.
+- **`@amplio/cli`** — `amplio init`, `amplio add`, and `amplio list` for scaffolding typed telemetry into `telemetry/`. Bundles the registry at build time (`registry/` copied into the published package).
 - **Registry** — shadcn-compatible items (events, middleware, sinks, enrichers, integrations) declared in `registry/registry.manifest.json` and built to `public/r/*.json`.
 - **Examples** — runnable smoke apps for Hono, Express, Fastify, Next.js, and a standalone script under `examples/`.

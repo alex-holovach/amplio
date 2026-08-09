@@ -1,4 +1,4 @@
-import { init, logger } from "@useamplio/core";
+import { init, logger } from "@amplio/amplio";
 import { consoleJsonSink } from "./sinks/json";
 
 init({

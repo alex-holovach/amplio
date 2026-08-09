@@ -1,11 +1,11 @@
-# @useamplio/core
+# @amplio/amplio
 
 Tiny schema-first wide-event telemetry runtime. Zero runtime dependencies (`zod` optional peer).
 
 ## Install
 
 ```bash
-pnpm add @useamplio/core
+pnpm add @amplio/amplio
 # optional validation
 pnpm add zod
 ```
@@ -13,7 +13,7 @@ pnpm add zod
 ## Quick start
 
 ```ts
-import { init, defineEvent, createLogger } from "@useamplio/core";
+import { init, defineEvent, createLogger } from "@amplio/amplio";
 import { z } from "zod";
 
 const signedUp = defineEvent("auth.user.signed_up", z.object({ user_id: z.string() }));

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPkg = path.join(repoRoot, "packages/cli");
-const corePkg = path.join(repoRoot, "packages/core");
+const corePkg = path.join(repoRoot, "packages/amplio");
 
 function run(cmd, args, opts = {}) {
   return execFileSync(cmd, args, {
@@ -22,8 +22,8 @@ function fail(msg) {
 }
 
 // Ensure builds + bundled registry
-run("pnpm", ["--filter", "@useamplio/core", "build"], { cwd: repoRoot, stdio: "inherit" });
-run("pnpm", ["--filter", "@useamplio/cli", "build"], { cwd: repoRoot, stdio: "inherit" });
+run("pnpm", ["--filter", "@amplio/amplio", "build"], { cwd: repoRoot, stdio: "inherit" });
+run("pnpm", ["--filter", "@amplio/cli", "build"], { cwd: repoRoot, stdio: "inherit" });
 
 if (!existsSync(path.join(cliPkg, "registry/registry.json"))) {
   fail("packages/cli/registry/registry.json missing after build");

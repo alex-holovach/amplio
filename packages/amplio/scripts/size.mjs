@@ -13,7 +13,7 @@ const raw = statSync(bundlePath).size;
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} KB`;
 
-console.log(`@useamplio/core bundle size`);
+console.log(`@amplio/amplio bundle size`);
 console.log(`  raw:   ${fmt(raw)} (${raw} bytes)`);
 console.log(`  gzip:  ${fmt(gzipped.length)} (${gzipped.length} bytes)`);
 console.log(`  target gzip: < ${fmt(targetBytes)}`);

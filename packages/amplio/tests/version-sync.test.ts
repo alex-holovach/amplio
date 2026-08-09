@@ -18,14 +18,14 @@ function readPackageJson(relativePath: string): PackageJson {
 }
 
 describe("version sync", () => {
-  it("root, @useamplio/core, and @useamplio/cli share the same version", () => {
+  it("root, @amplio/amplio, and @amplio/cli share the same version", () => {
     const root = readPackageJson("package.json");
-    const core = readPackageJson("packages/core/package.json");
+    const core = readPackageJson("packages/amplio/package.json");
     const cli = readPackageJson("packages/cli/package.json");
 
     expect(root.name).toBe("amplio");
-    expect(core.name).toBe("@useamplio/core");
-    expect(cli.name).toBe("@useamplio/cli");
+    expect(core.name).toBe("@amplio/amplio");
+    expect(cli.name).toBe("@amplio/cli");
 
     expect(typeof root.version).toBe("string");
     expect(root.version.length).toBeGreaterThan(0);

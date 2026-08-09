@@ -1,4 +1,4 @@
-import { defineEvent } from "@useamplio/core";
+import { defineEvent } from "@amplio/amplio";
 import { z } from "zod";
 
 export const AuthUserSignedUp = defineEvent(

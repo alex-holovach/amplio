@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { LogRecord, Sink } from "@useamplio/core";
+import type { LogRecord, Sink } from "@amplio/amplio";
 
 export interface JsonFileSinkOptions {
   path?: string;

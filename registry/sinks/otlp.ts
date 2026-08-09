@@ -1,4 +1,4 @@
-import type { JsonValue, LogRecord, Sink } from "@useamplio/core";
+import type { JsonValue, LogRecord, Sink } from "@amplio/amplio";
 
 export interface OtlpSinkOptions {
   endpoint?: string;

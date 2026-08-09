@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { LogRecord } from "@useamplio/core";
+import type { LogRecord } from "@amplio/amplio";
 import { afterEach, describe, expect, it } from "vitest";
 import { jsonFileSink } from "../../../registry/sinks/json.ts";
 

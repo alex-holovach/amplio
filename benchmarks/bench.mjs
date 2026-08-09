@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { performance } from "node:perf_hooks";
-import { createLogger, init, resetConfigForTests } from "../packages/core/dist/index.js";
+import { createLogger, init, resetConfigForTests } from "../packages/amplio/dist/index.js";
 
 const ITERATIONS = 20_000;
 const WARMUP = 1_000;

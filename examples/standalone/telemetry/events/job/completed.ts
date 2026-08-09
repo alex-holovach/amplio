@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineEvent } from "@useamplio/core";
+import { defineEvent } from "@amplio/amplio";
 
 export const JobCompleted = defineEvent(
   "job.completed",

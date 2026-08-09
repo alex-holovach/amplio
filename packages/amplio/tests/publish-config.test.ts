@@ -19,36 +19,36 @@ function readPackageJson(relativePath: string): PackageJson {
 }
 
 describe("publish config", () => {
-  it("@useamplio/core has publishConfig.access === \"public\"", () => {
-    const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@useamplio/core");
+  it("@amplio/amplio has publishConfig.access === \"public\"", () => {
+    const pkg = readPackageJson("packages/amplio/package.json");
+    expect(pkg.name).toBe("@amplio/amplio");
     expect(pkg.publishConfig?.access).toBe("public");
   });
 
-  it("@useamplio/cli has publishConfig.access === \"public\"", () => {
+  it("@amplio/cli has publishConfig.access === \"public\"", () => {
     const pkg = readPackageJson("packages/cli/package.json");
-    expect(pkg.name).toBe("@useamplio/cli");
+    expect(pkg.name).toBe("@amplio/cli");
     expect(pkg.publishConfig?.access).toBe("public");
   });
 
-  it("@useamplio/core and @useamplio/cli require Node >=20", () => {
-    const core = readPackageJson("packages/core/package.json");
+  it("@amplio/amplio and @amplio/cli require Node >=20", () => {
+    const core = readPackageJson("packages/amplio/package.json");
     const cli = readPackageJson("packages/cli/package.json");
-    expect(core.name).toBe("@useamplio/core");
-    expect(cli.name).toBe("@useamplio/cli");
+    expect(core.name).toBe("@amplio/amplio");
+    expect(cli.name).toBe("@amplio/cli");
     expect(core.engines?.node).toBe(">=20");
     expect(cli.engines?.node).toBe(">=20");
   });
 
-  it('@useamplio/core peerDependencies.zod === "^3.0.0 || ^4.0.0"', () => {
-    const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@useamplio/core");
+  it('@amplio/amplio peerDependencies.zod === "^3.0.0 || ^4.0.0"', () => {
+    const pkg = readPackageJson("packages/amplio/package.json");
+    expect(pkg.name).toBe("@amplio/amplio");
     expect(pkg.peerDependencies?.zod).toBe("^3.0.0 || ^4.0.0");
   });
 
-  it("@useamplio/core peerDependenciesMeta.zod.optional === true", () => {
-    const pkg = readPackageJson("packages/core/package.json");
-    expect(pkg.name).toBe("@useamplio/core");
+  it("@amplio/amplio peerDependenciesMeta.zod.optional === true", () => {
+    const pkg = readPackageJson("packages/amplio/package.json");
+    expect(pkg.name).toBe("@amplio/amplio");
     expect(pkg.peerDependenciesMeta?.zod?.optional).toBe(true);
   });
 });
