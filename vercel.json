@@ -1,18 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "echo skip-install",
-  "buildCommand": "node scripts/build-registry.mjs",
-  "outputDirectory": "public",
-  "headers": [
-    {
-      "source": "/r/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "*" },
-        { "key": "Cache-Control", "value": "public, s-maxage=60, stale-while-revalidate=300" }
-      ]
-    }
-  ]
+  "comments": "Production site deploys from apps/www (Next.js + /r registry). Use the deploy-site workflow or: pnpm sync-registry && pnpm --filter @useamplio/www build && cd apps/www && vercel deploy --prod --scope aholovach"
 }
