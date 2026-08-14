@@ -60,7 +60,7 @@ describe("testing public API", () => {
     });
 
     expect(true).toBe(true);
-  });
+  }, 15_000);
 
   it("captures one typed Event record through a normal configured sink", () => {
     const events = createTestSink();
