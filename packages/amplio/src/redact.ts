@@ -2,6 +2,7 @@ import { getGlobalState } from "./global-state.js";
 import type { JsonValue, LogRecord, RedactConfig } from "./types.js";
 
 const REDACTED = "[REDACTED]";
+const CIRCULAR = "[Circular]";
 const PERCENT_ENCODED = /%[0-9A-Fa-f]{2}/;
 
 const DEFAULT_FIELD_KEYS = new Set([
@@ -102,7 +103,9 @@ const compileGatedPatterns = (extra: RegExp[] = []): GatedPattern[] => {
   ];
 };
 
-export function compileRedactConfig(config?: RedactConfig): CompiledRedactConfig | false {
+export function compileRedactConfig(
+  config?: RedactConfig,
+): CompiledRedactConfig | false {
   if (config === false) {
     return false;
   }
@@ -229,7 +232,10 @@ const needsPatternScan = (input: string): boolean => {
   return false;
 };
 
-const applyGatedPatterns = (input: string, gatedPatterns: GatedPattern[]): string => {
+const applyGatedPatterns = (
+  input: string,
+  gatedPatterns: GatedPattern[],
+): string => {
   let out = input;
   for (const { test, pattern, replacement } of gatedPatterns) {
     if (!test(out)) {
@@ -295,133 +301,82 @@ const redactStringValue = (
   return redactString(str, gatedPatterns);
 };
 
-function redactArray(
-  value: JsonValue[],
-  fieldKey: string,
-  fieldKeys: Set<string>,
-  gatedPatterns: GatedPattern[],
-): JsonValue[] {
-  let out: JsonValue[] | null = null;
-  for (let index = 0, len = value.length; index < len; index += 1) {
-    const item = value[index] as JsonValue;
-    const itemType = typeof item;
-
-    if (itemType === "number" || itemType === "boolean" || item === null) {
-      if (out !== null) {
-        out.push(item);
-      }
-      continue;
-    }
-
-    if (itemType === "string") {
-      const str = item as string;
-      const next = redactStringValue(fieldKey, str, fieldKeys, gatedPatterns);
-      if (next !== str) {
-        if (out === null) {
-          out = value.slice(0, index);
-        }
-        out.push(next);
-      } else if (out !== null) {
-        out.push(str);
-      }
-      continue;
-    }
-
-    if (itemType === "object") {
-      const next = Array.isArray(item)
-        ? redactValue(item, fieldKey, fieldKeys, gatedPatterns)
-        : redactObject(item as Record<string, JsonValue>, fieldKeys, gatedPatterns);
-      if (next !== item) {
-        if (out === null) {
-          out = value.slice(0, index);
-        }
-        out.push(next);
-      } else if (out !== null) {
-        out.push(item);
-      }
-    }
-  }
-  return out ?? value;
-}
-
-function redactObject(
-  obj: Record<string, JsonValue>,
-  fieldKeys: Set<string>,
-  gatedPatterns: GatedPattern[],
-): Record<string, JsonValue> {
-  let out: Record<string, JsonValue> | null = null;
-  for (const key in obj) {
-    if (!Object.hasOwn(obj, key)) {
-      continue;
-    }
-    const nested = obj[key];
-    if (nested === undefined) {
-      continue;
-    }
-    const nestedType = typeof nested;
-    if (nestedType === "number" || nestedType === "boolean" || nested === null) {
-      continue;
-    }
-    if (nestedType === "string") {
-      const str = nested as string;
-      const next = redactStringValue(key, str, fieldKeys, gatedPatterns);
-      if (next !== str) {
-        if (out === null) {
-          out = { ...obj };
-        }
-        out[key] = next;
-      }
-      continue;
-    }
-    if (Array.isArray(nested)) {
-      const next = redactValue(nested, key, fieldKeys, gatedPatterns);
-      if (next !== nested) {
-        if (out === null) {
-          out = { ...obj };
-        }
-        out[key] = next;
-      }
-      continue;
-    }
-    if (nestedType === "object") {
-      const next = redactObject(
-        nested as Record<string, JsonValue>,
-        fieldKeys,
-        gatedPatterns,
-      );
-      if (next !== nested) {
-        if (out === null) {
-          out = { ...obj };
-        }
-        out[key] = next;
-      }
-    }
-  }
-  return out ?? obj;
-}
-
 function redactValue(
   value: JsonValue,
   fieldKey: string,
   fieldKeys: Set<string>,
   gatedPatterns: GatedPattern[],
+  ancestors: Set<object>,
 ): JsonValue {
   const valueType = typeof value;
 
   if (valueType === "string") {
-    return redactStringValue(fieldKey, value as string, fieldKeys, gatedPatterns);
+    return redactStringValue(
+      fieldKey,
+      value as string,
+      fieldKeys,
+      gatedPatterns,
+    );
   }
 
   if (valueType === "number" || valueType === "boolean" || value === null) {
     return value;
   }
 
-  if (Array.isArray(value)) {
-    return redactArray(value, fieldKey, fieldKeys, gatedPatterns);
-  }
-
   if (valueType === "object") {
-    return redactObject(value as Record<string, JsonValue>, fieldKeys, gatedPatterns);
+    if (ancestors.has(value as object)) {
+      return CIRCULAR;
+    }
+    ancestors.add(value as object);
+    let result: JsonValue;
+    if (Array.isArray(value)) {
+      let out: JsonValue[] | null = null;
+      for (let index = 0; index < value.length; index += 1) {
+        const item = value[index] as JsonValue;
+        const next = redactValue(
+          item,
+          fieldKey,
+          fieldKeys,
+          gatedPatterns,
+          ancestors,
+        );
+        if (next !== item && out === null) {
+          out = value.slice(0, index);
+        }
+        if (out !== null) {
+          out.push(next);
+        }
+      }
+      result = out ?? value;
+    } else {
+      const object = value as Record<string, JsonValue>;
+      let out: Record<string, JsonValue> | null = null;
+      for (const key in object) {
+        if (!Object.hasOwn(object, key)) {
+          continue;
+        }
+        const item = object[key];
+        if (item === undefined) {
+          continue;
+        }
+        const next = redactValue(
+          item,
+          key,
+          fieldKeys,
+          gatedPatterns,
+          ancestors,
+        );
+        if (next !== item) {
+          if (out === null) {
+            out = { ...object };
+          }
+          out[key] = next;
+        }
+      }
+      result = out ?? object;
+    }
+    ancestors.delete(value as object);
+    return result;
   }
 
   return value;
@@ -432,14 +387,19 @@ const redactRecordCompiled = (
   compiled: CompiledRedactConfig,
 ): LogRecord => {
   const { fieldKeys, gatedPatterns } = compiled;
-  return redactObject(
-    record as Record<string, JsonValue>,
+  return redactValue(
+    record as JsonValue,
+    "",
     fieldKeys,
     gatedPatterns,
+    new Set(),
   ) as LogRecord;
 };
 
-export function redactRecord(record: LogRecord, config?: RedactConfig): LogRecord {
+export function redactRecord(
+  record: LogRecord,
+  config?: RedactConfig,
+): LogRecord {
   const compiled =
     config !== undefined ? compileRedactConfig(config) : getCompiledRedact();
   if (compiled === false) {

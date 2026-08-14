@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createLogger, flush, init, resetConfigForTests, type LogRecord, type Sink } from "../src/index.js";
+import {
+  createLogger,
+  flush,
+  init,
+  resetConfigForTests,
+  type LogRecord,
+  type Sink,
+} from "../src/legacy.js";
 
 beforeEach(() => {
   resetConfigForTests();
@@ -39,7 +46,8 @@ describe("async sink", () => {
       await flush();
 
       expect(unhandled).toHaveLength(0);
-      expect(warn).toHaveBeenCalledWith("[amplio] async sink failed: sink failed");
+      expect(warn).toHaveBeenCalledWith("[amplio] sink_failed");
+      expect(JSON.stringify(warn.mock.calls)).not.toContain("sink failed");
     } finally {
       process.off("unhandledRejection", onUnhandled);
       warn.mockRestore();
@@ -52,6 +60,7 @@ describe("async sink", () => {
       unhandled.push(reason);
     };
     process.on("unhandledRejection", onUnhandled);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     try {
       const records: LogRecord[] = [];
@@ -77,6 +86,7 @@ describe("async sink", () => {
       });
     } finally {
       process.off("unhandledRejection", onUnhandled);
+      warn.mockRestore();
     }
   });
 });

@@ -57,7 +57,10 @@ interface NewRow {
 }
 
 /** Rows appended to any amplio*.jsonl since the snapshot (new files included). */
-async function readNewRows(cwd: string, before: Map<string, number>): Promise<NewRow[]> {
+async function readNewRows(
+  cwd: string,
+  before: Map<string, number>,
+): Promise<NewRow[]> {
   const rows: NewRow[] = [];
   for (const file of await listJsonlFiles(cwd)) {
     let content: Buffer;
@@ -88,7 +91,8 @@ async function readNewRows(cwd: string, before: Map<string, number>): Promise<Ne
   return rows;
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 function describeRow(row: NewRow, cwd: string): string {
   const rel = path.relative(cwd, row.file);
@@ -97,11 +101,7 @@ function describeRow(row: NewRow, cwd: string): string {
   }
   const record = row.record;
   const eventName =
-    typeof record["@event"] === "string"
-      ? record["@event"]
-      : typeof record.event === "string"
-        ? record.event
-        : "(unnamed)";
+    typeof record["@event"] === "string" ? record["@event"] : "(unnamed)";
   const details: string[] = [];
   if (typeof record.request_id === "string") {
     details.push(`request_id ${record.request_id}`);
@@ -116,13 +116,17 @@ function describeRow(row: NewRow, cwd: string): string {
 }
 
 function printNoEventDiagnosis(): void {
-  console.log("\nThe response arrived but no event landed. Likely causes, most common first:");
+  console.log(
+    "\nThe response arrived but no event landed. Likely causes, most common first:",
+  );
   console.log(
     "  - Wrong port: a stale server may hold the port you curled while your dev server moved to 3001+ — a wrong-port response looks identical to dropped events. Check the port in the dev server's startup output.",
   );
-  console.log("  - The route you hit is not wrapped with amplio middleware (run: amplio doctor).");
   console.log(
-    "  - init() never ran (Next.js: instrumentation.ts must import telemetry/logger; restart the dev server after wiring).",
+    "  - The route you hit is not wrapped by a boundary Plugin (run: amplio doctor).",
+  );
+  console.log(
+    "  - init() never ran (Next.js: instrumentation.ts must import telemetry/runtime; restart the dev server after wiring).",
   );
   console.log("  - AMPLIO_DISABLED is set in this environment.");
 }
@@ -139,18 +143,22 @@ export async function runSmoke(options: SmokeOptions): Promise<number> {
 
   let jsonSinkWired = false;
   if (await pathExists(path.join(paths.sinks, "json.ts"))) {
-    if (await pathExists(paths.logger)) {
-      const loggerSource = await fs.readFile(paths.logger, "utf8");
-      jsonSinkWired = loggerSource.includes("sinks/json");
+    if (await pathExists(paths.runtime)) {
+      const runtimeSource = await fs.readFile(paths.runtime, "utf8");
+      jsonSinkWired = runtimeSource.includes("sinks/json");
     }
   }
 
   if (!jsonSinkWired) {
-    console.log("✗ FAIL — nothing to watch: the JSON file sink is not installed and wired.");
+    console.log(
+      "✗ FAIL — nothing to watch: the JSON file sink is not installed and wired.",
+    );
     console.log(
       "  smoke verifies emission by watching amplio*.jsonl grow; the console sink writes to the dev server's stdout, which the CLI cannot see.",
     );
-    console.log("  fix: amplio add sink json (auto-wires logger.ts), restart dev, re-run smoke.");
+    console.log(
+      "  fix: amplio add sink json (auto-wires runtime.ts), restart dev, re-run smoke.",
+    );
     return 1;
   }
 
@@ -162,7 +170,9 @@ export async function runSmoke(options: SmokeOptions): Promise<number> {
     response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   } catch (error) {
     const cause = (error as { cause?: { code?: string } }).cause;
-    console.log(`✗ FAIL — request to ${url} failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.log(
+      `✗ FAIL — request to ${url} failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
     if (cause?.code === "ECONNREFUSED") {
       console.log(
         "  Nothing is listening there. Is the dev server running? Next.js silently moves to 3001+ when 3000 is busy — check the port in its startup output.",

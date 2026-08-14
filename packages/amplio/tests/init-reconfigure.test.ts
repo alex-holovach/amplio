@@ -7,7 +7,7 @@ import {
   type Enricher,
   type LogRecord,
   type Sink,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 const memorySink = (): { records: LogRecord[]; sink: Sink } => {
   const records: LogRecord[] = [];

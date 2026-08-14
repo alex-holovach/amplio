@@ -1,9 +1,9 @@
-import { mkdtemp, mkdir, readFile, writeFile, access } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -23,31 +23,33 @@ type RegistryItem = {
   files: RegistryFile[];
 };
 
-/**
- * Mimic shadcn's local file install for `registry:lib` items:
- * target `~/telemetry/...` → `<cwd>/telemetry/...` (root-anchored, not src/)
- */
-async function installShadcnItem(cwd: string, item: RegistryItem): Promise<string[]> {
+/** Mimics shadcn's root-anchored target install for registry:lib items. */
+async function installShadcnItem(
+  cwd: string,
+  item: RegistryItem,
+): Promise<string[]> {
   const written: string[] = [];
 
   for (const file of item.files) {
     if (!file.content) {
-      throw new Error(`Registry item ${item.name} missing embedded content for ${file.path}`);
+      throw new Error(
+        `Registry item ${item.name} missing embedded content for ${file.path}`,
+      );
     }
     if (!file.target?.startsWith("~/telemetry/")) {
       throw new Error(`Expected ~/telemetry/ target, got ${file.target}`);
     }
 
-    const dest = path.join(cwd, file.target.slice(2));
-    await mkdir(path.dirname(dest), { recursive: true });
-    await writeFile(dest, file.content, "utf8");
-    written.push(path.relative(cwd, dest));
+    const destination = path.join(cwd, file.target.slice(2));
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, file.content, "utf8");
+    written.push(path.relative(cwd, destination));
   }
 
   return written;
 }
 
-describe("shadcn-compatible registry install", () => {
+describe("shadcn-compatible vNext registry install", () => {
   beforeAll(() => {
     execFileSync("node", ["scripts/build-registry.mjs"], {
       cwd: repoRoot,
@@ -55,39 +57,65 @@ describe("shadcn-compatible registry install", () => {
     });
   });
 
-  it("installs @useamplio/event-auth-user-signed-up into telemetry/ only", async () => {
-    const itemPath = path.join(repoRoot, "public/r/event-auth-user-signed-up.json");
-    const item = JSON.parse(await readFile(itemPath, "utf8")) as RegistryItem;
+  it("installs the HTTP root Event into telemetry/events only", async () => {
+    const item = JSON.parse(
+      await readFile(
+        path.join(repoRoot, "public/r/event-http-request.json"),
+        "utf8",
+      ),
+    ) as RegistryItem;
 
-    expect(item.name).toBe("event-auth-user-signed-up");
+    expect(item.name).toBe("event-http-request");
     expect(item.type).toBe("registry:lib");
-    expect(item.files.length).toBeGreaterThan(0);
 
     const cwd = await mkdtemp(path.join(tmpdir(), "amplio-shadcn-"));
     const written = await installShadcnItem(cwd, item);
 
-    expect(written).toEqual(["telemetry/events/auth/user-signed-up.ts"]);
-    await access(path.join(cwd, "telemetry/events/auth/user-signed-up.ts"));
-
+    expect(written).toEqual(["telemetry/events/http-request.ts"]);
+    await access(path.join(cwd, "telemetry/events/http-request.ts"));
     const source = await readFile(
-      path.join(cwd, "telemetry/events/auth/user-signed-up.ts"),
+      path.join(cwd, "telemetry/events/http-request.ts"),
       "utf8",
     );
-    expect(source).toContain("auth.user.signed_up");
-    expect(source).toContain("AuthUserSignedUp");
-    expect(source).toContain("defineEvent");
-
-    // No files outside telemetry/
-    for (const rel of written) {
-      expect(rel.startsWith("telemetry/")).toBe(true);
-    }
+    expect(source).toContain('id: "http.request"');
+    expect(source).toContain("// amplio:plugin-imports");
+    expect(source).toContain("// amplio:plugins");
+    expect(source).not.toMatch(/defineFact|defineWorkload/);
   });
 
-  it("registry index lists the shadcn item name consumers would add", async () => {
+  it("installs the editable Resend Plugin into telemetry/plugins only", async () => {
+    const item = JSON.parse(
+      await readFile(
+        path.join(repoRoot, "public/r/plugin-resend.json"),
+        "utf8",
+      ),
+    ) as RegistryItem;
+
+    const cwd = await mkdtemp(path.join(tmpdir(), "amplio-shadcn-"));
+    const written = await installShadcnItem(cwd, item);
+
+    expect(written).toEqual(["telemetry/plugins/resend.ts"]);
+    const source = await readFile(
+      path.join(cwd, "telemetry/plugins/resend.ts"),
+      "utf8",
+    );
+    expect(source).toContain("export const ResendPlugin");
+    expect(source).toContain('id: "resend.send"');
+    expect(source).not.toMatch(/address|subject|body|api.?key|query/i);
+  });
+
+  it("indexes only current semantic and operational item names", async () => {
     const registry = JSON.parse(
       await readFile(path.join(repoRoot, "public/r/registry.json"), "utf8"),
     ) as { items: Array<{ name: string }> };
+    const names = registry.items.map((item) => item.name);
 
-    expect(registry.items.map((i) => i.name)).toContain("event-auth-user-signed-up");
+    expect(names).toContain("event-http-request");
+    expect(names).toContain("plugin-resend");
+    expect(
+      names.some((name) =>
+        /^(component|workload|middleware|integration)-/.test(name),
+      ),
+    ).toBe(false);
   });
 });

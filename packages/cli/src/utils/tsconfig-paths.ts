@@ -4,15 +4,21 @@ import { pathExists } from "./fs.js";
 import { parseJsonc } from "./jsonc.js";
 
 export function printTsconfigPathsHint(): void {
-  console.log("\nOptional: add to tsconfig.json compilerOptions.paths for shorter imports:");
+  console.log(
+    "\nOptional: add to tsconfig.json compilerOptions.paths for shorter imports:",
+  );
   console.log('  "~telemetry/*": ["./telemetry/*"]');
-  console.log("  Then import from \"~telemetry/middleware/next\" instead of relative paths.");
+  console.log(
+    '  Then import from "~telemetry/plugins/next" instead of relative paths.',
+  );
   console.log("  Or run: amplio paths");
 }
 
 function tsconfigHasTelemetryAlias(raw: string, telemetryDir: string): boolean {
   try {
-    const config = parseJsonc<{ compilerOptions?: { paths?: Record<string, string[]> } }>(raw);
+    const config = parseJsonc<{
+      compilerOptions?: { paths?: Record<string, string[]> };
+    }>(raw);
     const paths = config.compilerOptions?.paths ?? {};
     return paths["~telemetry/*"]?.includes(`./${telemetryDir}/*`) ?? false;
   } catch {
@@ -64,11 +70,14 @@ export async function applyTsconfigPathsAlias(
     const braceIndex = raw.indexOf("{", compilerOptionsMatch.index);
     const entryIndent = detectEntryIndent(raw, braceIndex);
     const pathsBlock = `\n${entryIndent}"paths": {\n${entryIndent}  ${aliasEntry}\n${entryIndent}}${separatorAfterInsert(raw, braceIndex)}`;
-    edited = raw.slice(0, braceIndex + 1) + pathsBlock + raw.slice(braceIndex + 1);
+    edited =
+      raw.slice(0, braceIndex + 1) + pathsBlock + raw.slice(braceIndex + 1);
   }
 
   try {
-    const config = parseJsonc<{ compilerOptions?: { paths?: Record<string, string[]> } }>(edited);
+    const config = parseJsonc<{
+      compilerOptions?: { paths?: Record<string, string[]> };
+    }>(edited);
     const paths = config.compilerOptions?.paths ?? {};
     if (!paths["~telemetry/*"]?.includes(`./${telemetryDir}/*`)) {
       return "failed";
@@ -81,7 +90,10 @@ export async function applyTsconfigPathsAlias(
   return "success";
 }
 
-export async function writeTsconfigPathsAlias(cwd: string, telemetryDir: string): Promise<void> {
+export async function writeTsconfigPathsAlias(
+  cwd: string,
+  telemetryDir: string,
+): Promise<void> {
   const result = await applyTsconfigPathsAlias(cwd, telemetryDir);
   if (result === "success") {
     console.log("  ✓ tsconfig.json (~telemetry/* path alias)");

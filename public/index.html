@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>amplio registry</title>
+    <title>amplio registry items</title>
     <style>
       :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
       body { margin: 2rem auto; max-width: 40rem; line-height: 1.5; padding: 0 1rem; }
@@ -12,16 +12,29 @@
     </style>
   </head>
   <body>
-    <h1>amplio registry</h1>
-    <p>shadcn-compatible telemetry registry for <code>@useamplio/*</code>.</p>
+    <h1>amplio registry items</h1>
+    <p><a href="/r/registry.json"><code>/r/registry.json</code></a> is the machine-readable index.</p>
     <ul>
-      <li><a href="/r/registry.json"><code>/r/registry.json</code></a></li>
-      <li><a href="/r/middleware-hono.json"><code>/r/middleware-hono.json</code></a></li>
-      <li><a href="/r/event-auth-user-signed-up.json"><code>/r/event-auth-user-signed-up.json</code></a></li>
+      <li><a href="/r/event-http-request.json"><code>event-http-request</code></a> — Root HTTP request Event for framework boundary Plugins.</li>
+      <li><a href="/r/plugin-hono.json"><code>plugin-hono</code></a> — Hono boundary Plugin that closes one HTTP Event per request.</li>
+      <li><a href="/r/plugin-express.json"><code>plugin-express</code></a> — Express boundary Plugin spanning callbacks through the final response.</li>
+      <li><a href="/r/plugin-fastify.json"><code>plugin-fastify</code></a> — Fastify boundary Plugin spanning request hooks through final onResponse status.</li>
+      <li><a href="/r/plugin-next.json"><code>plugin-next</code></a> — Next.js route-handler boundary Plugin preserving Response identity.</li>
+      <li><a href="/r/plugin-trpc.json"><code>plugin-trpc</code></a> — tRPC contributor Plugin recording nested query and mutation duration Events while leaving subscriptions unchanged.</li>
+      <li><a href="/r/plugin-better-auth.json"><code>plugin-better-auth</code></a> — Better Auth contributor Plugin using native after hooks for privacy-safe sign-in and sign-up semantics.</li>
+      <li><a href="/r/plugin-resend.json"><code>plugin-resend</code></a> — Resend contributor Plugin with privacy-safe email send observations.</li>
+      <li><a href="/r/runtime.json"><code>runtime</code></a> — Init-only Amplio runtime configuration.</li>
+      <li><a href="/r/sink-console.json"><code>sink-console</code></a> — Console sink that prints Event records as JSON.</li>
+      <li><a href="/r/sink-json.json"><code>sink-json</code></a> — JSONL sink for local Event verification.</li>
+      <li><a href="/r/sink-otlp.json"><code>sink-otlp</code></a> — OTLP sink that exports Event records over OpenTelemetry.</li>
+      <li><a href="/r/enricher-service-metadata.json"><code>enricher-service-metadata</code></a> — Resource enricher for bounded deployment name, version, and region attributes.</li>
     </ul>
-    <p>Point <code>components.json</code> at:</p>
-    <pre><code>"registries": {
-  "@useamplio": "https://amplio-ruddy.vercel.app/r/{name}.json"
-}</code></pre>
+    <p>Install and compose a Plugin with
+    <code>npx @useamplio/cli@alpha add plugin &lt;name&gt; --event &lt;event-id&gt;</code>.
+    Create a project Event with <code>npx @useamplio/cli@alpha add event &lt;event-id&gt;</code>.</p>
+    <p><code>npx shadcn@latest add @useamplio/&lt;item&gt;</code> copies open-code source only;
+    use the Amplio CLI for a complete, tracked installation.</p>
+    <p><strong>Not listed?</strong> Project Events live in your repository and do not need a hosted
+    registry item.</p>
   </body>
 </html>

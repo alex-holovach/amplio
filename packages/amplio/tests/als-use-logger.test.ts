@@ -8,9 +8,9 @@ import {
   resetUseLoggerOutsideScopeWarningForTests,
   runWithLogger,
   useLogger,
-} from "../src/index.js";
+} from "../src/legacy.js";
 import { getContextNoopLogger } from "../src/noop-logger.js";
-import type { LogRecord, Sink } from "../src/index.js";
+import type { LogRecord, Sink } from "../src/legacy.js";
 
 const capture = (): { records: LogRecord[]; sink: Sink } => {
   const records: LogRecord[] = [];

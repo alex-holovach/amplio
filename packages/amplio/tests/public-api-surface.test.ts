@@ -1,13 +1,13 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { z } from "zod";
-import * as core from "../src/index.js";
+import * as core from "../src/legacy.js";
 import {
   createLogger,
   defineEvent,
   init,
   logger,
   resetConfigForTests,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 beforeEach(() => {
   resetConfigForTests();

@@ -1,0 +1,16 @@
+{
+  "extends": "../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@useamplio/amplio": ["../../../src/index.ts"],
+      "@useamplio/amplio/plugin": ["../../../src/plugin.ts"]
+    },
+    "rootDir": "../../..",
+    "types": ["node"]
+  },
+  "include": ["index.ts"]
+}

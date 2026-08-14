@@ -1,0 +1,85 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "plugin-resend",
+  "title": "Resend Plugin",
+  "description": "Resend contributor Plugin with privacy-safe email send observations.",
+  "type": "registry:lib",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.16",
+    "resend@^4.0.0"
+  ],
+  "meta": {
+    "amplio": {
+      "kind": "plugin",
+      "role": "contributor",
+      "recipeVersion": "1.0.0",
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": {
+        "resend": ">=4 <5"
+      },
+      "testedProviderVersions": {
+        "resend": {
+          "minimum": "4.0.0",
+          "latest": "4.8.0"
+        }
+      },
+      "events": [
+        {
+          "id": "resend.send",
+          "version": 1,
+          "semanticDigest": "sha256-a584ae1d4271e1d66aff88023c4a3cbcdf7a553b07d4806cc5fc666e4b1d65d6"
+        }
+      ],
+      "semanticDigest": "sha256-af3ba6042e49d7f409c84e27d8b4879149c4ba80798b678aad737885495684c3",
+      "nativeTransform": {
+        "version": 1,
+        "digest": "sha256-7b08f30df112ead1709ebe03ed0f998b82530f21f97eae74a99ee232d3abaa52"
+      },
+      "placement": {
+        "branch": "email"
+      },
+      "provider": {
+        "package": "resend",
+        "constructor": "Resend",
+        "instrumenter": "ResendPlugin",
+        "seam": "constructor"
+      },
+      "wiringActions": [
+        {
+          "type": "wrap-constructor",
+          "description": "Wrap one unambiguous new Resend(...) composition root."
+        },
+        {
+          "type": "mount-event-subtree",
+          "description": "Mount ResendPlugin.events under the email branch."
+        }
+      ],
+      "privacy": {
+        "includes": [
+          "provider",
+          "template"
+        ],
+        "excludes": [
+          "to",
+          "cc",
+          "bcc",
+          "from",
+          "subject",
+          "html",
+          "text",
+          "react",
+          "key"
+        ]
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "registry/plugins/resend.ts",
+      "target": "~/telemetry/plugins/resend.ts",
+      "type": "registry:lib",
+      "content": "import { event } from \"@useamplio/amplio\";\nimport { plugin } from \"@useamplio/amplio/plugin\";\nimport type { CreateEmailOptions, Resend } from \"resend\";\nimport { z } from \"zod\";\n\nconst ResendSend = event({\n  id: \"resend.send\",\n  version: 1,\n  schema: z.object({\n    provider: z.literal(\"resend\"),\n    template: z.string().optional(),\n  }),\n  timing: \"duration\",\n  cardinality: { many: { max: 16 } },\n});\n\nconst templateTag = (input: CreateEmailOptions): string | undefined =>\n  input.tags?.find((tag) => tag.name === \"template\")?.value;\n\nconst instrumentedClients = new WeakSet<Resend>();\n\nexport const ResendPlugin = plugin({\n  id: \"resend\",\n  events: { sends: ResendSend },\n  instrument({ events, observe }) {\n    return <Client extends Resend>(client: Client): Client => {\n      if (instrumentedClients.has(client)) {\n        return client;\n      }\n\n      const send = client.emails.send.bind(client.emails);\n      client.emails.send = observe(events.sends, send, {\n        input: ({ args: [input] }) => {\n          const template = templateTag(input);\n          return {\n            provider: \"resend\",\n            ...(template ? { template } : {}),\n          };\n        },\n        success: ({ result }) => result.error === null,\n      });\n      instrumentedClients.add(client);\n      return client;\n    };\n  },\n});\n"
+    }
+  ]
+}

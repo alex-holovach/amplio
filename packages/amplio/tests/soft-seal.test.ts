@@ -3,7 +3,7 @@ import {
   createLogger,
   init,
   resetConfigForTests,
-} from "../src/index.js";
+} from "../src/legacy.js";
 import { getSealedNoopLogger } from "../src/noop-logger.js";
 
 beforeEach(() => {
@@ -63,7 +63,7 @@ describe("soft seal", () => {
 
   it("event() after seal returns sealed no-op event logger and warns on use", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const { defineEvent } = await import("../src/index.js");
+    const { defineEvent } = await import("../src/legacy.js");
     const def = defineEvent("ops.tick.fired");
     const scope = createLogger().set({ ok: true });
     scope.emit();

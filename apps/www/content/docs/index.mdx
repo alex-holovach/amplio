@@ -1,98 +1,146 @@
 ---
 title: Introduction
-description: Schema-first wide-event telemetry that installs as open code in your repo.
+description: Open-code semantic Events assembled by native Plugins.
 ---
 
-**amplio** is shadcn for observability: typed event schemas, a tiny runtime, and generated `telemetry/` code you read and edit like application code.
+**Amplio** turns a request, job, message, command, or other meaningful unit of work into one typed
+semantic Event. Application code calls ordinary functions; open-code Plugins contribute meaning at
+the framework, provider, and local seams where that meaning is already known.
+
+There is no logger to retrieve, mutable context to update, or emit call to remember.
 
 ## Quick start
 
-```bash
-npx @useamplio/cli@alpha init --service my-app --yes
-npx @useamplio/cli@alpha add event auth.user.signed_up
-npx @useamplio/cli@alpha add middleware hono
-```
-
-`init` detects Next.js, Hono, Express, or Fastify from `package.json` and can scaffold middleware plus a starter event in one shot.
-
-> The unscoped npm name `amplio` is blocked by typo-squatting rules. Always use `@useamplio/cli@alpha`.
-
-Prefer shadcn? `npx shadcn@latest add @useamplio/middleware-hono` drops the same files — finish with `npx @useamplio/cli@alpha doctor --fix` to wire barrels ([CLI reference](/docs/cli#shadcn-registry)).
-
-Verify the wiring end to end:
+This active walkthrough assumes an existing Hono application with one `new Hono()` composition
+root and one `new Resend(...)` client construction.
 
 ```bash
-npx @useamplio/cli@alpha doctor                                  # wiring checks
-npx @useamplio/cli@alpha smoke http://localhost:3000/api/health  # PASS/FAIL
+pnpm add @useamplio/amplio zod resend
+pnpm add --save-dev @useamplio/cli
+pnpm exec amplio init --service orders-api
+pnpm exec amplio add plugin hono
+pnpm exec amplio add plugin resend --event http.request
 ```
 
-`smoke` requests the URL and watches `amplio*.jsonl` for the emitted row — it needs the JSON sink (`add sink json`) and your dev server running.
+The generated source stays in your repository:
 
-## Emit a wide event
-
-```typescript
-import { logger } from "./telemetry/logger";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
-
-logger
-  .event(AuthUserSignedUp)
-  .set({
-    user: { id: "u_123" },
-    signup: { method: "email" },
-  })
-  .emit();
+```text
+telemetry/
+├── events/
+│   └── http-request.ts
+├── plugins/
+│   ├── hono.ts
+│   └── resend.ts
+├── sinks/
+│   └── console.ts
+└── runtime.ts
 ```
 
-Example record (fields vary by schema and enrichers):
+## One declared Event tree
+
+```ts
+// telemetry/events/http-request.ts
+import { event } from "@useamplio/amplio";
+import { z } from "zod";
+import { ResendPlugin } from "../plugins/resend.js";
+
+export const HttpRequest = event({
+  id: "http.request",
+  version: 1,
+  schema: z.object({
+    request_id: z.string(),
+    http: z.object({
+      method: z.string(),
+      route: z.string(),
+      status: z.number().int().optional(),
+    }),
+  }),
+  tree: {
+    email: ResendPlugin.events,
+  },
+});
+```
+
+The `email` property chooses record placement. `ResendPlugin.events` supplies the exact nested Event
+definitions, including their schemas, timing, and bounded cardinality.
+
+## One native seam
+
+The Plugin wraps provider construction once:
+
+```ts
+import { Resend } from "resend";
+import { ResendPlugin } from "../telemetry/plugins/resend.js";
+
+export const resend = ResendPlugin(new Resend(process.env.RESEND_API_KEY));
+```
+
+Every caller keeps the provider's ordinary interface:
+
+```ts
+await resend.emails.send(message);
+```
+
+Only fields explicitly selected by the Plugin enter telemetry. The generated Resend Plugin records
+a stable provider name and optional template tag; it excludes recipients, subject, body, headers,
+and credentials.
+
+## One lifecycle owner
+
+The framework Plugin keeps the root Event open for the complete framework lifecycle. In Hono, it
+wraps `await next()`. In Express, it begins before the first route handler and settles when the
+response finishes. In Fastify, it spans `onRequest` through `onResponse`. In Next, it wraps a route
+handler with an explicit stable route template.
+
+```ts
+const app = new Hono();
+app.use("*", HonoPlugin());
+
+app.post("/orders", async (context) => {
+  const order = await placeOrder(await context.req.json());
+  return context.json(order, 201);
+});
+```
+
+The handler knows nothing about Amplio.
+
+## One immutable record
 
 ```json
 {
-  "service": "my-app",
-  "env": "development",
-  "timestamp": "2026-08-07T16:30:00.000Z",
-  "duration_ms": 12,
-  "event": "auth.user.signed_up",
-  "@event": "auth.user.signed_up",
-  "user": { "id": "u_123" },
-  "signup": { "method": "email" }
+  "@event": "http.request",
+  "@event_version": 1,
+  "service": "orders-api",
+  "env": "production",
+  "timestamp": "2026-08-14T07:00:00.000Z",
+  "request_id": "req_01K2...",
+  "duration_ms": 84,
+  "success": true,
+  "http": {
+    "method": "POST",
+    "route": "/orders",
+    "status": 201
+  },
+  "email": {
+    "sends": [
+      {
+        "provider": "resend",
+        "template": "order_confirmation",
+        "duration_ms": 42,
+        "success": true
+      }
+    ]
+  }
 }
 ```
 
-`@event` is the reserved canonical event name; `event` duplicates it for sinks and queries that avoid `@`-prefixed keys (pass `init({ canonicalKeyOnly: true })` to emit only `@event`). `success` appears only when `status` or an explicit `success` is set — clean domain rows omit it, so filter with `success != false`, not `success = true`.
+The record is validated, sanitized, redacted, sampled, detached from application state, and then
+sent to configured sinks.
 
-## Correlated domain events
+## Where to go next
 
-Inside request middleware scope, `.child()` emits a separate row that shares the request's `request_id`:
-
-```typescript
-import { getLogger } from "@useamplio/amplio";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
-
-// inside withAmplio / hono middleware:
-getLogger()
-  .child(AuthUserSignedUp)
-  .set({ user: { id: "u_123" }, signup: { method: "email" } })
-  .emit();
-// two rows: http.request spine (middleware) + auth.user.signed_up (same request_id)
-```
-
-## Packages
-
-| Package | Role |
-|---|---|
-| `@useamplio/cli` | Scaffolding (`init`, `add`, `doctor`) |
-| `@useamplio/amplio` | Runtime (`defineEvent`, `init`, `.set()`, `.emit()`) |
-
-The CLI is a scaffolder — once `telemetry/` exists, you can remove it and keep editing events, middleware, and sinks with only `@useamplio/amplio` installed.
-
-## Next steps
-
-<Cards>
-  <Card title="Core concepts" href="/docs/concepts" />
-  <Card title="Emit API" href="/docs/emit" />
-  <Card title="create-t3-app" href="/docs/next-t3" />
-  <Card title="Frameworks" href="/docs/frameworks" />
-  <Card title="CLI reference" href="/docs/cli" />
-  <Card title="Sinks & enrichers" href="/docs/sinks" />
-  <Card title="vs evlog" href="/docs/vs-evlog" />
-</Cards>
+- [Core concepts](/docs/concepts): Event identity, trees, cardinality, and Plugin roles.
+- [Semantic API](/docs/emit): `event()`, `.handle()`, and Plugin authoring tools.
+- [Frameworks](/docs/frameworks): truthful lifecycle ownership for each server framework.
+- [CLI](/docs/cli): generated layout and supported commands.
+- [Sinks & enrichers](/docs/sinks): privacy, sampling, delivery, and flush.

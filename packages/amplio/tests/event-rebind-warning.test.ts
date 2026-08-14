@@ -9,7 +9,7 @@ import {
   runWithLogger,
   type LogRecord,
   type Sink,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 const REBIND_NOTICE =
   '[amplio] .event("auth.user.signed_up") on a logger already bound to "http.request" now emits a separate correlated row and keeps the "http.request" spine (same as .child()). Spell it .child(EventDef) to make the intent explicit.';

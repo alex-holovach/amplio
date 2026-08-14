@@ -1,0 +1,75 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "plugin-next",
+  "title": "Next.js Plugin",
+  "description": "Next.js route-handler boundary Plugin preserving Response identity.",
+  "type": "registry:lib",
+  "dependencies": [
+    "next@^15.2.4",
+    "@useamplio/amplio@^0.1.0-alpha.16"
+  ],
+  "registryDependencies": [
+    "@useamplio/event-http-request",
+    "@useamplio/runtime"
+  ],
+  "meta": {
+    "amplio": {
+      "kind": "plugin",
+      "role": "boundary",
+      "recipeVersion": "1.0.0",
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": {
+        "next": ">=15 <17"
+      },
+      "testedProviderVersions": {
+        "next": {
+          "minimum": "15.0.0",
+          "latest": "16.3.1"
+        }
+      },
+      "events": [
+        {
+          "id": "http.request",
+          "version": 1,
+          "semanticDigest": "sha256-0907ef8a9cc8957a6e1b7fc6038d832319dc7a0c2f2b32764d6e2e9fb4f474ce"
+        }
+      ],
+      "semanticDigest": "sha256-166a77128834d0958ea50d1aa95bd768dda65c16e43d55076383bcd5ea4994c8",
+      "nativeTransform": {
+        "version": 1,
+        "digest": "sha256-9e3f0302a38f2d0aaced6f8a7f5f967cbc910fa271a4a8039ee19c9ab803fbd0"
+      },
+      "wiringActions": [
+        {
+          "type": "wrap-boundary",
+          "export": "withAmplio",
+          "description": "Wrap a route handler and optionally supply a stable semantic route."
+        }
+      ],
+      "privacy": {
+        "includes": [
+          "request_id",
+          "http.method",
+          "http.route",
+          "http.status"
+        ],
+        "excludes": [
+          "url",
+          "path",
+          "query",
+          "headers",
+          "cookies",
+          "body"
+        ]
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "registry/plugins/next.ts",
+      "target": "~/telemetry/plugins/next.ts",
+      "type": "registry:lib",
+      "content": "import \"../runtime.js\";\n\nimport type { NextRequest } from \"next/server\";\nimport { HttpRequest, resolveRequestId } from \"../events/http-request.js\";\n\ntype NextHandler = (\n  request: NextRequest,\n  ...args: any[]\n) => Response | Promise<Response>;\n\nexport function withAmplio<F extends NextHandler>(\n  route: string,\n  handler: F,\n): F {\n  return HttpRequest.handle(handler, {\n    input: ({ args: [request] }) => ({\n      request_id: resolveRequestId(request.headers.get(\"x-request-id\")),\n      http: {\n        method: request.method,\n        route,\n      },\n    }),\n    result: ({ result }) => ({\n      http: { status: result.status },\n    }),\n    success: ({ result }) => result.status < 400,\n  });\n}\n"
+    }
+  ]
+}

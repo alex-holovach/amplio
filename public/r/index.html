@@ -15,34 +15,26 @@
     <h1>amplio registry items</h1>
     <p><a href="/r/registry.json"><code>/r/registry.json</code></a> is the machine-readable index.</p>
     <ul>
-      <li><a href="/r/event-auth-user-signed-up.json"><code>event-auth-user-signed-up</code></a> — Wide event when a user completes sign-up.</li>
-      <li><a href="/r/event-auth-user-signed-in.json"><code>event-auth-user-signed-in</code></a> — Wide event when a user signs in.</li>
-      <li><a href="/r/event-email-sent.json"><code>event-email-sent</code></a> — Wide event when an email is sent.</li>
-      <li><a href="/r/event-payment-order-paid.json"><code>event-payment-order-paid</code></a> — Wide event when a payment order is paid.</li>
-      <li><a href="/r/event-page-viewed.json"><code>event-page-viewed</code></a> — Wide event when a page is viewed (path only — query strings stay out).</li>
-      <li><a href="/r/event-job-completed.json"><code>event-job-completed</code></a> — Wide event when a background job finishes (success, failed, or cancelled).</li>
-      <li><a href="/r/event-webhook-received.json"><code>event-webhook-received</code></a> — Wide event when an inbound webhook arrives (provider, event type, signature validity).</li>
-      <li><a href="/r/event-payment-refunded.json"><code>event-payment-refunded</code></a> — Wide event when a payment is refunded (full or partial).</li>
-      <li><a href="/r/middleware-hono.json"><code>middleware-hono</code></a> — Hono middleware that attaches request-scoped amplio context.</li>
-      <li><a href="/r/middleware-express.json"><code>middleware-express</code></a> — Express middleware that attaches request-scoped amplio context.</li>
-      <li><a href="/r/middleware-next.json"><code>middleware-next</code></a> — Route-handler wrapper (withAmplio) that owns the request wide event - this is not Next.js middleware.ts.</li>
-      <li><a href="/r/middleware-fastify.json"><code>middleware-fastify</code></a> — Fastify plugin that attaches request-scoped amplio context.</li>
-      <li><a href="/r/middleware-trpc.json"><code>middleware-trpc</code></a> — tRPC middleware that annotates the ambient request wide event with trpc fields (pair with the Next.js route-handler wrapper).</li>
-      <li><a href="/r/sink-console.json"><code>sink-console</code></a> — Console sink that prints wide events as JSON.</li>
-      <li><a href="/r/sink-json.json"><code>sink-json</code></a> — JSON sink that serializes wide events for streaming or files.</li>
-      <li><a href="/r/sink-otlp.json"><code>sink-otlp</code></a> — OTLP sink that exports wide events over OpenTelemetry.</li>
-      <li><a href="/r/enricher-service-metadata.json"><code>enricher-service-metadata</code></a> — Enricher that adds service name / environment metadata.</li>
-      <li><a href="/r/enricher-query-allowlist.json"><code>enricher-query-allowlist</code></a> — Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.</li>
-      <li><a href="/r/enricher-request-metadata.json"><code>enricher-request-metadata</code></a> — Enricher that adds request id / HTTP metadata.</li>
-      <li><a href="/r/integration-next-auth.json"><code>integration-next-auth</code></a> — NextAuth v5 events hook that emits amplio auth events (uses local message types — no next-auth type imports needed).</li>
-      <li><a href="/r/integration-better-auth.json"><code>integration-better-auth</code></a> — Better Auth helpers that emit amplio auth events.</li>
-      <li><a href="/r/integration-clerk.json"><code>integration-clerk</code></a> — Clerk helpers that emit amplio auth events.</li>
-      <li><a href="/r/integration-resend.json"><code>integration-resend</code></a> — Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).</li>
-      <li><a href="/r/integration-polar.json"><code>integration-polar</code></a> — Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed).</li>
+      <li><a href="/r/event-http-request.json"><code>event-http-request</code></a> — Root HTTP request Event for framework boundary Plugins.</li>
+      <li><a href="/r/plugin-hono.json"><code>plugin-hono</code></a> — Hono boundary Plugin that closes one HTTP Event per request.</li>
+      <li><a href="/r/plugin-express.json"><code>plugin-express</code></a> — Express boundary Plugin spanning callbacks through the final response.</li>
+      <li><a href="/r/plugin-fastify.json"><code>plugin-fastify</code></a> — Fastify boundary Plugin spanning request hooks through final onResponse status.</li>
+      <li><a href="/r/plugin-next.json"><code>plugin-next</code></a> — Next.js route-handler boundary Plugin preserving Response identity.</li>
+      <li><a href="/r/plugin-trpc.json"><code>plugin-trpc</code></a> — tRPC contributor Plugin recording nested query and mutation duration Events while leaving subscriptions unchanged.</li>
+      <li><a href="/r/plugin-better-auth.json"><code>plugin-better-auth</code></a> — Better Auth contributor Plugin using native after hooks for privacy-safe sign-in and sign-up semantics.</li>
+      <li><a href="/r/plugin-resend.json"><code>plugin-resend</code></a> — Resend contributor Plugin with privacy-safe email send observations.</li>
+      <li><a href="/r/runtime.json"><code>runtime</code></a> — Init-only Amplio runtime configuration.</li>
+      <li><a href="/r/sink-console.json"><code>sink-console</code></a> — Console sink that prints Event records as JSON.</li>
+      <li><a href="/r/sink-json.json"><code>sink-json</code></a> — JSONL sink for local Event verification.</li>
+      <li><a href="/r/sink-otlp.json"><code>sink-otlp</code></a> — OTLP sink that exports Event records over OpenTelemetry.</li>
+      <li><a href="/r/enricher-service-metadata.json"><code>enricher-service-metadata</code></a> — Resource enricher for bounded deployment name, version, and region attributes.</li>
     </ul>
-    <p>Install: <code>npx @useamplio/cli@alpha add &lt;kind&gt; &lt;name&gt;</code> (wires everything) or
-    <code>npx shadcn@latest add @useamplio/&lt;item&gt;</code> (drops files; run <code>doctor --fix</code> after).</p>
-    <p><strong>Not listed?</strong> Events generated by <code>amplio add event your.name</code> are
-    starter schemas that exist only in your repo — they are not hosted here.</p>
+    <p>Install and compose a Plugin with
+    <code>npx @useamplio/cli@alpha add plugin &lt;name&gt; --event &lt;event-id&gt;</code>.
+    Create a project Event with <code>npx @useamplio/cli@alpha add event &lt;event-id&gt;</code>.</p>
+    <p><code>npx shadcn@latest add @useamplio/&lt;item&gt;</code> copies open-code source only;
+    use the Amplio CLI for a complete, tracked installation.</p>
+    <p><strong>Not listed?</strong> Project Events live in your repository and do not need a hosted
+    registry item.</p>
   </body>
 </html>

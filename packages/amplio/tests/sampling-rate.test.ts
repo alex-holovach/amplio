@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { shouldSample } from "../src/index.js";
-import type { LogRecord } from "../src/index.js";
+import { shouldSample } from "../src/legacy.js";
+import type { LogRecord } from "../src/legacy.js";
 
 const config = { rate: 0.1, keep: [{ field: "status", gte: 400 }] };
 
@@ -20,6 +20,12 @@ const droppedRecord: LogRecord = {
   status: 200,
 };
 
+const canonicalKeptRecord: LogRecord = {
+  "@event": "test",
+  request_id: "r6",
+  timestamp: "t",
+};
+
 describe("shouldSample rate", () => {
   it("drops events without keep rules when hash >= rate", () => {
     expect(shouldSample(droppedRecord, config)).toBe(false);
@@ -27,6 +33,7 @@ describe("shouldSample rate", () => {
 
   it("keeps events without keep rules when hash < rate", () => {
     expect(shouldSample(keptRecord, config)).toBe(true);
+    expect(shouldSample(canonicalKeptRecord, config)).toBe(true);
   });
 
   it("keeps status>=400 via keep rule even when hash >= rate", () => {
@@ -39,24 +46,71 @@ describe("shouldSample rate", () => {
   });
 
   it("keeps field equals via keep rule even when hash >= rate", () => {
-    const equalsConfig = { rate: 0.1, keep: [{ field: "severity", equals: "ERROR" }] };
+    const equalsConfig = {
+      rate: 0.1,
+      keep: [{ field: "severity", equals: "ERROR" }],
+    };
     expect(
-      shouldSample({ ...droppedRecord, severity: "ERROR" } as LogRecord, equalsConfig),
+      shouldSample(
+        { ...droppedRecord, severity: "ERROR" } as LogRecord,
+        equalsConfig,
+      ),
     ).toBe(true);
     expect(
-      shouldSample({ ...droppedRecord, severity: "INFO" } as LogRecord, equalsConfig),
+      shouldSample(
+        { ...droppedRecord, severity: "INFO" } as LogRecord,
+        equalsConfig,
+      ),
     ).toBe(false);
   });
 
-  it("keeps field matches via keep rule even when hash >= rate", () => {
-    const matchesConfig = { rate: 0.1, keep: [{ field: "path", matches: /^\/admin/ }] };
+  it("treats the canonical @event key as the event sampling field", () => {
     expect(
-      shouldSample({ ...droppedRecord, path: "/admin/users" } as LogRecord, matchesConfig),
+      shouldSample({ "@event": "api.route" } as LogRecord, {
+        rate: 0,
+        keep: [{ field: "event", equals: "api.route" }],
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps field matches via keep rule even when hash >= rate", () => {
+    const matchesConfig = {
+      rate: 0.1,
+      keep: [{ field: "path", matches: /^\/admin/ }],
+    };
+    expect(
+      shouldSample(
+        { ...droppedRecord, path: "/admin/users" } as LogRecord,
+        matchesConfig,
+      ),
     ).toBe(true);
     expect(
-      shouldSample({ ...droppedRecord, path: "/health" } as LogRecord, matchesConfig),
+      shouldSample(
+        { ...droppedRecord, path: "/health" } as LogRecord,
+        matchesConfig,
+      ),
     ).toBe(false);
   });
+
+  it.each(["global", "sticky"] as const)(
+    "evaluates a %s keep RegExp deterministically without mutating lastIndex",
+    (mode) => {
+      const matches = mode === "global" ? /^\/admin/g : /^\/admin/y;
+      const matchesConfig = { rate: 0, keep: [{ field: "path", matches }] };
+      const record = { path: "/admin/users" } as LogRecord;
+
+      expect([
+        shouldSample(record, matchesConfig),
+        shouldSample(record, matchesConfig),
+        shouldSample(record, matchesConfig),
+      ]).toEqual([true, true, true]);
+      expect(matches.lastIndex).toBe(0);
+
+      matches.lastIndex = 3;
+      expect(shouldSample(record, matchesConfig)).toBe(true);
+      expect(matches.lastIndex).toBe(3);
+    },
+  );
 
   it("keep matches only applies to string values (non-string → no match, rate 0 drops)", () => {
     const config = { rate: 0, keep: [{ field: "status", matches: /^5/ }] };
@@ -83,7 +137,10 @@ describe("shouldSample rate", () => {
   });
 
   it("keeps nested user.plan equals via keep rule even when hash >= rate", () => {
-    const planConfig = { rate: 0.1, keep: [{ field: "user.plan", equals: "enterprise" }] };
+    const planConfig = {
+      rate: 0.1,
+      keep: [{ field: "user.plan", equals: "enterprise" }],
+    };
     expect(
       shouldSample(
         { ...droppedRecord, user: { plan: "enterprise" } } as LogRecord,
@@ -105,7 +162,12 @@ describe("shouldSample rate", () => {
       keptRecord,
       { event: "other", request_id: "r99", timestamp: "t2", status: 200 },
       { event: "other", request_id: "r42", timestamp: "t3", status: 500 },
-      { event: "x", request_id: "abc", timestamp: "2026-01-01", severity: "ERROR" },
+      {
+        event: "x",
+        request_id: "abc",
+        timestamp: "2026-01-01",
+        severity: "ERROR",
+      },
     ];
 
     for (const record of records) {
@@ -125,7 +187,13 @@ describe("shouldSample rate", () => {
     const nonMatching: LogRecord[] = [
       droppedRecord, // status 200 — fails gte/equals keep
       keptRecord,
-      { event: "ok", request_id: "r7", timestamp: "t", status: 204, severity: "INFO" },
+      {
+        event: "ok",
+        request_id: "r7",
+        timestamp: "t",
+        status: 204,
+        severity: "INFO",
+      },
       { event: "health", request_id: "r8", timestamp: "t", path: "/health" },
     ];
 
@@ -133,7 +201,6 @@ describe("shouldSample rate", () => {
       expect(shouldSample(record, alwaysWithKeep)).toBe(true);
     }
   });
-
 
   it("always samples when rate is >= 1 (e.g. rate: 2) with empty/no keep", () => {
     const typicalRecord: LogRecord = {
@@ -146,11 +213,11 @@ describe("shouldSample rate", () => {
     expect(shouldSample(typicalRecord, { rate: 2, keep: [] })).toBe(true);
   });
 
-  it('always samples when sampling is {} (rate defaults to 1)', () => {
+  it("always samples when sampling is {} (rate defaults to 1)", () => {
     const typical: LogRecord = {
-      event: 'test',
-      request_id: 'r6',
-      timestamp: 't',
+      event: "test",
+      request_id: "r6",
+      timestamp: "t",
       status: 200,
     };
     expect(shouldSample(typical, {})).toBe(true);
@@ -197,7 +264,9 @@ describe("shouldSample rate", () => {
   it("keep rules do not match when the field is absent/undefined (rate: 0 → drop)", () => {
     const config = { rate: 0, keep: [{ field: "status", gte: 500 }] };
     expect(shouldSample({} as LogRecord, config)).toBe(false);
-    expect(shouldSample({ severity: "ERROR" } as LogRecord, config)).toBe(false);
+    expect(shouldSample({ severity: "ERROR" } as LogRecord, config)).toBe(
+      false,
+    );
     expect(shouldSample({ status: 503 } as LogRecord, config)).toBe(true);
   });
 
@@ -226,19 +295,25 @@ describe("shouldSample rate", () => {
   });
 
   it("nested keep path does not match when intermediate segment is missing or not an object (rate: 0 → drop)", () => {
-    const config = { rate: 0, keep: [{ field: "user.plan", equals: "enterprise" }] };
+    const config = {
+      rate: 0,
+      keep: [{ field: "user.plan", equals: "enterprise" }],
+    };
     expect(shouldSample({} as LogRecord, config)).toBe(false);
     expect(shouldSample({ user: "x" } as LogRecord, config)).toBe(false);
     expect(shouldSample({ user: {} } as LogRecord, config)).toBe(false);
-    expect(shouldSample({ user: { plan: "enterprise" } } as LogRecord, config)).toBe(true);
+    expect(
+      shouldSample({ user: { plan: "enterprise" } } as LogRecord, config),
+    ).toBe(true);
   });
-
 
   it("keep equals: null matches null field (Object.is) and not absent/undefined", () => {
     const config = { rate: 0, keep: [{ field: "err", equals: null }] };
     expect(shouldSample({ err: null } as LogRecord, config)).toBe(true);
     expect(shouldSample({} as LogRecord, config)).toBe(false);
-    expect(shouldSample({ err: undefined } as unknown as LogRecord, config)).toBe(false);
+    expect(
+      shouldSample({ err: undefined } as unknown as LogRecord, config),
+    ).toBe(false);
     expect(shouldSample({ err: "x" } as LogRecord, config)).toBe(false);
   });
 
@@ -265,8 +340,12 @@ describe("shouldSample rate", () => {
 
   it("keeps nested user.score via keep gte on dotted path when rate is 0", () => {
     const config = { rate: 0, keep: [{ field: "user.score", gte: 90 }] };
-    expect(shouldSample({ user: { score: 90 } } as LogRecord, config)).toBe(true);
-    expect(shouldSample({ user: { score: 89 } } as LogRecord, config)).toBe(false);
+    expect(shouldSample({ user: { score: 90 } } as LogRecord, config)).toBe(
+      true,
+    );
+    expect(shouldSample({ user: { score: 89 } } as LogRecord, config)).toBe(
+      false,
+    );
     expect(shouldSample({ user: {} } as LogRecord, config)).toBe(false);
   });
 
@@ -304,5 +383,4 @@ describe("shouldSample rate", () => {
     expect(shouldSample({ severity: "INFO" } as LogRecord, config)).toBe(true);
     expect(shouldSample({ severity: "ERROR" } as LogRecord, config)).toBe(true);
   });
-
 });

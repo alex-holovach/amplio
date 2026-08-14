@@ -1,470 +1,691 @@
-# SPEC.md — amplio
+# Technical specification — Amplio Event runtime
 
-Technical specification and acceptance criteria for **amplio**.
+This specification defines the executable Event/Plugin contract. It supersedes the alpha Logger,
+fact, operation, component, workload, integration, and middleware model. Temporary mutable-builder
+compatibility under `@useamplio/amplio/legacy` is outside this design.
 
-## 1. Overview
+Normative terms `MUST`, `SHOULD`, and `MAY` have their usual requirements meanings.
 
-amplio provides:
+## 1. Public model
 
-1. **`@useamplio/amplio`** — immutable runtime for schema-first wide events.
-2. **`@useamplio/cli`** — project init and registry-driven `add`.
-3. **`registry/`** — shadcn-compatible item definitions.
-4. **User-owned `telemetry/`** — events, sinks, enrichers, middleware, integrations.
+Amplio has two customer-facing semantic concepts:
 
-### Design tenets
+- **Event** — a typed semantic node. A root Event owns one complete unit of work and the declared
+  output tree. A nested Event represents one bounded semantic observation.
+- **Plugin** — editable open code that connects a framework, provider, SDK, or local subsystem to
+  exact Event definitions at a native seam.
 
-- **One wide event per unit of work** — request, job, or run.
-- **Set then emit** — context accumulates; emission is explicit or middleware-driven.
-- **Schema at the edge** — event definitions live in user repo files.
-- **Drain pipeline** — enrichers → validation → sinks (user-configured in `init()`).
+Boundary, contributor, seam, tree, observation, and sink describe roles or configuration. They are
+not additional semantic node types.
 
-## 2. Terminology
+## 2. Public package surfaces
 
-| Term | Definition |
-|---|---|
-| **Event name** | Stable id: `domain.entity.action` (e.g. `auth.user.signed_up`) |
-| **Event schema** | Standard Schema-compatible validator + metadata from `defineEvent` |
-| **Wide event** | In-memory builder holding merged context until emit |
-| **Scope** | Request-scoped (AsyncLocalStorage) or standalone instance |
-| **Seal** | Post-emit state; further `.set()` / `.emit()` are no-ops |
-| **Drain** | Serialize, enrich, validate, write to sinks |
+### 2.1 Main
 
-## 3. Repository structure
+`@useamplio/amplio` exports:
 
-### 3.1 Monorepo
-
-```
-packages/amplio/       → @useamplio/amplio
-packages/cli/        → @useamplio/cli
-registry/            → item sources + built manifest
-examples/
-  hono/              → HTTP middleware reference
-  standalone/        → logger.create reference
-benchmarks/          → core perf + size
-scripts/build-registry.mjs
+```ts
+export { event, flush, init };
+export type {
+  Event,
+  EventRecord,
+  FlushResult,
+  InitOptions,
+  JsonValue,
+  Schema,
+  Sink,
+  SinkRecord,
+};
 ```
 
-### 3.2 User project (post-init)
+The main entrypoint MUST NOT export a Logger, mutable Event builder, ambient accessor,
+`defineFact`, `defineOperation`, `defineComponent`, `defineWorkload`, placement wrappers, vendor
+types, or global `record`/`observe` functions.
 
-```
-telemetry/
-├── events/
-│   └── auth-user-signed-up.ts
-├── middleware/          # created on demand
-│   └── hono.ts
-├── sinks/
-│   └── console-json.ts
-├── enrichers/
-│   └── service-metadata.ts
-├── integrations/
-│   └── better-auth.ts
-└── logger.ts
+`init(options)` configures by side effect and returns `void`.
+
+### 2.2 Plugin authoring
+
+`@useamplio/amplio/plugin` exports:
+
+```ts
+export { openEvent, plugin };
+export type { EventScope, Plugin, PluginTools };
 ```
 
-## 4. Public API
+This subpath is for editable files under `telemetry/plugins/`, not business call sites.
 
-### 4.1 `defineEvent`
+### 2.3 Testing
 
-```typescript
-import { defineEvent } from "@useamplio/amplio";
-import { z } from "zod";
+`@useamplio/amplio/testing` MAY export `createTestSink`, `assertEvent`, and definition-aware helpers.
+Testing helpers may throw explicit assertion failures. Production wrappers MUST NOT infer strictness
+from `NODE_ENV` or throw telemetry validation errors through application work.
 
-export const AuthUserSignedUp = defineEvent(
-  "auth.user.signed_up",
-  z.object({
-    user: z.object({
-      id: z.string(),
-      email: z.string().email().optional(),
-    }),
-    signup: z.object({
-      method: z.enum(["email", "oauth", "invite"]),
-      referrer: z.string().optional(),
-    }),
-  }),
-);
+## 3. Event definition contract
+
+### 3.1 Schema and JSON types
+
+Event semantic input and output are JSON object records. Scalar semantics use a named field such as
+`{ value }`.
+
+Core accepts the Standard Schema-compatible structural contract:
+
+```ts
+type Schema<Input extends JsonObject, Output extends JsonObject> = {
+  readonly "~standard": {
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: { readonly input: Input; readonly output: Output };
+    validate(
+      value: unknown,
+    ):
+      | { readonly value: Output; readonly issues?: undefined }
+      | { readonly issues: readonly SchemaIssue[] }
+      | PromiseLike<SchemaResult<Output>>;
+  };
+};
 ```
 
-**Rules:**
+Core MUST NOT depend on Zod or another schema implementation. Generated Events may use a schema
+package owned by the host application.
 
-- First argument (name) MUST match `/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*){2}$/`.
-- Second argument (shape) MUST implement [Standard Schema](https://standardschema.dev) (`~standard.validate`).
-- Returns opaque event definition with phantom types for inference.
+Projectors accept synchronous `DeepPartial<Input>` patches. Nested objects merge, arrays replace,
+and later lifecycle patches win. `EventRecord<E>` uses validated `Output`.
 
-### 4.2 `init`
+V1 finalization is synchronous. A thenable validation result is consumed only to avoid an unhandled
+rejection; the affected nested occurrence or root is dropped and `async_schema_unsupported` is
+diagnosed without changing application behavior.
 
-```typescript
-// telemetry/logger.ts
-import { init } from "@useamplio/amplio";
-import { consoleJsonSink } from "./sinks/console-json";
-import { serviceMetadata } from "./enrichers/service-metadata";
+### 3.2 `event()`
 
-export const logger = init({
-  service: "my-app",
-  env: process.env.NODE_ENV,
-  enrichers: [serviceMetadata],
-  sinks: [consoleJsonSink],
+Conceptually:
+
+```ts
+event({
+  id,
+  version,
+  schema,
+  timing = "duration",
+  cardinality = "single",
+  maxDurationMs,
+  tree = {},
 });
 ```
 
-- Called once; repeated calls throw in development.
-- Returns `{ event, create }` bound to global config.
-- Optional `sampling: { rate, keep }` — `keep` rules support `equals` / `matches` / `gte` / `lte` and dotted paths (e.g. `attributes.http.status_code`).
-- A keep rule with both `gte` and `lte` forms an inclusive AND range (value must be ≥ `gte` and ≤ `lte`).
-- Multiple `keep` rules are OR'd — any matching keep rule keeps the record.
-- `rate: 0` with no `keep` (or an empty `keep` list) drops all events; `rate: 1` always samples (`keep` rules are irrelevant).
+Construction MUST validate:
 
-### 4.3 `logger.create`
+- lowercase dot-separated stable `id`;
+- positive integer `version`;
+- `timing` equal to `"instant"` or `"duration"`;
+- `cardinality` equal to `"single"` or `{ many: { max } }` with a finite positive integer;
+- positive finite duration override; and
+- a safe declared tree.
 
-```typescript
-const run = logger.create({
-  run: { id: "job-123", kind: "nightly-sync" },
-});
+Every call produces one opaque process-local identity. The returned definition and its compiled tree
+are deeply snapshotted, branded, and frozen.
 
-run.set({ sync: { tables: 4 } });
-run.emit(); // validates if schema bound; otherwise freeform within init defaults
+A duration Event exposes:
+
+```ts
+handle<F extends (...args: any[]) => any>(
+  fn: F,
+  projectors?: EventProjectors<F, EventInput<this>>,
+): F;
 ```
 
-Standalone wide events for scripts, workers, CLI.
+An instant Event does not expose `handle()` and cannot declare children. A root opened through
+`handle()` occurs exactly once regardless of its cardinality descriptor.
 
-### 4.4 `logger.event`
+### 3.3 Definition fidelity
 
-```typescript
-const ev = logger.event(AuthUserSignedUp, {
-  user: { id: "u_1" },
-});
+`handle()` and Plugin wrappers MUST preserve:
 
-ev.set({ signup: { method: "oauth" } });
-ev.emit();
-```
+- `this`, argument order/identity, overloads, callback behavior, and application invocation count;
+- synchronous return versus asynchronous return;
+- exact returned values and exact thrown values;
+- native Promise object identity, fulfillment values, and rejection reasons.
 
-- Binds instance to schema; emit runs validation.
-- Partial initial context optional.
+Genuine ECMAScript Promises, including cross-realm Promises, are detected without reading a
+user-controlled `.then`; settlement observers are attached through an intrinsic operation and the
+original Promise is returned.
 
-### 4.5 `useLogger`
+Arbitrary thenables are not read, called, assimilated, or advertised as supported. Plugins for
+custom thenable APIs MUST use documented native hooks or `begin()`/`end()`.
 
-```typescript
-import { useLogger } from "@useamplio/amplio";
+Projectors are synchronous. A projector throw or returned thenable is isolated, consumed when
+necessary, diagnosed, and ignored. A `success` projector returning a non-boolean is ignored and
+diagnosed. No instrumentation failure escapes.
 
-export async function handler(c: Context) {
-  const log = useLogger();
-  log.set({ route: { name: "checkout" } });
-  // middleware emits on response finish
+## 4. Declared tree
+
+### 4.1 Placement and traversal
+
+Nested plain objects determine record placement:
+
+```ts
+tree: {
+  auth: BetterAuthPlugin.events,
+  payments: {
+    requests: StripePlugin.events.requests,
+  },
 }
 ```
 
-- Retrieves current scope from AsyncLocalStorage.
-- Returns a no-op logger when no scope is active (does not throw); dev warns on misuse.
+Event IDs identify schema versions and diagnostics; they do not determine placement.
 
-### 4.6 `.set()` / `.emit()`
+Traversal reads only own enumerable data properties and MUST reject arrays, symbol keys, accessors,
+cycles, proxy failures, non-plain prototypes, `__proto__`, `prototype`, `constructor`, runtime-owned
+keys, and values that are not branded Events or plain tree objects.
 
-```typescript
-interface WideEvent {
-  set(partial: DeepPartial<Context>): this;
-  error(err: unknown, ctx?: Record<string, unknown>): this;
-  emit(): EmittedEvent | null;
+One Event identity may appear at only one path in a root. Duplicate mounts fail at construction. The
+same nested identity may be mounted once in each of several different roots.
+
+### 4.2 Optionality and record typing
+
+All mounted nested Events are optional in traffic:
+
+- an unobserved single Event is omitted;
+- an unobserved repeated Event is omitted, not `[]`;
+- a plain group with no surviving descendants is pruned.
+
+`EventRecord<E>` recursively represents mounted branches as optional and chooses one object or an
+array from the nested Event's cardinality. Duration nodes include runtime timing/outcome fields;
+instant nodes do not.
+
+### 4.3 HMR and identity mismatch
+
+Duplicate module evaluation may create two identities with one semantic ID. The runtime diagnoses
+the mismatch and MUST NOT attach by ID. Registry source uses one canonical import path per Plugin.
+
+## 5. Plugin authoring contract
+
+### 5.1 `plugin()`
+
+Conceptually:
+
+```ts
+plugin({
+  id,
+  events,
+  instrument(tools) {
+    return nativeInstrumenter;
+  },
+});
+```
+
+The return value is the native instrumenter with a non-writable, non-configurable `.events`
+property. `.events` is a safe, deeply frozen snapshot. The instrumenter closes over those exact Event
+values, and roots mount those same values.
+
+The Plugin definition is not an output node. Values inside `.events` are the output definitions.
+
+### 5.2 `PluginTools`
+
+Tools are available only inside `instrument(...)`:
+
+```ts
+interface PluginTools<Events extends EventTree> {
+  readonly events: Events;
+  record<E extends InstantEventFrom<Events>>(
+    event: E,
+    value: EventInput<E>,
+  ): void;
+  observe<E extends DurationEventFrom<Events>, F extends AnyFunction>(
+    event: E,
+    fn: F,
+    projectors?: EventProjectors<F, EventInput<E>>,
+  ): F;
+  begin<E extends DurationEventFrom<Events>>(
+    event: E,
+    input?: DeepPartial<EventInput<E>>,
+  ): ObservationHandle<EventInput<E>>;
 }
 ```
 
-**Merge semantics:**
+Invalid Event/tool combinations MUST fail typechecking. Tools attach only when the exact definition
+is mounted under the active occurrence.
 
-- Objects: deep merge (recursive plain objects only).
-- Arrays: replace (no concat) unless future spec adds `setMergeArrays`.
-- `undefined` values: ignored (do not unset keys).
-- `null`: sets key to null.
+`begin()` reserves order synchronously and returns an idempotent handle:
 
-**Emit semantics:**
+```ts
+interface ObservationHandle<Node> {
+  run<T>(fn: () => T): T;
+  bind<F extends AnyFunction>(fn: F): F;
+  update(value: DeepPartial<Node>): void;
+  end(value?: DeepPartial<Node>, options?: { success?: boolean }): void;
+  fail(error: unknown, value?: DeepPartial<Node>): void;
+  cancel(reasonCode?: string): void;
+}
+```
 
-1. If sealed → dev warning, return `null`.
-2. Run enrichers (in registration order).
-3. If schema-bound → validate; on failure throw `AmplioValidationError` in test or when `init({ strict: true })`, otherwise soft-fail (attach `validation.issues`, set `success: false`, dev warn).
-4. Redact sensitive fields (on by default; `redact: false` to disable).
-5. Attach system fields: `timestamp`, `@event`, `service`, `env`, `duration_ms`, `level` (derived).
-6. Fan-out to sinks synchronously (`flush()` awaits pending async sink deliveries; sink errors logged, do not throw by default).
-7. Seal instance.
+`end`, `fail`, and `cancel` settle at most once. Cancellation records a stable non-sensitive code;
+it never cancels or throws into provider code.
 
-**Level derivation (v0):**
+Outside an active declaring Event, Plugin calls execute provider code normally and perform no
+semantic write. Development diagnostics distinguish no active root, undeclared Event, closed root,
+duplicates, overflow, schema failure, and projection failure.
 
-- Default `info`.
-- If payload contains `error` object (nested key `error` with `message: string`) → `error`.
-- Explicit `level` in schema allowed; must be enum `debug | info | warn | error`.
+### 5.3 Boundary authoring
 
-**Success from `status` (v0):**
+Frameworks with split hooks use `openEvent(definition, input?)`, which returns:
 
-When both `status` and `success` are unset, `success` defaults to `true`.
+```ts
+interface EventScope<E extends DurationEvent> {
+  run<T>(fn: () => T): T;
+  bind<F extends AnyFunction>(fn: F): F;
+  update(value: DeepPartial<EventInput<E>>): void;
+  finish(
+    value?: DeepPartial<EventInput<E>>,
+    options?: { success?: boolean },
+  ): void;
+  fail(error: unknown, value?: DeepPartial<EventInput<E>>): void;
+  cancel(reasonCode?: string): void;
+}
+```
 
-When `success` is unset and `status` is present on emit, derive `success`:
+Scopes close idempotently. A Plugin retains a scope only on true request-local framework state or in
+a per-instance `WeakMap` keyed by that state. URLs, methods, routes, user IDs, and other non-unique
+strings are forbidden correlation keys.
 
-- Numeric: `[200, 400)` → `true`; otherwise → `false`.
-- Numeric strings: same range as numeric (e.g. `"200"` → `true`, `"500"` → `false`).
-- `"ok"` → `true` (case-sensitive exact match only; `"OK"` → `false`).
-- Other non-numeric strings → `false`.
+## 6. Runtime state and lifecycle
 
-Explicit `success` wins over `status` derivation (ignore `status` when `success` is set).
+### 6.1 State machine
 
-## 5. Naming & files
+Each root and accepted duration occurrence follows:
 
-| Artifact | Rule | Example |
-|---|---|---|
-| Event name | `domain.entity.action` | `billing.invoice.paid` |
-| File | kebab-case | `billing-invoice-paid.ts` |
-| Export | PascalCase matching semantic | `BillingInvoicePaid` |
-| Registry id | `@useamplio/event-<kebab-full-name>` | `@useamplio/event-billing-invoice-paid` |
+```text
+open -> closing -> closed
+```
 
-CLI `add event billing.invoice.paid` → `telemetry/events/billing/invoice-paid.ts` (+ barrels).
+State never moves backward. Normal root lifecycle is:
 
-## 6. CLI
+1. Snapshot the active immutable runtime configuration generation.
+2. Open before relevant framework/provider work.
+3. Run input projection.
+4. Execute the complete unit of work in isolated async context.
+5. Reserve nested occurrences at invocation/start time.
+6. Run result/success or error projection at the declared completion signal.
+7. Move to closing and reject new reservations.
+8. Omit and diagnose pending occurrences.
+9. Sanitize and synchronously validate root and nested semantic values.
+10. Create an immutable logical snapshot and move to closed.
+11. Enrich resource attributes, redact, revalidate, sample, and deliver isolated values.
+12. Return the original result or rethrow the exact original error.
 
-### 6.1 Commands
+Sink work may begin before step 12, but a synchronous application function never awaits async
+delivery. `flush()` owns explicit draining.
 
-| Command | Behavior |
-|---|---|
-| `amplio init` | Scaffold `telemetry/`, config, default sink |
-| `amplio list [kind]` | List registry items with titles when present (optional kind filter) |
-| `amplio add event <name>` | Add event file + export |
-| `amplio add middleware <id>` | Add middleware file + wiring instructions |
-| `amplio add sink <id>` | Add sink module |
-| `amplio add enricher <id>` | Add enricher module |
-| `amplio add integration <id>` | Add integration helper |
+### 6.2 Success and errors
 
-### 6.2 Init options
+`success` is application/business outcome only:
 
-- `--cwd` (default `.`)
-- `--package-manager` (`pnpm` | `npm` | `yarn` | `bun`)
-- `--typescript` (default true)
-- Framework detection from `package.json` (Next.js, Hono, Express, Fastify) via `detect-framework`; `--middleware`, `--event`, `--yes` for non-interactive scaffold
+- normal return defaults to true;
+- throw/rejection is false;
+- returned failures such as HTTP status `>= 400` require a boundary classifier;
+- a nested failure does not force root failure if application code handles it.
 
-### 6.3 Registry resolution
+Projection, validation, truncation, timeout, redaction, sampling, and sink failure never set business
+`success: false`; they are operational diagnostics.
 
-1. Read project config for registry URL / namespace.
-2. Fetch item manifest (local file in dev, HTTPS in prod).
-3. Copy files into paths relative to cwd.
-4. Merge `dependencies` / `devDependencies` into package.json.
+Application result/error precedence is absolute. Accessing hostile thrown values is guarded. The
+original thrown value is rethrown by identity even when safe structured error conversion fails.
 
-## 7. Registry format
+### 6.3 Nested roots
 
-shadcn-compatible item:
+Opening a different root inside an active root creates an independent record. Nested observations
+attach only to the inner root until it closes, then the outer context is restored.
 
-```json
+Re-entering the same root definition is a duplicate boundary: the outer scope remains sole owner,
+the inner wrapper invokes application code transparently, skips its projectors, and does not deliver.
+
+### 6.4 Deadlines
+
+Every duration Event has a finite deadline. Runtime default is 300,000 ms and may be overridden by
+`init({ limits: { maxEventDurationMs } })` or `maxDurationMs` on a definition.
+
+A timed-out root is dropped and diagnosed out of band without inventing success. A timed-out nested
+occurrence is omitted and diagnosed if its owner remains open. Application work continues; later
+observations are inert; deadline timers do not keep the process alive.
+
+## 7. Cardinality and occurrence frames
+
+### 7.1 Single and repeated Events
+
+For `"single"`, the first reservation owns the slot. Later calls execute normally, contribute
+nothing, and produce one bounded duplicate diagnostic.
+
+For `{ many: { max } }`:
+
+- reserve the array index synchronously before provider work;
+- preserve invocation order regardless of completion order;
+- accept the first `max` reservations;
+- drop newest on overflow; and
+- record exact path, maximum, and dropped count under `@amplio.truncated`.
+
+A rejected duplicate or overflow duration call runs within an inert shadow frame. Descendant Events
+cannot leak into an accepted occurrence, sibling, or later root.
+
+### 7.2 Nested duration Events
+
+Each accepted duration occurrence owns a distinct child frame. Children attach relative to that
+specific occurrence. Concurrent parent occurrences cannot share children even when they complete
+out of order.
+
+A child observed without its exact semantic parent occurrence active is inert and diagnosed. Closing
+a parent closes its child frame before snapshotting.
+
+### 7.3 Pending and late work
+
+Unawaited work does not extend its owner:
+
+- a pending slot at close is omitted;
+- `@amplio.incomplete` records path and Event ID;
+- late settlement is a no-op and cannot mutate the snapshot;
+- `bind()` and normal ALS descendants retain their original occurrence until it closes;
+- an unbound callback later invoked in another root follows that ambient root, a documented v1
+  limitation.
+
+## 8. Record and validation contract
+
+### 8.1 Canonical envelope
+
+Every delivered root contains:
+
+```ts
 {
-  "name": "event-auth-user-signed-up",
-  "type": "registry:amplio",
-  "files": [
-    {
-      "path": "registry/events/auth-user-signed-up.ts",
-      "target": "telemetry/events/auth-user-signed-up.ts"
-    }
-  ],
-  "dependencies": ["zod"],
-  "registryDependencies": []
+  "@event": string,
+  "@event_version": number,
+  service: string,
+  env: string,
+  timestamp: string,
+  duration_ms: number,
+  success: boolean,
 }
 ```
 
-Built output published to `registry/` as static JSON for CDN or git raw hosting.
+HTTP roots SHOULD contain a validated or generated `request_id`.
 
-## 8. Middleware (reference: Hono)
+The runtime owns the envelope, optional structured `error`, `@amplio`, optional `resource`, and every
+declared tree branch. Projectors, schemas, Plugins, and enrichers cannot overwrite them.
 
-`telemetry/middleware/hono.ts`:
+An instant nested Event contributes validated semantic output. A duration nested Event adds
+`duration_ms`, `success`, and optional error:
 
-- On request: `logger.create()` or anonymous wide event with `{ http: { method, path } }`.
-- Store in ALS + Hono context (`c.set('amplio', log)`).
-- On response `finish` / `error`: `await log.emit()`.
-- Export factory `amplioMiddleware()` and typed `useLogger(c)`.
-
-Auto-emit is middleware responsibility, not `@useamplio/amplio` magic.
-
-Next.js middleware (`registry/middleware/next.ts`): wraps handlers with AsyncLocalStorage via `runWithLogger`, auto-emits on response, and schedules `flush()` via Next.js `after`, optional `waitUntil`, or a fire-and-forget fallback.
-
-## 9. Sinks & enrichers
-
-### Sink
-
-```typescript
-export type AmplioSink = (event: Record<string, unknown>) => void | Promise<void>;
+```ts
+type StructuredError = {
+  type: string;
+  code?: string;
+  message?: string;
+};
 ```
 
-### Enricher
+Raw stacks and arbitrary error properties are excluded. Message is omitted unless privacy policy
+explicitly permits it.
 
-```typescript
-export type AmplioEnricher = (
-  event: Record<string, unknown>
-) => Record<string, unknown> | Promise<Record<string, unknown>>;
+### 8.2 Validation behavior
+
+Validation runs on sanitized plain data. Successful schema transforms are sanitized again and
+become the wire output.
+
+- failed nested validation omits the occurrence and adds a bounded diagnostic;
+- failed root validation drops the entire Event and diagnoses out of band;
+- issue paths normalize to string/number Event paths;
+- validation never changes application control flow.
+
+### 8.3 Diagnostics
+
+Operational metadata lives under `@amplio` with bounded, deduplicated entries:
+
+```text
+diagnostics[]  stable code, Event ID, and path
+incomplete[]   pending Event ID and path
+truncated[]    path, max, and dropped count
 ```
 
-Both are user-editable modules; core only invokes arrays registered in `init()`.
+Production may omit verbose messages while retaining stable codes and counts.
 
-`serviceMetadata` uses `AMPLIO_SERVICE` / `AMPLIO_SERVICE_VERSION` / `AMPLIO_REGION` (name falls back to `record.service`; unset or empty-string version/region omitted — empty env strings are treated as unset).
+### 8.4 JSON safety and bounds
 
-`requestMetadata` / request-metadata enricher: empty-string optional `route` / `ip` / `userAgent` / `requestId` ≡ unset (omitted from `http`; empty `requestId` does not wipe an existing `request_id`). `status` is still included when `0`.
+Finalization is total: no projected value may make it throw. Sanitization MUST guard prototypes,
+getters, proxies, cycles, and key enumeration; reject unsafe keys; preserve safe siblings; omit
+functions/symbols/undefined object properties; convert BigInt to decimal strings and valid dates to
+ISO; and construct plain sanitized objects with null prototypes.
 
-OTLP sink: when present, maps `record.service` → resource `service.name` and `record.env` → `deployment.environment`.
+Default limits are:
 
-JSON file sink: `AMPLIO_JSON_SINK_PATH` empty or whitespace-only is treated as unset → default `amplio.<env>.jsonl` from the record's `env` (`amplio.dev.jsonl` when absent); `options.path` wins when set.
+| Limit                                | Default |
+| ------------------------------------ | ------: |
+| Depth                                |      12 |
+| Keys per Event                       |     512 |
+| UTF-8 bytes per string               |   8 KiB |
+| Semantic bytes per nested occurrence |  16 KiB |
+| Serialized root size                 | 256 KiB |
 
-## 10. Anti-slop rules
+When size exceeds limits, the runtime deterministically removes newest repeated occurrences, then
+optional singles, then verbose diagnostic details. If root-owned semantic fields still exceed the
+limit, the entire Event is dropped and diagnosed out of band.
 
-1. **No printf primary path** — examples must not demonstrate `log.info("user signed up")` as main telemetry.
-2. **Nested shapes** — event templates group fields (`user`, `error`, `http`, `billing`).
-3. **Readable codegen** — max line length 100; multiline objects; named exports.
-4. **Stable event names** — `@event` field always set from `defineEvent.name`.
-5. **One emit per scope** — sealed loggers prevent duplicate request events.
+## 9. Privacy and finalization pipeline
 
-## 11. `@useamplio/amplio` internals (non-public)
+Generated Plugins explicitly project safe fields. They MUST NOT capture passwords, secrets, API
+keys, tokens, authorization headers, cookies, raw bodies, raw URLs, query strings, provider objects,
+or raw error messages by default.
 
-May include: ALS store, merge util, validate adapter, seal flag, dev warnings.
+For each closed root, the pipeline is:
 
-Must NOT include: vendor SDKs, framework imports, CLI, code generation.
+1. validate and snapshot semantic input;
+2. create an isolated working copy;
+3. enrich only bounded `resource` attributes;
+4. redact into another copy;
+5. sanitize redactor output and restore protected runtime fields;
+6. synchronously revalidate the complete Event tree;
+7. drop fail-closed if redaction or revalidation fails;
+8. sample the validated redacted record;
+9. deliver isolated immutable records to sinks.
 
-## 12. Error model
+Sensitive data never reaches sampling hashes or sinks before redaction. A redactor may remove or
+replace semantic fields only when the result remains schema-valid. Redactor failure never falls back
+to unredacted delivery. Sampler failure drops the Event.
 
-```typescript
-class AmplioValidationError extends Error {
-  issues: StandardSchemaIssue[];
-}
+`onDiagnostic` runs outside active Event context behind a reentrancy guard. Throws, rejections, and
+returned thenables are consumed and rate-limited. Diagnostics cannot recursively create Events.
 
-class AmplioSealedError extends Error {} // dev-only throw if strict mode
+## 10. Runtime configuration and delivery
+
+### 10.1 Configuration generations
+
+`init()` validates and atomically installs one immutable generation containing envelope defaults,
+limits, enrichers, redactor, sampler, diagnostics, and sinks. Duplicate sink identities are
+deduplicated.
+
+Each root retains its opening generation through delivery, even if HMR replaces configuration.
+Replaced generations retire and remain flushable while retained.
+
+Defaults:
+
+```ts
+init({
+  delivery: {
+    maxPendingPerSink: 1_024,
+    flushTimeoutMs: 5_000,
+    maxRetiredGenerations: 4,
+    retiredGenerationTtlMs: 30_000,
+  },
+});
 ```
 
-Structured errors via `.error()` (does not auto-emit):
+If another replacement would exceed the retained-generation bound while an older generation owns
+open roots, replacement is refused atomically and `config_generation_limit` is diagnosed. Hung
+retired deliveries are abandoned after finite count/TTL bounds.
 
-```typescript
-log.error(new PaymentError("Card declined"), { billing: { order_id: "ord_1" } });
-log.emit();
+### 10.2 Sinks
+
+```ts
+type Sink = ((record: SinkRecord) => void | PromiseLike<void>) & {
+  flush?: () => void | PromiseLike<void>;
+};
 ```
 
-Or set an `error` object directly with `.set()` when you prefer manual shaping.
+A sink synchronously accepts/enqueues a record before returning. A returned thenable represents
+completion of already accepted work. Sink throws/rejections are isolated and later sinks run.
 
-## 13. Type inference
+Core tracks at most `maxPendingPerSink` unsettled deliveries. At the bound it does not invoke that
+sink for a new Event, reports `sink_backpressure_drop`, and continues other sinks.
 
-`defineEvent` infers:
+Each sink receives an immutable isolated value. Mutation by one sink cannot affect another sink,
+later work, or definition-aware test retrieval.
 
-- Required/optional keys for `.set()` after bind.
-- Emit return type `EmittedEvent<TSchema>`.
+### 10.3 `flush()`
 
-Standalone `logger.create()` without schema uses `init` default context type or `Record<string, unknown>`.
+`flush({ timeoutMs? })` snapshots active/retiring generations and a start-time accepted-delivery
+watermark. It:
 
-## 14. Security
+1. synchronously invokes each flush hook to seal pre-watermark partial batches;
+2. collects returned thenables and delivery accepted at or before the watermark;
+3. awaits only that work until the finite timeout; and
+4. resolves `{ completed, pending, failures }` without throwing through shutdown code.
 
-- Core redacts emails, JWTs, Bearer tokens, credit cards, and sensitive field names on every emit by default; pass `redact: false` to `init()` to disable.
-- Document never logging passwords, tokens, raw cookies.
+Delivery after the watermark belongs to a later flush. `flush()` does not wait for roots that have
+not reached delivery.
 
-## 15. Compatibility
+## 11. Framework completion
 
-- Node ≥ 20.
-- TypeScript ≥ 5.4.
-- ESM-first (`"type": "module"`).
+Boundary Plugins span the strongest truthful lifecycle available without changing application
+behavior:
 
-## 16. Acceptance criteria
+- Next.js/Hono close on returned `Response` or thrown/rejected handler value and classify status;
+- Express opens before the middleware chain and closes on response `finish` or `close`, preserving
+  `next(error)`;
+- Fastify opens in `onRequest` and closes after serialization and `onSend`/`onError`, using
+  `onResponse` as final signal;
+- queues close after ack/nack outcome;
+- streaming completion is claimed only when native completion/abort hooks are owned;
+- WebSocket HTTP Events close at upgrade outcome; messages use separate Events;
+- fire-and-forget and `waitUntil` work are excluded unless explicitly owned and awaited.
 
-### AC-1 Monorepo bootstrap
+Stable route templates are explicit. Raw paths and query strings are not route identifiers.
 
-- [x] `packages/amplio`, `packages/cli`, `registry/`, `examples/`, `benchmarks/` exist and `pnpm build` succeeds.
-- [x] Root scripts (`build`, `test`, `bench`, `size`, `registry:build`) run without error.
+## 12. Open-code project and registry
 
-### AC-2 Core API surface
+### 12.1 Generated layout
 
-- [x] `@useamplio/amplio` exports a frozen public surface (`defineEvent`, `init`, `logger`/`createLogger`, `useLogger`/`runWithLogger`, errors, types) — verified by tests.
-- [x] `init()` returns `logger` with `.event()` and `.create()`.
-- [x] Wide event instances expose `.set()`, `.error()`, and `.emit()` (no level methods like `.info()`).
-- [x] Public API documented in package README and matches this spec.
+```text
+telemetry/
+  events/
+    http-request.ts
+  plugins/
+    next.ts
+    resend.ts
+  sinks/
+  runtime.ts
+amplio.json
+instrumentation.ts
+```
 
-### AC-3 defineEvent & validation
+`runtime.ts` calls `init()` and exports no client, logger, mutable Event, or accessor. `amplio.json`
+is CLI metadata only. VNext generation does not create component/fact/operation/workload/integration
+or middleware directories.
 
-- [x] Invalid event name rejected at definition time (`defineEvent` + CLI).
-- [x] Schema-bound emit validates with Standard Schema adapter.
-- [x] Validation failure throws `AmplioValidationError` in test or `strict: true`; otherwise soft-fails with `validation.issues` on the record.
-- [x] Successful emit includes `@event` equal to declared name.
+### 12.2 Dependencies and registry metadata
 
-### AC-4 Wide-event lifecycle
+Core has no provider imports, provider types, or provider peer dependencies. Registry recipes declare
+host-owned provider/schema requirements and test minimum/latest compatible plus excluded boundary
+versions.
 
-- [x] Deep merge for nested objects; arrays replace; `undefined` in patch keeps prior values.
-- [x] Second `.emit()` returns `null` and warns in development.
-- [x] Post-seal `.set()` is ignored with dev warning.
-- [x] Post-seal `.create()` returns sealed no-op logger with dev warning.
-- [x] Post-seal `.event()` returns sealed no-op event logger with dev warning.
-- [x] Enrichers run before validation; sinks run after validation.
+Plugin metadata includes:
 
-### AC-5 Init & drain
+```text
+slug, kind=plugin, role, recipeVersion, core range, provider ranges,
+Event IDs/versions, files, wiring actions, privacy inclusions/exclusions
+```
 
-- [x] Multiple sinks receive the same finalized payload.
-- [x] Sink failure does not prevent other sinks from running (sink isolation).
-- [x] Sync/async sink errors do not throw from `.emit()`.
-- [x] Library-first silence: `.emit()` without `init()` returns a record and does not throw.
-- [x] `redact: false` disables default redaction on emit.
-- [x] `service` and `env` from init appear on every emitted event.
+Registry Plugin tests use real native lifecycles where possible and include concurrent identical
+requests plus forbidden-field snapshots.
 
-### AC-6 CLI init
+### 12.3 Installation and updates
 
-- [x] `npx @useamplio/cli@alpha init` creates `telemetry/logger.ts`, `telemetry/events/`, `telemetry/middleware/`, `telemetry/sinks/`, `telemetry/enrichers/`, `telemetry/integrations/`.
-- [x] Default console JSON sink wired and importable.
-- [x] Second `amplio init` is idempotent — existing files left unchanged.
-- [x] CLI `--help` and `--version` exit 0.
-- [x] Project compiles after init (`telemetry/events/index.ts` scaffolded as `export {}`).
+Default `amplio add plugin` preflights content digest, versions, existing files, Event selection,
+unique placement, provider construction seam, boundary, dependencies, and planned source edits.
 
-### AC-6b CLI list
+Installation is transactional for tracked source, package manifest, lockfile, and Amplio metadata.
+`--target <relative-source-file>` provides explicit file selection and MUST reject absolute,
+traversing, missing, non-source, or project-escaping paths before writes. Selection narrows discovery
+only: provider/import authentication and same-file ambiguity checks remain mandatory. An active
+Plugin cannot be implicitly retargeted. Non-interactive ambiguity aborts instead of guessing. The
+CLI never executes arbitrary downloaded scripts and discloses normal package lifecycle scripts.
 
-- [x] `amplio list` prints grouped registry items and exits 0.
-- [x] `amplio list sink` filters to sink items only.
+Successful installation leaves copied source, tree composition, dependencies, metadata, and safe
+wiring complete. A repeated install creates no diff. `--source-only` is an explicit inert escape
+hatch and causes `doctor --strict` to fail until composed. A supported manual Next.js or Express
+attachment may be promoted by targeting its file only after the CLI verifies the documented native
+shape. That wiring is recorded as customer-owned: activation and removal never rewrite it, strict
+doctor re-verifies it, and removal refuses to delete Plugin source until live consumers are detached.
 
-### AC-7 CLI add event
+Updates use recorded base content and recoverable three-way merge. Conflicts never overwrite local
+edits. Removing a Plugin does not remove its provider package.
 
-- [x] `amplio add event auth.user.signed_up` creates `telemetry/events/auth/user-signed-up.ts`.
-- [x] File contains `defineEvent`, Zod schema with nested objects, PascalCase export.
-- [x] Re-run skips existing files; `--force` overwrites (documented in README).
+## 13. Compatibility and migration
 
-### AC-8 Registry
+Target mapping:
 
-- [x] `pnpm registry:build` emits shadcn-compatible JSON.
-- [x] At least one event item installable via `shadcn add @useamplio/event-auth-user-signed-up` (shadcn-compatible `public/r` install proven in tests).
-- [x] Registry item lands files only under `telemetry/` (`~/…` targets).
+| Alpha                             | VNext                                            |
+| --------------------------------- | ------------------------------------------------ |
+| `defineWorkload`                  | `event`                                          |
+| fact/operation/component          | nested Event definitions inside Plugin `.events` |
+| component tree                    | Event `tree` containing Plugin subtrees          |
+| `integrations/`                   | `plugins/`                                       |
+| `middleware/`                     | framework files in `plugins/`                    |
+| `workloads/`                      | `events/`                                        |
+| logger accessors, `.set`, `.emit` | removed with no business-code replacement        |
+| `@useamplio/amplio/events`        | removed                                          |
+| mutable builder compatibility     | temporary explicit `/legacy` only                |
 
-### AC-9 Middleware (Hono example)
+Migration creates Event/Plugin directories, folds semantic definitions into the Plugin owning each
+native seam, replaces adapters with native Plugin exports, composes `.events` into roots, and bans
+legacy imports from recipes/examples. It MUST show the exact composition root selecting a new
+instrumented export. `/legacy` is deleted before stable v1.
 
-- [x] Example app in `examples/basic` uses `amplioMiddleware`.
-- [x] One wide event emitted per HTTP request (smoke scripts).
-- [x] Handler uses `useLogger()` and `.set()`; no manual emit in handler.
-- [x] Emitted JSON includes nested `http` object.
+## 14. Acceptance gates
 
-### AC-10 Standalone example
+### Public/type surface
 
-- [x] `examples/standalone` uses `logger.create()` + `.emit()`.
-- [x] Demonstrates schema-bound `logger.event()`.
+- Main exports `event`, `init`, and `flush` with no logger or alpha semantic primitives.
+- Main, `/plugin`, and `/testing` build and pack with no vendor or legacy declaration leakage.
+- Strict consumers infer projector args/results, schema transforms, wrapper signatures, nested
+  optional placement, and repeated arrays without `any`.
 
-### AC-11 Anti-slop
+### Function fidelity
 
-- [x] No example uses string-only logging as primary telemetry.
-- [x] Generated event files pass Prettier defaults (CLI + registry tests).
-- [x] All shipped event templates use nested object schemas (minimum depth 2 for domain fields).
+- Sync stays sync; exact return/throw identity survives.
+- Native and cross-realm Promise identity/settlement survives.
+- Custom thenables are untouched.
+- `this`, overloads, callbacks, ordering, and call count survive.
+- Hostile projectors, schemas, values, and errors cannot escape.
 
-### AC-12 Performance & size
+### Tree/runtime
 
-- [x] `pnpm size` reports `@useamplio/amplio` ≤ 8 KB gzip.
-- [x] Benchmark documents `set` + `emit` median & p99 for 1 KB payload (`pnpm bench`).
-- [x] Core package ships with zero runtime dependencies.
+- Exact identity attaches; ID/type impostors do not.
+- Trees are safely traversed, snapshotted, branded, and deeply frozen.
+- Duplicate mounts fail before traffic.
+- Optionality, ordering, overflow, shadow frames, occurrence children, pending work, late work,
+  nested roots, same-root reentry, deadlines, and interleaved concurrency satisfy this specification.
 
-### AC-13 Differentiation
+### Privacy/delivery
 
-- [x] README states open-code + in-repo schema vs opaque npm runtime.
-- [x] User can delete `@useamplio/cli` after init and keep editing `telemetry/` with only `@useamplio/amplio` installed (documented in README).
+- Canonical envelope and definition-aware records satisfy `EventRecord<E>`.
+- Sanitization handles BigInt, cycles, throwing getters, proxies, and oversize input.
+- Redaction precedes sampling/sinks and failure is fail-closed.
+- Sink mutation/failure/backpressure is isolated.
+- Flush honors hooks, watermark, timeout, generations, and returned counts.
+- Diagnostic callbacks cannot escape, recurse, or create Events.
 
-### AC-14 Tests
+### Framework/Plugin/CLI
 
-- [x] Unit tests cover merge, validation, sampling, redaction, ALS, sinks.
-- [x] CLI integration test scaffolds temp dir and asserts file tree.
-- [x] `examples/basic`, `express-smoke`, and `fastify-smoke` smoke scripts assert one JSON wide event with nested `http`.
-
-## 17. Versioning
-
-- Pre-1.0: minor bumps may break generated file templates; core API stable after 0.2.
-- Registry items versioned independently in manifest `version` field.
-- Event schemas are user-owned; breaking changes are explicit repo edits.
-
-## 18. Future (post-v0, not acceptance)
-
-- Head/tail sampling in `init({ sample })`
-- `logger.fork()` for sub-operations
-- OpenTelemetry trace correlation enricher
-- `amplio add integration ai-sdk`
-
----
-
-**Status:** Spec draft for initial implementation. Update checkboxes as criteria are verified in CI or manual QA.
+- Boundary tests exercise truthful framework completion and stable route templates.
+- Plugin recipes test supported/excluded provider versions, native hooks, instance isolation, privacy,
+  and inert behavior without a root.
+- Clean installs are complete and idempotent; failures roll back tracked edits; updates preserve
+  local changes; removals preserve providers.
+- Application/domain fixtures contain no Amplio imports or instrumentation calls.
+- Registry generation, runnable examples, packed cold install, typecheck, size, and publish smoke
+  gates pass.

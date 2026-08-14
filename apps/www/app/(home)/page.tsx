@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { appName } from '@/lib/shared';
+import Link from "next/link";
+import { appName } from "@/lib/shared";
 
 export default function HomePage() {
   return (
@@ -8,12 +8,13 @@ export default function HomePage() {
         {appName} — shadcn for observability
       </p>
       <h1 className="mb-4 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-        Schema-first telemetry you own
+        Your code has semantics. Not a logger.
       </h1>
       <p className="mb-10 max-w-lg text-lg text-fd-muted-foreground text-balance">
-        Define typed wide events, accumulate context with <code className="text-sm">.set()</code>,
-        emit once with <code className="text-sm">.emit()</code> — open code in{' '}
-        <code className="text-sm">telemetry/</code>, not a black-box npm logger.
+        Compose open-code Plugins into one typed Event tree. Application code
+        keeps calling ordinary functions; source in{" "}
+        <code className="text-sm">telemetry/</code> owns semantics and
+        lifecycle.
       </p>
       <div className="mb-10 flex flex-wrap items-center justify-center gap-3">
         <Link
@@ -26,19 +27,21 @@ export default function HomePage() {
           href="https://www.npmjs.com/package/@useamplio/cli"
           className="inline-flex h-10 items-center rounded-lg border border-fd-border bg-fd-background px-5 font-mono text-sm transition-colors hover:bg-fd-accent"
         >
-          npx @useamplio/cli@alpha init --yes
+          npx @useamplio/cli@alpha init
         </a>
       </div>
       <pre className="w-full max-w-xl overflow-x-auto rounded-lg border border-fd-border bg-fd-card p-4 text-left font-mono text-sm leading-relaxed text-fd-card-foreground">
-        {`import { getLogger } from "@useamplio/amplio";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
+        {`// application code stays ordinary
+const user = await signUp(input);
+return Response.json(user, { status: 201 });
 
-// inside request middleware scope:
-getLogger()
-  .child(AuthUserSignedUp)
-  .set({ user: { id: "u_123" }, signup: { method: "email" } })
-  .emit();
-// two rows: http.request spine + auth.user.signed_up, same request_id`}
+// native seams activate open-code Plugins once
+const app = new Hono();
+app.use("*", HonoPlugin());
+
+export const resend = ResendPlugin(
+  new Resend(process.env.RESEND_API_KEY),
+);`}
       </pre>
     </div>
   );

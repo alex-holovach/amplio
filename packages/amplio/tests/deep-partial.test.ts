@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, expectTypeOf } from "vitest";
 import { z } from "zod";
-import { defineEvent, init, logger, resetConfigForTests } from "../src/index.js";
+import { defineEvent, init, logger, resetConfigForTests } from "../src/legacy.js";
 
 const UserUpdated = defineEvent(
   "user.updated",

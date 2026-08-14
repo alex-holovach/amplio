@@ -9,7 +9,7 @@ async function makeTempDir(prefix: string): Promise<string> {
   return mkdtemp(path.join(tmpdir(), prefix));
 }
 
-/** Project with the JSON sink installed and wired in logger.ts. */
+/** Project with the JSON sink installed and wired in runtime.ts. */
 async function setupSmokeProject(cwd: string): Promise<void> {
   await writeFile(
     path.join(cwd, "amplio.json"),
@@ -18,7 +18,7 @@ async function setupSmokeProject(cwd: string): Promise<void> {
   await mkdir(path.join(cwd, "telemetry/sinks"), { recursive: true });
   await writeFile(path.join(cwd, "telemetry/sinks/json.ts"), "export {};\n");
   await writeFile(
-    path.join(cwd, "telemetry/logger.ts"),
+    path.join(cwd, "telemetry/runtime.ts"),
     'import { jsonFileSink } from "./sinks/json";\ninit({ sinks: [jsonFileSink()] });\n',
   );
 }
@@ -45,7 +45,6 @@ describe("runSmoke", () => {
 
     const row = {
       "@event": "http.request",
-      event: "http.request",
       request_id: "req_smoke",
       status: 200,
       duration_ms: 7,
@@ -66,7 +65,10 @@ describe("runSmoke", () => {
     const log = vi.spyOn(console, "log").mockImplementation((line: string) => {
       logs.push(String(line));
     });
-    const code = await runSmoke({ cwd, url: `http://127.0.0.1:${port}/api/trpc/post.hello` });
+    const code = await runSmoke({
+      cwd,
+      url: `http://127.0.0.1:${port}/api/trpc/post.hello`,
+    });
     log.mockRestore();
 
     expect(code).toBe(0);
@@ -136,7 +138,11 @@ describe("runSmoke", () => {
     const log = vi.spyOn(console, "log").mockImplementation((line: string) => {
       logs.push(String(line));
     });
-    const code = await runSmoke({ cwd, url: `http://127.0.0.1:${port}/`, timeoutSeconds: 2 });
+    const code = await runSmoke({
+      cwd,
+      url: `http://127.0.0.1:${port}/`,
+      timeoutSeconds: 2,
+    });
     log.mockRestore();
 
     expect(code).toBe(1);

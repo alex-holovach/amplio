@@ -1,0 +1,89 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "plugin-better-auth",
+  "title": "Better Auth Plugin",
+  "description": "Better Auth contributor Plugin using native after hooks for privacy-safe sign-in and sign-up semantics.",
+  "type": "registry:lib",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.16",
+    "better-auth@^1.2.1"
+  ],
+  "meta": {
+    "amplio": {
+      "kind": "plugin",
+      "role": "contributor",
+      "recipeVersion": "1.0.0",
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": {
+        "better-auth": ">=1.2.1 <2"
+      },
+      "testedProviderVersions": {
+        "better-auth": {
+          "minimum": "1.2.1",
+          "latest": "1.6.28"
+        }
+      },
+      "events": [
+        {
+          "id": "auth.signed_in",
+          "version": 1,
+          "semanticDigest": "sha256-7c4951acd47710af6a59a78d2c4c4c4f7da7839b4517ed3a0ab0bbcc83ef713d"
+        },
+        {
+          "id": "auth.signed_up",
+          "version": 1,
+          "semanticDigest": "sha256-75a6b7a8da5b33cd9ec6807605809eb3e3e80271b7192bdb5852ec5db8d955db"
+        }
+      ],
+      "semanticDigest": "sha256-4de99fed1bebece9ce6fb99080383a3216f91285b491ea8fe87d04febfa77240",
+      "nativeTransform": {
+        "version": 1,
+        "digest": "sha256-d36cf41cf89c24d512f25c9697e86e0c9b4e3055f7f26070962dc11eaa636d61"
+      },
+      "placement": {
+        "branch": "auth"
+      },
+      "provider": {
+        "package": "better-auth",
+        "instrumenter": "BetterAuthPlugin",
+        "seam": "better-auth-plugin",
+        "factory": "betterAuth"
+      },
+      "wiringActions": [
+        {
+          "type": "mount-event-subtree",
+          "description": "Mount BetterAuthPlugin.events under the auth branch."
+        },
+        {
+          "type": "register-native-plugin",
+          "export": "BetterAuthPlugin",
+          "description": "Append BetterAuthPlugin() to one unambiguous betterAuth plugins array."
+        }
+      ],
+      "privacy": {
+        "includes": [
+          "method",
+          "user.id",
+          "mfa"
+        ],
+        "excludes": [
+          "email",
+          "session id",
+          "tokens",
+          "headers",
+          "body",
+          "callback url"
+        ]
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "registry/plugins/better-auth.ts",
+      "target": "~/telemetry/plugins/better-auth.ts",
+      "type": "registry:lib",
+      "content": "import { event } from \"@useamplio/amplio\";\nimport { plugin } from \"@useamplio/amplio/plugin\";\nimport type { BetterAuthPlugin as NativeBetterAuthPlugin } from \"better-auth\";\nimport { createAuthMiddleware } from \"better-auth/api\";\nimport { z } from \"zod\";\n\nconst AuthSession = {\n  mfa: z.boolean().optional(),\n  user: z.object({ id: z.string() }),\n};\n\nconst SignedInResult = z.object({\n  method: z.enum([\"password\", \"oauth\", \"magic_link\", \"sso\"]),\n  ...AuthSession,\n});\n\nconst SignedUpResult = z.object({\n  method: z.enum([\"email\", \"oauth\", \"invite\"]),\n  ...AuthSession,\n});\n\ntype SignInMethod = z.infer<typeof SignedInResult>[\"method\"];\ntype SignUpMethod = z.infer<typeof SignedUpResult>[\"method\"];\ntype NativeAfterHook = NonNullable<\n  NonNullable<NativeBetterAuthPlugin[\"hooks\"]>[\"after\"]\n>[number];\ntype MatcherContext = Parameters<NativeAfterHook[\"matcher\"]>[0];\ntype MiddlewareContext = Parameters<\n  Parameters<typeof createAuthMiddleware>[0]\n>[0];\n\nfunction pathOf(context: MatcherContext): string {\n  return typeof context.path === \"string\" ? context.path : \"\";\n}\n\nfunction hasConfirmedSession(context: MatcherContext): boolean {\n  const id = context.context?.newSession?.user.id;\n  return typeof id === \"string\" && id.length > 0;\n}\n\nfunction isRegistration(context: MatcherContext): boolean {\n  const returned = context.context?.returned;\n  if (returned === null || typeof returned !== \"object\") {\n    return false;\n  }\n\n  try {\n    return (returned as { isRegister?: unknown }).isRegister === true;\n  } catch {\n    return false;\n  }\n}\n\nfunction isOAuthCallback(context: MatcherContext): boolean {\n  const path = pathOf(context);\n  return path.startsWith(\"/callback/\") || path.startsWith(\"/oauth2/callback/\");\n}\n\nfunction isEmailSignUp(context: MatcherContext): boolean {\n  return pathOf(context) === \"/sign-up/email\" && hasConfirmedSession(context);\n}\n\nfunction isOAuthSignUp(context: MatcherContext): boolean {\n  return (\n    isOAuthCallback(context) &&\n    hasConfirmedSession(context) &&\n    isRegistration(context)\n  );\n}\n\nfunction isInvitationSignUp(context: MatcherContext): boolean {\n  const path = pathOf(context);\n  return (\n    (path === \"/organization/signup-with-invitation\" ||\n      path.endsWith(\"/signup-with-invitation\")) &&\n    hasConfirmedSession(context)\n  );\n}\n\nfunction isPasswordSignIn(context: MatcherContext): boolean {\n  return (\n    [\"/sign-in/email\", \"/sign-in/username\", \"/sign-in/phone-number\"].includes(\n      pathOf(context),\n    ) && hasConfirmedSession(context)\n  );\n}\n\nfunction isOAuthSignIn(context: MatcherContext): boolean {\n  return (\n    isOAuthCallback(context) &&\n    hasConfirmedSession(context) &&\n    !isRegistration(context)\n  );\n}\n\nfunction isMagicLinkSignIn(context: MatcherContext): boolean {\n  return (\n    pathOf(context) === \"/magic-link/verify\" && hasConfirmedSession(context)\n  );\n}\n\nfunction isSsoSignIn(context: MatcherContext): boolean {\n  const path = pathOf(context);\n  return (\n    (path === \"/sign-in/sso\" ||\n      path.startsWith(\"/sso/callback\") ||\n      path.startsWith(\"/sso/saml2/\")) &&\n    hasConfirmedSession(context)\n  );\n}\n\nfunction isMfaSignIn(context: MatcherContext): boolean {\n  return (\n    [\n      \"/two-factor/verify-totp\",\n      \"/two-factor/verify-otp\",\n      \"/two-factor/verify-backup-code\",\n    ].includes(pathOf(context)) && hasConfirmedSession(context)\n  );\n}\n\nfunction projectSession(context: MiddlewareContext, forceMfa = false) {\n  const session = context.context.newSession;\n  if (!session?.user.id) {\n    return;\n  }\n\n  const configuredMfa = session.user.twoFactorEnabled;\n  const mfa = forceMfa\n    ? true\n    : typeof configuredMfa === \"boolean\"\n      ? configuredMfa\n      : undefined;\n\n  return {\n    user: { id: session.user.id },\n    ...(mfa === undefined ? {} : { mfa }),\n  };\n}\n\nexport const BetterAuthPlugin = plugin({\n  id: \"better-auth\",\n  events: {\n    signed_in: event({\n      id: \"auth.signed_in\",\n      version: 1,\n      schema: SignedInResult,\n      timing: \"instant\",\n      cardinality: \"single\",\n    }),\n    signed_up: event({\n      id: \"auth.signed_up\",\n      version: 1,\n      schema: SignedUpResult,\n      timing: \"instant\",\n      cardinality: \"single\",\n    }),\n  },\n  instrument({ events, record }) {\n    const recordSignedIn = (\n      method: SignInMethod,\n      context: MiddlewareContext,\n      forceMfa = false,\n    ): void => {\n      const session = projectSession(context, forceMfa);\n      if (!session) {\n        return;\n      }\n      record(events.signed_in, { method, ...session });\n    };\n\n    const recordSignedUp = (\n      method: SignUpMethod,\n      context: MiddlewareContext,\n    ): void => {\n      const session = projectSession(context);\n      if (!session) {\n        return;\n      }\n      record(events.signed_up, { method, ...session });\n    };\n\n    return function createBetterAuthAdapter(): NativeBetterAuthPlugin {\n      return {\n        id: \"amplio\",\n        hooks: {\n          after: [\n            {\n              matcher: isEmailSignUp,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedUp(\"email\", context);\n              }),\n            },\n            {\n              matcher: isInvitationSignUp,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedUp(\"invite\", context);\n              }),\n            },\n            {\n              matcher: isOAuthSignUp,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedUp(\"oauth\", context);\n              }),\n            },\n            {\n              matcher: isPasswordSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"password\", context);\n              }),\n            },\n            {\n              matcher: isOAuthSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"oauth\", context);\n              }),\n            },\n            {\n              matcher: isMagicLinkSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"magic_link\", context);\n              }),\n            },\n            {\n              matcher: isSsoSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"sso\", context);\n              }),\n            },\n            {\n              matcher: isMfaSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"password\", context, true);\n              }),\n            },\n          ],\n        },\n      };\n    };\n  },\n});\n"
+    }
+  ]
+}

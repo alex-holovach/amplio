@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createLogger, init, resetConfigForTests } from "../src/index.js";
+import { createLogger, init, resetConfigForTests } from "../src/legacy.js";
 
 const ISO_8601_UTC = /^\d{4}-\d{2}-\d{2}T.*Z$/;
 

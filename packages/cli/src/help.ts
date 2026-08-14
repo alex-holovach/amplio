@@ -1,170 +1,153 @@
-const ALPHA_MD_URL = "https://github.com/alex-holovach/amplio/blob/main/ALPHA.md";
-const T3_MD_URL = "https://github.com/alex-holovach/amplio/blob/main/docs/t3.md";
-
-export { ALPHA_MD_URL, T3_MD_URL };
-
 export function printGlobalHelp(): void {
-  console.log(`amplio — schema-first wide-event telemetry scaffolding
+  console.log(`amplio — open-code Event + Plugin telemetry
 
 Usage:
-  amplio init [options]       Scaffold telemetry/ in your project
-  amplio add <kind> <id>      Add registry item (event, middleware, sink, …)
-  amplio list [kind]          List registry items
-  amplio doctor [options]     Validate wiring and event layout
-  amplio paths                Write the ~telemetry/* tsconfig path alias (nothing else)
-  amplio smoke <url>          Hit a wrapped route and verify an event is emitted (PASS/FAIL)
+  amplio init [options]       Create telemetry/runtime.ts, Events, and detected boundary Plugins
+  amplio add <kind> <id>      Add an Event, Plugin, sink, or enricher
+  amplio diff plugin <slug>   Compare local, installed, and registry Plugin source
+  amplio update plugin <slug> Three-way merge a newer Plugin recipe
+  amplio remove plugin <slug> Safely remove Plugin source and managed wiring
+  amplio list [kind]          List Event + Plugin registry recipes
+  amplio doctor [options]     Validate the vNext telemetry layout
+  amplio paths                Add the ~telemetry/* tsconfig alias
+  amplio smoke <url>          Verify a response and emitted root Event
 
-Commands:
-  init, add, list, doctor, paths, smoke   Run amplio <command> --help for command-specific flags
-
-Global options:
-  --cwd <path>                Project directory (default: .)
-  -h, --help                  Show help (global or per-command)
-  -V, --version               Print version
+Run amplio <command> --help for command-specific options.
 `);
 }
 
 export function printInitHelp(): void {
-  console.log(`amplio init — scaffold telemetry/ in your project
+  console.log(`amplio init — scaffold open-code Event telemetry
 
 Usage:
   amplio init [options]
 
 Options:
   --cwd <path>                 Project directory (default: .)
-  --service <name>             Service name for logger.ts (defaults to package.json name)
+  --service <name>             Service name (defaults to package.json name)
   --package-manager <pm>       pnpm | npm | yarn | bun
-  --no-typescript              Disable TypeScript defaults in amplio.json
-  --middleware <name|none>     Scaffold middleware (auto-detect from package.json)
-  --event <name|none>          Scaffold starter event (defaults to auth.user.signed_up when auto and an auth dependency is detected)
-  --yes                        Non-interactive: auto-scaffold detected middleware + event (auto-wires create-t3-app layouts, applies ~telemetry/* path alias)
-  --skip-install               Skip installing @useamplio/amplio and zod
-  --paths / --no-paths         Write the ~telemetry/* tsconfig path alias (default: on under --yes; standalone: amplio paths)
-  --wire                       Auto-wire create-t3-app files (route handler + tRPC procedures)
-  --verbose                    Stream raw package-manager install output
+  --yes                        Install the detected supported boundary Plugin (Hono in this slice)
+  --skip-install               Do not run the package manager
+  --force                      Overwrite colliding untracked generated files
+  --paths / --no-paths         Add or skip the ~telemetry/* tsconfig alias
+  --verbose                    Stream package-manager output
   -h, --help                   Show this help
 
-Examples:
+Example:
   amplio init --yes --service my-api
-  amplio init --wire --paths
 `);
 }
 
 export function printAddHelp(): void {
-  console.log(`amplio add — install a registry item into telemetry/
+  console.log(`amplio add — add open code to telemetry/
 
 Usage:
-  amplio add event <domain.action or domain.entity.action> [more names…]
-  amplio add middleware <hono|express|next|fastify|trpc>
-  amplio add sink <console|otlp|json>
-  amplio add enricher <service-metadata|request-metadata|query-allowlist>
-  amplio add integration <better-auth|clerk|next-auth|resend|polar>
+  amplio add event <event-id>
+  amplio add plugin hono
+  amplio add plugin resend --event <root-event-id>
+  amplio add sink <console|json|otlp>
+  amplio add enricher service-metadata
 
 Options:
   --cwd <path>                 Project directory (default: .)
-  --force                      Overwrite generated files
-  --dry-run                    Preview what would be created/updated/wired — writes nothing
+  --event <event-id>           Root Event receiving a contributor Plugin subtree
+  --target <relative-source-file>
+                               Select one contained seam or adopt verified Next/Express wiring
+  --source-only                Copy inert Plugin source without composing or wiring it
+  --yes                        Approve the complete Plugin recipe dependency plan
+  --force                      Overwrite an Event or operational recipe
+  --dry-run                    Preview files, dependencies, and rollback boundaries
   -h, --help                   Show this help
 
 Examples:
-  amplio add event post.created
-  amplio add event auth.user.signed_up
-  amplio add event post.created comment.created vote.cast
-  amplio add middleware hono
+  amplio add event order.placed
+  amplio add plugin resend --event http.request
+  amplio add plugin resend --event http.request --target src/email.ts
+  amplio add plugin next --target app/api/health/route.ts
   amplio add sink otlp --dry-run
-`);
-}
 
-export function printDoctorHelp(): void {
-  console.log(`amplio doctor — validate telemetry wiring and event layout
-
-Usage:
-  amplio doctor [options]
-
-Options:
-  --cwd <path>                 Project directory (default: .)
-  --fix                        Regenerate missing barrel exports and prune stale ones
-  --strict                     Exit non-zero on warnings (CI gate)
-  --verbose                    Always print the end-to-end verification epilogue
-  -h, --help                   Show this help
-
-Example:
-  amplio doctor --strict
+Dependency installs roll back tracked package, lock, source, and state files.
+Package-manager cache, node_modules, and dependency lifecycle scripts are not reversible.
 `);
 }
 
 export function printListHelp(): void {
-  console.log(`amplio list — list registry items
+  console.log(`amplio list — list registry recipes
 
 Usage:
-  amplio list [kind]
-
-Kinds:
-  event, middleware, sink, enricher, integration
+  amplio list [event|plugin|sink|enricher]
 
 Options:
   --cwd <path>                 Project directory (default: .)
-  --json                       Print machine-readable JSON (no decorative text)
+  --json                       Print machine-readable JSON
   -h, --help                   Show this help
+`);
+}
 
-Example:
-  amplio list sink --json
+function printPluginLifecycleHelp(command: "diff" | "update" | "remove"): void {
+  const descriptions = {
+    diff: "compare local, installed, and registry Plugin source",
+    update: "three-way merge a newer open-code Plugin recipe",
+    remove: "remove unmodified Plugin source and reverse managed wiring",
+  } as const;
+  console.log(`amplio ${command} plugin — ${descriptions[command]}
+
+Usage:
+  amplio ${command} plugin <slug>
+
+Options:
+  --cwd <path>                 Project directory (default: .)
+  -h, --help                   Show this help
+`);
+}
+
+export function printDoctorHelp(): void {
+  console.log(`amplio doctor — validate Event + Plugin layout
+
+Usage:
+  amplio doctor [--strict] [--verbose]
+
+Options:
+  --cwd <path>                 Project directory (default: .)
+  --strict                     Fail when warnings are present
+  --verbose                    Print migration context on failure
+  -h, --help                   Show this help
 `);
 }
 
 export function printPathsHelp(): void {
-  console.log(`amplio paths — write the ~telemetry/* tsconfig path alias
+  console.log(`amplio paths — add the ~telemetry/* tsconfig alias
 
 Usage:
-  amplio paths
-
-Adds "~telemetry/*": ["./<telemetryDir>/*"] to tsconfig.json compilerOptions.paths
-(JSONC-comment-safe, idempotent). Does not re-run any other init step.
-
-Options:
-  --cwd <path>                 Project directory (default: .)
-  -h, --help                   Show this help
+  amplio paths [--cwd <path>]
 `);
 }
 
 export function printSmokeHelp(): void {
-  console.log(`amplio smoke — end-to-end verification: request in, event out
+  console.log(`amplio smoke — verify one request and emitted root Event
 
 Usage:
-  amplio smoke <url> [options]
+  amplio smoke <url> [--timeout <seconds>] [--cwd <path>]
 
-Makes an HTTP request to <url> (a route wrapped with amplio middleware, dev
-server already running) and watches amplio*.jsonl for a newly emitted row.
-Reports PASS when both the response and an event arrive — a wrong-port curl
-or unwired middleware becomes an explicit FAIL instead of silent nothing.
-
-Requires the JSON file sink (amplio add sink json): the console sink writes to
-the dev server's stdout, which this process cannot observe.
-
-Options:
-  --cwd <path>                 Project directory (default: .)
-  --timeout <seconds>          How long to wait for the response/row (default: 10)
-  -h, --help                   Show this help
-
-Example:
-  amplio smoke 'http://localhost:3000/api/trpc/post.hello?batch=1&input=%7B%7D'
+Requires the JSON sink: amplio add sink json
 `);
 }
 
 const COMMAND_HELP: Record<string, () => void> = {
   init: printInitHelp,
   add: printAddHelp,
-  doctor: printDoctorHelp,
+  diff: () => printPluginLifecycleHelp("diff"),
+  update: () => printPluginLifecycleHelp("update"),
+  remove: () => printPluginLifecycleHelp("remove"),
   list: printListHelp,
+  doctor: printDoctorHelp,
   paths: printPathsHelp,
   smoke: printSmokeHelp,
 };
 
 export function printCommandHelp(command: string): boolean {
   const print = COMMAND_HELP[command];
-  if (!print) {
-    return false;
-  }
+  if (!print) return false;
   print();
   return true;
 }

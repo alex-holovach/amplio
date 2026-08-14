@@ -1,42 +1,61 @@
-export function renderLoggerTemplate(service = "my-app", doctorCommand = "npx @useamplio/cli@alpha doctor"): string {
+export function renderRuntimeTemplate(
+  service = "my-app",
+  doctorCommand = "npx @useamplio/cli@alpha doctor",
+): string {
   return `// Import this module for side effects before any request handling
-// (e.g. \`import "./telemetry/logger"\` or via Next.js instrumentation.ts).
-// emit() before init() is a silent no-op (dev builds warn once).
-// Run \`${doctorCommand}\` to verify wiring.
-import { init, logger } from "@useamplio/amplio";
-import type { LogRecord, Sink } from "@useamplio/amplio";
-
-const consoleJsonSink: Sink = (record: LogRecord) => {
-  console.log(JSON.stringify(record));
-};
+// (e.g. \`import "./telemetry/runtime.js"\` or via Next.js instrumentation.ts).
+// Run \`${doctorCommand}\` to check the tracked telemetry layout.
+import { init } from "@useamplio/amplio";
+import { consoleSink } from "./sinks/console.js";
 
 init({
   service: "${service}",
   env: process.env.NODE_ENV ?? "development",
   enrichers: [],
   // Canonical sampling config — keep all errors, sample 10% of the rest:
-  // sampling: { rate: 0.1, keep: [{ field: "success", equals: false }, { field: "status", gte: 400 }] },
+  // sampling: { rate: 0.1, keep: [{ field: "success", equals: false }, { field: "http.status", gte: 400 }] },
   // see @useamplio/amplio README ## Sampling
-  sinks: [consoleJsonSink],
+  sinks: [consoleSink],
 });
+`;
+}
 
-// Which entry point do I use?
-//   getLogger()                    — inside middleware-wrapped requests: annotate the
-//                                    spine (.set()) or emit domain rows (.child(Def))
-//   logger (below) / logger.create — jobs, crons, one-shot scripts (no request scope)
-//   createRequestLogger            — only when writing your own middleware
-export { logger };
+export function renderConsoleSinkTemplate(): string {
+  return `import type { Sink } from "@useamplio/amplio";
+
+const createJsonReplacer = () => {
+  const ancestors: object[] = [];
+  return function (this: object, _key: string, value: unknown): unknown {
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
+    if (value === null || typeof value !== "object") {
+      return value;
+    }
+    while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
+      ancestors.pop();
+    }
+    if (ancestors.includes(value)) {
+      return "[Circular]";
+    }
+    ancestors.push(value);
+    return value;
+  };
+};
+
+export const consoleSink: Sink = (record) => {
+  console.log(JSON.stringify(record, createJsonReplacer()));
+};
 `;
 }
 
 export function renderAmplioConfig(options: {
   registry?: string;
   packageManager?: string;
-  typescript?: boolean;
+  telemetryDir?: string;
 }): string {
   const config: Record<string, unknown> = {
-    telemetryDir: "telemetry",
-    typescript: options.typescript ?? true,
+    telemetryDir: options.telemetryDir ?? "telemetry",
     packageManager: options.packageManager ?? "pnpm",
   };
 
@@ -47,16 +66,17 @@ export function renderAmplioConfig(options: {
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
-export function renderInstrumentationTemplate(loggerImportPath: string): string {
+export function renderInstrumentationTemplate(
+  runtimeImportPath: string,
+): string {
   return `// Next.js instrumentation hook - runs once when the server boots.
-// Importing telemetry/logger here runs amplio init() before any request;
-// without it, emit() calls are silent no-ops.
+// Importing telemetry/runtime here runs amplio init() before any request.
 export async function register() {
   // Next also compiles this file for the Edge runtime. telemetry/ may pull in
   // node: builtins (e.g. the JSON sink uses node:fs), so only load it on the
   // Node.js runtime — otherwise Turbopack/webpack warn on every compile.
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    await import("${loggerImportPath}");
+    await import("${runtimeImportPath}");
   }
 }
 `;

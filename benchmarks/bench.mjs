@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import { performance } from "node:perf_hooks";
-import { createLogger, init, resetConfigForTests } from "../packages/amplio/dist/index.js";
+import { event, init } from "../packages/amplio/dist/index.js";
 
 const ITERATIONS = 20_000;
 const WARMUP = 1_000;
 
 function percentile(sorted, p) {
   if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1);
+  const idx = Math.min(
+    sorted.length - 1,
+    Math.ceil((p / 100) * sorted.length) - 1,
+  );
   return sorted[idx];
 }
 
@@ -57,7 +60,6 @@ function nested1kbPayload() {
   };
 }
 
-resetConfigForTests();
 init({
   service: "bench",
   env: "test",
@@ -66,16 +68,41 @@ init({
 
 const sample = nested1kbPayload();
 const approxBytes = Buffer.byteLength(JSON.stringify(sample), "utf8");
-console.log(`payload ~${approxBytes} bytes (nested set+emit target)`);
+console.log(`payload ~${approxBytes} bytes (semantic event target)`);
 
-benchLatency("set+emit (flat payload)", () => {
-  createLogger({ request_id: "req_bench", feature: "checkout" })
-    .set({ status: 200, user_id: "u_1" })
-    .emit();
+const ObjectSchema = {
+  "~standard": {
+    version: 1,
+    vendor: "amplio-benchmark",
+    validate: (value) => ({ value }),
+  },
+};
+
+const FlatEvent = event({ id: "bench.flat", version: 1, schema: ObjectSchema });
+const runFlat = FlatEvent.handle((payload) => payload, {
+  input: ({ args: [payload] }) => payload,
 });
 
-const nested = benchLatency("set+emit (nested payload ~1KB)", () => {
-  createLogger({ request_id: "req_bench" }).set(nested1kbPayload()).emit();
+const NestedEvent = event({
+  id: "bench.nested",
+  version: 1,
+  schema: ObjectSchema,
+});
+const runNested = NestedEvent.handle((payload) => payload, {
+  input: ({ args: [payload] }) => payload,
+});
+
+benchLatency("event (flat projection)", () => {
+  runFlat({
+    request_id: "req_bench",
+    feature: "checkout",
+    status: 200,
+    user_id: "u_1",
+  });
+});
+
+const nested = benchLatency("event (nested projection ~1KB)", () => {
+  runNested(nested1kbPayload());
 });
 
 if (!(nested.median >= 0 && nested.p99 >= nested.median)) {

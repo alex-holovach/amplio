@@ -1,46 +1,106 @@
 ---
 title: vs evlog
-description: How amplio compares to evlog, printf logging, and OpenTelemetry traces.
+description: Same wide-event ambition, different ownership and composition model.
 ---
 
-## evlog
+evlog and Amplio both prefer one rich event over scattered prose logs. The main difference is who
+owns semantic state.
 
-**Same wide-event model. Different ownership model.**
+|                        | evlog                                        | Amplio                                             |
+| ---------------------- | -------------------------------------------- | -------------------------------------------------- |
+| Primary interface      | Request-scoped mutable logger context        | Versioned Event definitions and native Plugins     |
+| Application call sites | Add fields during execution                  | Call ordinary functions                            |
+| Shape ownership        | Emerges from mutations across the call graph | Declared in one root Event tree                    |
+| Reuse                  | Shared conventions and logger helpers        | Exact Plugin Event definitions mounted by identity |
+| Lifecycle              | Logger scope and explicit field updates      | Boundary Plugin closes automatically               |
+| Provider semantics     | Caller adds fields around provider use       | Plugin wraps provider construction once            |
 
-| | evlog | amplio |
-|---|---|---|
-| Code location | Closed npm runtime + optional augmentation | Open `telemetry/` in your repo |
-| Event model | Logger methods + modules | Schema-first `defineEvent` + wide events |
-| Install | npm package | CLI scaffolds editable files (shadcn-style) |
-| API surface | `log.info`, plugins, etc. | Frozen: `defineEvent`, `init`, `getLogger`, `.child()`, `.set()` / `.error()` / `.emit()`, `flush()` |
-| After setup | Runtime dependency you update via npm | CLI is removable — only `@useamplio/amplio` stays installed; you keep editing `telemetry/` |
+## evlog style
 
-amplio is **not** evlog. You own the schemas, middleware, sinks, and integrations — they scaffold as readable, typed files under `telemetry/` that you can diff in PRs. The runtime (`@useamplio/amplio`) is ~4.5 KB gzipped with zero runtime dependencies (optional `zod` peer). If you'd rather have telemetry logic updated for you through npm than own it in your repo, a closed runtime is the simpler trade — amplio optimizes for the opposite: telemetry changes go through your code review.
+```ts
+const log = useLogger(event);
 
-## vs printf logging
-
-```typescript
-// ❌ not amplio
-log.info("user signed up", { userId });
-
-// ✅ amplio
-getLogger()
-  .child(AuthUserSignedUp)
-  .set({ user: { id: userId }, signup: { method: "email" } })
-  .emit();
+log.set({
+  user: { id: user.id, plan: user.plan },
+});
 ```
 
-Structured fields come from Zod schemas — not ad-hoc objects.
+This is compact and useful when the code doing the work should directly annotate a request-scoped
+context. The final shape, however, is distributed across every call site that mutates it.
 
-## vs OpenTelemetry traces alone
+## Amplio style
 
-amplio emits **wide events**: one rich JSON record per request or domain action. Traces answer "what happened in this span tree"; wide events answer "what happened in this business unit of work" with schema-validated fields you define.
+The application call remains native:
 
-OTLP sink exports to your collector when you need both.
+```ts
+const payment = await charge(input);
+```
 
-## When to pick amplio
+Open code wraps that exported seam once:
 
-- You want observability code in PRs, not black boxes
-- You prefer one emit per request/job with accumulated context
-- You use shadcn-style registry installs
-- create-t3-app / Hono / Express / Fastify with minimal wiring
+```ts
+export const StripePlugin = plugin({
+  id: "stripe",
+  events: { charges: Charge },
+  instrument({ events, observe }) {
+    return (charge) =>
+      observe(events.charges, charge, {
+        input: ({ args: [input] }) => ({
+          amount_cents: input.amountCents,
+          currency: input.currency,
+        }),
+        result: ({ result }) => ({ payment_id: result.id }),
+      });
+  },
+});
+```
+
+The root declares placement:
+
+```ts
+export const Checkout = event({
+  id: "checkout",
+  version: 1,
+  schema: CheckoutFields,
+  tree: {
+    payments: StripePlugin.events,
+  },
+});
+```
+
+The Plugin can contribute only when its exact definitions are mounted in the active root. It cannot
+write arbitrary fields into an undeclared branch.
+
+## Why Amplio chooses declaration
+
+The Event file answers these questions without running the application:
+
+- Which provider semantics can appear?
+- Where do they appear in the final record?
+- Which schema and wire version govern each node?
+- Is a nested Event timed or instant?
+- Is repetition bounded, and by how much?
+- Which native source owns projection and privacy choices?
+
+This is the same reason schema-first APIs are easier to review than mutable bags: the possible
+output is visible before execution.
+
+## What Plugins cost
+
+Amplio asks for an explicit native seam and editable wrapper source. That is more setup than calling
+`log.set(...)` wherever data is available. It also means a provider without a stable, observable
+seam may need a custom Plugin or may not be a good fit.
+
+The trade is deliberate: more meaning in one reviewed place, less telemetry state in application
+code.
+
+## What both approaches share
+
+- wide events are usually more useful than fragmented prose;
+- stable semantic fields beat parsing messages;
+- errors and latency belong beside business context;
+- privacy requires explicit field selection and redaction;
+- logs and traces can be exported together rather than treated as rivals.
+
+Choose evlog when direct request-scoped annotation is the desired programming model. Choose Amplio
+when application calls should stay ordinary and the repository should declare the full Event tree.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRequestId } from "../src/index.js";
+import { createRequestId } from "../src/legacy.js";
 
 describe("createRequestId", () => {
   it("matches req_<time>_<rand> and is unique", () => {

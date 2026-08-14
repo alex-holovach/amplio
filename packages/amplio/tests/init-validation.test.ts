@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { init, resetConfigForTests, type AmplioConfig } from "../src/index.js";
+import { init, resetConfigForTests, type AmplioConfig } from "../src/legacy.js";
 
 beforeEach(() => {
   resetConfigForTests();

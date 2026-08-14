@@ -1,0 +1,19 @@
+{
+  "extends": "../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "paths": {
+      "@useamplio/amplio": ["../../../src/index.ts"],
+      "@useamplio/amplio/plugin": ["../../../src/plugin.ts"]
+    },
+    "rootDir": "../../..",
+    "types": ["node"]
+  },
+  "include": [
+    "app/**/*.ts",
+    "domain/**/*.ts",
+    "telemetry/**/*.ts",
+    "type-contract/**/*.ts"
+  ]
+}

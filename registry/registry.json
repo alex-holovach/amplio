@@ -5,257 +5,606 @@
   "items": [
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "event-auth-user-signed-up",
-      "title": "Auth User Signed Up",
-      "description": "Wide event when a user completes sign-up.",
+      "name": "event-http-request",
+      "title": "HTTP Request Event",
+      "description": "Root HTTP request Event for framework boundary Plugins.",
       "type": "registry:lib",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16"
       ],
       "files": [
         {
-          "path": "registry/events/auth/user-signed-up.ts",
-          "target": "~/telemetry/events/auth/user-signed-up.ts",
+          "path": "registry/events/http-request.ts",
+          "target": "~/telemetry/events/http-request.ts",
           "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const AuthUserSignedUp = defineEvent(\n  \"auth.user.signed_up\",\n  z.object({\n    user: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    signup: z.object({\n      method: z.enum([\"email\", \"oauth\", \"invite\"]),\n      referrer: z.string().optional(),\n    }),\n  }),\n);\n"
+          "content": "import { event } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n// amplio:plugin-imports\n\nexport const HttpRequest = event({\n  id: \"http.request\",\n  version: 1,\n  schema: z.object({\n    request_id: z.string(),\n    http: z.object({\n      method: z.string(),\n      route: z.string().optional(),\n      status: z.number().int().optional(),\n    }),\n  }),\n  tree: {\n    // amplio:plugins\n  },\n});\n\nexport function resolveRequestId(value: unknown): string {\n  if (typeof value === \"string\" && /^[A-Za-z0-9_-]{1,128}$/.test(value)) {\n    return value;\n  }\n  return crypto.randomUUID();\n}\n"
         }
       ]
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "event-auth-user-signed-in",
-      "title": "Auth User Signed In",
-      "description": "Wide event when a user signs in.",
+      "name": "plugin-hono",
+      "title": "Hono Plugin",
+      "description": "Hono boundary Plugin that closes one HTTP Event per request.",
       "type": "registry:lib",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
+      "dependencies": [
+        "hono@^4.7.4",
+        "@useamplio/amplio@^0.1.0-alpha.16"
+      ],
+      "registryDependencies": [
+        "@useamplio/event-http-request",
+        "@useamplio/runtime"
+      ],
+      "meta": {
+        "amplio": {
+          "kind": "plugin",
+          "role": "boundary",
+          "recipeVersion": "1.0.0",
+          "coreRange": ">=0.1.0-alpha.16 <1",
+          "providerRanges": {
+            "hono": ">=4 <5"
+          },
+          "testedProviderVersions": {
+            "hono": {
+              "minimum": "4.0.0",
+              "latest": "4.13.2"
+            }
+          },
+          "events": [
+            {
+              "id": "http.request",
+              "version": 1,
+              "semanticDigest": "sha256-0907ef8a9cc8957a6e1b7fc6038d832319dc7a0c2f2b32764d6e2e9fb4f474ce"
+            }
+          ],
+          "semanticDigest": "sha256-166a77128834d0958ea50d1aa95bd768dda65c16e43d55076383bcd5ea4994c8",
+          "nativeTransform": {
+            "version": 1,
+            "digest": "sha256-36c04f03711637ebaa16746836cbff4fec1e28660f65c30f6deafd81ef689b51"
+          },
+          "wiringActions": [
+            {
+              "type": "register-boundary",
+              "export": "HonoPlugin",
+              "description": "Register before Hono routes with app.use."
+            }
+          ],
+          "privacy": {
+            "includes": [
+              "request_id",
+              "http.method",
+              "http.route",
+              "http.status"
+            ],
+            "excludes": [
+              "url",
+              "path",
+              "query",
+              "headers",
+              "cookies",
+              "body"
+            ]
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "registry/plugins/hono.ts",
+          "target": "~/telemetry/plugins/hono.ts",
+          "type": "registry:lib",
+          "content": "import \"../runtime.js\";\n\nimport type { Context, MiddlewareHandler, Next } from \"hono\";\nimport { HttpRequest, resolveRequestId } from \"../events/http-request.js\";\n\nconst handleRequest = HttpRequest.handle(\n  async (context: Context, next: Next) => {\n    await next();\n  },\n  {\n    input: ({ args: [context] }) => ({\n      request_id: resolveRequestId(context.req.header(\"x-request-id\")),\n      http: { method: context.req.method },\n    }),\n    result: ({ args: [context] }) => ({\n      http: {\n        route: context.req.routePath || undefined,\n        status: context.res.status,\n      },\n    }),\n    success: ({ args: [context] }) => context.res.status < 400,\n    error: ({ args: [context] }) => ({\n      http: {\n        route: context.req.routePath || undefined,\n      },\n    }),\n  },\n);\n\n/** Hono boundary Plugin: application handlers remain ordinary Hono handlers. */\nexport function HonoPlugin(): MiddlewareHandler {\n  return handleRequest;\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "plugin-express",
+      "title": "Express Plugin",
+      "description": "Express boundary Plugin spanning callbacks through the final response.",
+      "type": "registry:lib",
+      "dependencies": [
+        "express@^4.21.2",
+        "@useamplio/amplio@^0.1.0-alpha.16"
+      ],
+      "devDependencies": [
+        "@types/express@^5.0.0"
+      ],
+      "registryDependencies": [
+        "@useamplio/event-http-request",
+        "@useamplio/runtime"
+      ],
+      "meta": {
+        "amplio": {
+          "kind": "plugin",
+          "role": "boundary",
+          "recipeVersion": "1.0.0",
+          "coreRange": ">=0.1.0-alpha.16 <1",
+          "providerRanges": {
+            "express": ">=4 <6"
+          },
+          "testedProviderVersions": {
+            "express": {
+              "minimum": "4.0.0",
+              "latest": "5.2.1"
+            }
+          },
+          "events": [
+            {
+              "id": "http.request",
+              "version": 1,
+              "semanticDigest": "sha256-0907ef8a9cc8957a6e1b7fc6038d832319dc7a0c2f2b32764d6e2e9fb4f474ce"
+            }
+          ],
+          "semanticDigest": "sha256-166a77128834d0958ea50d1aa95bd768dda65c16e43d55076383bcd5ea4994c8",
+          "nativeTransform": {
+            "version": 1,
+            "digest": "sha256-0cb2e85dd906bcba34bc6bc7b24023d437ec5842eb443d157db6774c6969bf0d"
+          },
+          "wiringActions": [
+            {
+              "type": "register-boundary",
+              "export": "withAmplioRoute",
+              "description": "Spread the returned route layers before ordinary Express handlers."
+            }
+          ],
+          "privacy": {
+            "includes": [
+              "request_id",
+              "http.method",
+              "http.route",
+              "http.status"
+            ],
+            "excludes": [
+              "url",
+              "path",
+              "query",
+              "headers",
+              "cookies",
+              "body"
+            ]
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "registry/plugins/express.ts",
+          "target": "~/telemetry/plugins/express.ts",
+          "type": "registry:lib",
+          "content": "import \"../runtime.js\";\n\nimport { openEvent, type EventScope } from \"@useamplio/amplio/plugin\";\nimport type { ErrorRequestHandler, RequestHandler } from \"express\";\nimport { HttpRequest, resolveRequestId } from \"../events/http-request.js\";\n\ninterface PendingRequest {\n  readonly scope: EventScope<typeof HttpRequest>;\n  error?: unknown;\n  settled: boolean;\n}\n\n/**\n * Put the boundary first by spreading every returned route layer.\n * All supplied middleware and the final response lifecycle stay in one Event.\n */\nexport function withAmplioRoute(\n  route: string,\n  ...handlers: RequestHandler[]\n): Array<RequestHandler | ErrorRequestHandler> {\n  const pending = new WeakMap<object, PendingRequest>();\n\n  const boundary: RequestHandler = (request, response, next) => {\n    const scope = openEvent(HttpRequest, {\n      request_id: resolveRequestId(request.get(\"x-request-id\")),\n      http: { method: request.method, route },\n    });\n    const state: PendingRequest = { scope, settled: false };\n    pending.set(request, state);\n\n    const settle = (closedEarly: boolean) => {\n      if (state.settled) return;\n      state.settled = true;\n      response.off(\"finish\", onFinish);\n      response.off(\"close\", onClose);\n      pending.delete(request);\n      const output = {\n        http: { route, status: response.statusCode },\n      };\n      if (state.error !== undefined) {\n        scope.fail(state.error, output);\n      } else if (closedEarly && !response.writableFinished) {\n        scope.update(output);\n        scope.cancel(\"response_closed\");\n      } else {\n        scope.finish(output, { success: response.statusCode < 400 });\n      }\n    };\n    const onFinish = scope.bind(() => settle(false));\n    const onClose = scope.bind(() => settle(true));\n    response.once(\"finish\", onFinish);\n    response.once(\"close\", onClose);\n\n    scope.run(() => {\n      try {\n        next();\n      } catch (error) {\n        state.error = error;\n        next(error);\n      }\n    });\n    if (response.writableFinished || response.destroyed) {\n      settle(response.destroyed && !response.writableFinished);\n    }\n  };\n\n  const captureError: ErrorRequestHandler = (\n    error,\n    request,\n    _response,\n    next,\n  ) => {\n    const state = pending.get(request);\n    if (state && error !== \"route\" && error !== \"router\") {\n      state.error = error;\n    }\n    next(error);\n  };\n\n  return [boundary, ...handlers, captureError];\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "plugin-fastify",
+      "title": "Fastify Plugin",
+      "description": "Fastify boundary Plugin spanning request hooks through final onResponse status.",
+      "type": "registry:lib",
+      "dependencies": [
+        "fastify@^5.2.1",
+        "@useamplio/amplio@^0.1.0-alpha.16"
+      ],
+      "registryDependencies": [
+        "@useamplio/event-http-request",
+        "@useamplio/runtime"
+      ],
+      "meta": {
+        "amplio": {
+          "kind": "plugin",
+          "role": "boundary",
+          "recipeVersion": "1.0.0",
+          "coreRange": ">=0.1.0-alpha.16 <1",
+          "providerRanges": {
+            "fastify": ">=5 <6"
+          },
+          "testedProviderVersions": {
+            "fastify": {
+              "minimum": "5.0.0",
+              "latest": "5.12.0"
+            }
+          },
+          "events": [
+            {
+              "id": "http.request",
+              "version": 1,
+              "semanticDigest": "sha256-0907ef8a9cc8957a6e1b7fc6038d832319dc7a0c2f2b32764d6e2e9fb4f474ce"
+            }
+          ],
+          "semanticDigest": "sha256-166a77128834d0958ea50d1aa95bd768dda65c16e43d55076383bcd5ea4994c8",
+          "nativeTransform": {
+            "version": 1,
+            "digest": "sha256-cfebb520d2e7c9f1b35cb0569a8a9c8babd2183e7b5a711876ae52541cbd8698"
+          },
+          "wiringActions": [
+            {
+              "type": "register-boundary",
+              "export": "FastifyPlugin",
+              "description": "Register once before ordinary Fastify routes."
+            }
+          ],
+          "privacy": {
+            "includes": [
+              "request_id",
+              "http.method",
+              "http.route",
+              "http.status"
+            ],
+            "excludes": [
+              "url",
+              "path",
+              "query",
+              "headers",
+              "cookies",
+              "body"
+            ]
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "registry/plugins/fastify.ts",
+          "target": "~/telemetry/plugins/fastify.ts",
+          "type": "registry:lib",
+          "content": "import \"../runtime.js\";\n\nimport { openEvent, type EventScope } from \"@useamplio/amplio/plugin\";\nimport type { FastifyError, FastifyPluginAsync, FastifyRequest } from \"fastify\";\nimport { HttpRequest, resolveRequestId } from \"../events/http-request.js\";\n\ninterface PendingRequest {\n  readonly scope: EventScope<typeof HttpRequest>;\n  error?: FastifyError;\n}\n\n/** Register once before routes; ordinary Fastify handlers remain untouched. */\nconst implementation: FastifyPluginAsync = async (app) => {\n  const pending = new WeakMap<FastifyRequest, PendingRequest>();\n\n  app.addHook(\"onRequest\", (request, _reply, done) => {\n    const scope = openEvent(HttpRequest, {\n      request_id: resolveRequestId(request.headers[\"x-request-id\"]),\n      http: { method: request.method },\n    });\n    pending.set(request, { scope });\n    scope.run(done);\n  });\n\n  app.addHook(\"onError\", (request, _reply, error, done) => {\n    const state = pending.get(request);\n    if (state) state.error = error;\n    done();\n  });\n\n  app.addHook(\"onResponse\", (request, reply, done) => {\n    const state = pending.get(request);\n    pending.delete(request);\n    if (state) {\n      const output = {\n        http: {\n          route: request.routeOptions.url,\n          status: reply.statusCode,\n        },\n      };\n      if (state.error) state.scope.fail(state.error, output);\n      else {\n        state.scope.finish(output, { success: reply.statusCode < 400 });\n      }\n    }\n    done();\n  });\n\n  app.addHook(\"onRequestAbort\", (request, done) => {\n    const state = pending.get(request);\n    pending.delete(request);\n    if (state) {\n      state.scope.update({\n        http: { route: request.routeOptions.url },\n      });\n      state.scope.cancel(\"request_aborted\");\n    }\n    done();\n  });\n};\n\n// Fastify uses this documented symbol to expose lifecycle hooks outside the\n// registration scope, which is exactly what a composition-root Plugin needs.\nObject.defineProperties(implementation, {\n  [Symbol.for(\"skip-override\")]: { value: true },\n  [Symbol.for(\"fastify.display-name\")]: { value: \"amplio-fastify\" },\n});\n\nexport const FastifyPlugin = implementation;\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "plugin-next",
+      "title": "Next.js Plugin",
+      "description": "Next.js route-handler boundary Plugin preserving Response identity.",
+      "type": "registry:lib",
+      "dependencies": [
+        "next@^15.2.4",
+        "@useamplio/amplio@^0.1.0-alpha.16"
+      ],
+      "registryDependencies": [
+        "@useamplio/event-http-request",
+        "@useamplio/runtime"
+      ],
+      "meta": {
+        "amplio": {
+          "kind": "plugin",
+          "role": "boundary",
+          "recipeVersion": "1.0.0",
+          "coreRange": ">=0.1.0-alpha.16 <1",
+          "providerRanges": {
+            "next": ">=15 <17"
+          },
+          "testedProviderVersions": {
+            "next": {
+              "minimum": "15.0.0",
+              "latest": "16.3.1"
+            }
+          },
+          "events": [
+            {
+              "id": "http.request",
+              "version": 1,
+              "semanticDigest": "sha256-0907ef8a9cc8957a6e1b7fc6038d832319dc7a0c2f2b32764d6e2e9fb4f474ce"
+            }
+          ],
+          "semanticDigest": "sha256-166a77128834d0958ea50d1aa95bd768dda65c16e43d55076383bcd5ea4994c8",
+          "nativeTransform": {
+            "version": 1,
+            "digest": "sha256-9e3f0302a38f2d0aaced6f8a7f5f967cbc910fa271a4a8039ee19c9ab803fbd0"
+          },
+          "wiringActions": [
+            {
+              "type": "wrap-boundary",
+              "export": "withAmplio",
+              "description": "Wrap a route handler and optionally supply a stable semantic route."
+            }
+          ],
+          "privacy": {
+            "includes": [
+              "request_id",
+              "http.method",
+              "http.route",
+              "http.status"
+            ],
+            "excludes": [
+              "url",
+              "path",
+              "query",
+              "headers",
+              "cookies",
+              "body"
+            ]
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "registry/plugins/next.ts",
+          "target": "~/telemetry/plugins/next.ts",
+          "type": "registry:lib",
+          "content": "import \"../runtime.js\";\n\nimport type { NextRequest } from \"next/server\";\nimport { HttpRequest, resolveRequestId } from \"../events/http-request.js\";\n\ntype NextHandler = (\n  request: NextRequest,\n  ...args: any[]\n) => Response | Promise<Response>;\n\nexport function withAmplio<F extends NextHandler>(\n  route: string,\n  handler: F,\n): F {\n  return HttpRequest.handle(handler, {\n    input: ({ args: [request] }) => ({\n      request_id: resolveRequestId(request.headers.get(\"x-request-id\")),\n      http: {\n        method: request.method,\n        route,\n      },\n    }),\n    result: ({ result }) => ({\n      http: { status: result.status },\n    }),\n    success: ({ result }) => result.status < 400,\n  });\n}\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "plugin-trpc",
+      "title": "tRPC Plugin",
+      "description": "tRPC contributor Plugin recording nested query and mutation duration Events while leaving subscriptions unchanged.",
+      "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16",
+        "@trpc/server@^11.0.0"
       ],
+      "meta": {
+        "amplio": {
+          "kind": "plugin",
+          "role": "contributor",
+          "recipeVersion": "1.0.0",
+          "coreRange": ">=0.1.0-alpha.16 <1",
+          "providerRanges": {
+            "@trpc/server": ">=11 <12"
+          },
+          "testedProviderVersions": {
+            "@trpc/server": {
+              "minimum": "11.0.0",
+              "latest": "11.18.0"
+            }
+          },
+          "events": [
+            {
+              "id": "trpc.procedure",
+              "version": 1,
+              "semanticDigest": "sha256-d7284786798beac2d0f885995c88004e91824f0c0fd3830624b2182097cf3dd4"
+            }
+          ],
+          "semanticDigest": "sha256-72ec8ead1a474da39797076f69fae3c0512d0f3a70ceaacbd19358c318d75b4c",
+          "nativeTransform": {
+            "version": 1,
+            "digest": "sha256-e8becd5f52821d024ce3fe89ebaaf86d25a8fd8f98801f3771e8b1f2379da552"
+          },
+          "placement": {
+            "branch": "rpc"
+          },
+          "provider": {
+            "package": "@trpc/server",
+            "instrumenter": "TrpcPlugin",
+            "seam": "trpc-middleware",
+            "initializer": "initTRPC"
+          },
+          "wiringActions": [
+            {
+              "type": "mount-event-subtree",
+              "description": "Mount TrpcPlugin.events under the rpc branch."
+            },
+            {
+              "type": "register-contributor",
+              "export": "TrpcPlugin",
+              "description": "Register with the application's ordinary tRPC middleware builder."
+            }
+          ],
+          "privacy": {
+            "includes": [
+              "path",
+              "type",
+              "duration_ms",
+              "success"
+            ],
+            "excludes": [
+              "input",
+              "output",
+              "context",
+              "headers",
+              "auth",
+              "session",
+              "tokens",
+              "error message",
+              "stack"
+            ]
+          }
+        }
+      },
       "files": [
         {
-          "path": "registry/events/auth/user-signed-in.ts",
-          "target": "~/telemetry/events/auth/user-signed-in.ts",
+          "path": "registry/plugins/trpc.ts",
+          "target": "~/telemetry/plugins/trpc.ts",
           "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const AuthUserSignedIn = defineEvent(\n  \"auth.user.signed_in\",\n  z.object({\n    user: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    session: z.object({\n      // Optional: auth providers fire sign-in events before a session row exists\n      // (NextAuth `events.signIn`, Clerk webhooks, Better Auth hooks).\n      id: z.string().optional(),\n      method: z.enum([\"password\", \"oauth\", \"magic_link\", \"sso\"]),\n      mfa: z.boolean().optional(),\n    }),\n  }),\n);\n"
+          "content": "import { event } from \"@useamplio/amplio\";\nimport { plugin } from \"@useamplio/amplio/plugin\";\nimport { z } from \"zod\";\n\ntype TrpcProcedureType = \"query\" | \"mutation\" | \"subscription\";\ntype TrpcFailure = { ok: false; error: unknown };\n\nconst TrpcProcedure = event({\n  id: \"trpc.procedure\",\n  version: 1,\n  schema: z.object({\n    path: z.string(),\n    type: z.enum([\"query\", \"mutation\"]),\n  }),\n  timing: \"duration\",\n  cardinality: { many: { max: 64 } },\n});\n\nfunction isFailure(value: unknown): value is TrpcFailure {\n  try {\n    return (\n      typeof value === \"object\" &&\n      value !== null &&\n      \"ok\" in value &&\n      value.ok === false &&\n      \"error\" in value\n    );\n  } catch {\n    return false;\n  }\n}\n\nexport const TrpcPlugin = plugin({\n  id: \"trpc\",\n  events: { procedures: TrpcProcedure },\n  instrument({ events, begin }) {\n    return function trpcMiddleware() {\n      return <Result>(options: {\n        path: string;\n        type: TrpcProcedureType;\n        next: () => Promise<Result>;\n      }): Promise<Result> => {\n        // The middleware promise only represents subscription setup, not the\n        // stream's lifetime. Preserve it exactly rather than claiming false\n        // duration or completion semantics.\n        if (options.type === \"subscription\") return options.next();\n\n        const observation = begin(events.procedures, {\n          path: options.path,\n          type: options.type,\n        });\n        return observation.run(async () => {\n          try {\n            const result = await options.next();\n            if (isFailure(result)) observation.fail(result.error);\n            else observation.end();\n            return result;\n          } catch (error) {\n            observation.fail(error);\n            throw error;\n          }\n        });\n      };\n    };\n  },\n});\n"
         }
       ]
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "event-email-sent",
-      "title": "Email Sent",
-      "description": "Wide event when an email is sent.",
+      "name": "plugin-better-auth",
+      "title": "Better Auth Plugin",
+      "description": "Better Auth contributor Plugin using native after hooks for privacy-safe sign-in and sign-up semantics.",
       "type": "registry:lib",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16",
+        "better-auth@^1.2.1"
       ],
+      "meta": {
+        "amplio": {
+          "kind": "plugin",
+          "role": "contributor",
+          "recipeVersion": "1.0.0",
+          "coreRange": ">=0.1.0-alpha.16 <1",
+          "providerRanges": {
+            "better-auth": ">=1.2.1 <2"
+          },
+          "testedProviderVersions": {
+            "better-auth": {
+              "minimum": "1.2.1",
+              "latest": "1.6.28"
+            }
+          },
+          "events": [
+            {
+              "id": "auth.signed_in",
+              "version": 1,
+              "semanticDigest": "sha256-7c4951acd47710af6a59a78d2c4c4c4f7da7839b4517ed3a0ab0bbcc83ef713d"
+            },
+            {
+              "id": "auth.signed_up",
+              "version": 1,
+              "semanticDigest": "sha256-75a6b7a8da5b33cd9ec6807605809eb3e3e80271b7192bdb5852ec5db8d955db"
+            }
+          ],
+          "semanticDigest": "sha256-4de99fed1bebece9ce6fb99080383a3216f91285b491ea8fe87d04febfa77240",
+          "nativeTransform": {
+            "version": 1,
+            "digest": "sha256-d36cf41cf89c24d512f25c9697e86e0c9b4e3055f7f26070962dc11eaa636d61"
+          },
+          "placement": {
+            "branch": "auth"
+          },
+          "provider": {
+            "package": "better-auth",
+            "instrumenter": "BetterAuthPlugin",
+            "seam": "better-auth-plugin",
+            "factory": "betterAuth"
+          },
+          "wiringActions": [
+            {
+              "type": "mount-event-subtree",
+              "description": "Mount BetterAuthPlugin.events under the auth branch."
+            },
+            {
+              "type": "register-native-plugin",
+              "export": "BetterAuthPlugin",
+              "description": "Append BetterAuthPlugin() to one unambiguous betterAuth plugins array."
+            }
+          ],
+          "privacy": {
+            "includes": [
+              "method",
+              "user.id",
+              "mfa"
+            ],
+            "excludes": [
+              "email",
+              "session id",
+              "tokens",
+              "headers",
+              "body",
+              "callback url"
+            ]
+          }
+        }
+      },
       "files": [
         {
-          "path": "registry/events/email/sent.ts",
-          "target": "~/telemetry/events/email/sent.ts",
+          "path": "registry/plugins/better-auth.ts",
+          "target": "~/telemetry/plugins/better-auth.ts",
           "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const EmailSent = defineEvent(\n  \"email.sent\",\n  z.object({\n    email: z.object({\n      id: z.string(),\n      template: z.string(),\n      to: z.string().email(),\n      subject: z.string(),\n    }),\n    delivery: z.object({\n      provider: z.enum([\"resend\", \"sendgrid\", \"ses\", \"postmark\", \"other\"]),\n      status: z.enum([\"queued\", \"sent\", \"failed\"]),\n    }),\n  }),\n);\n"
+          "content": "import { event } from \"@useamplio/amplio\";\nimport { plugin } from \"@useamplio/amplio/plugin\";\nimport type { BetterAuthPlugin as NativeBetterAuthPlugin } from \"better-auth\";\nimport { createAuthMiddleware } from \"better-auth/api\";\nimport { z } from \"zod\";\n\nconst AuthSession = {\n  mfa: z.boolean().optional(),\n  user: z.object({ id: z.string() }),\n};\n\nconst SignedInResult = z.object({\n  method: z.enum([\"password\", \"oauth\", \"magic_link\", \"sso\"]),\n  ...AuthSession,\n});\n\nconst SignedUpResult = z.object({\n  method: z.enum([\"email\", \"oauth\", \"invite\"]),\n  ...AuthSession,\n});\n\ntype SignInMethod = z.infer<typeof SignedInResult>[\"method\"];\ntype SignUpMethod = z.infer<typeof SignedUpResult>[\"method\"];\ntype NativeAfterHook = NonNullable<\n  NonNullable<NativeBetterAuthPlugin[\"hooks\"]>[\"after\"]\n>[number];\ntype MatcherContext = Parameters<NativeAfterHook[\"matcher\"]>[0];\ntype MiddlewareContext = Parameters<\n  Parameters<typeof createAuthMiddleware>[0]\n>[0];\n\nfunction pathOf(context: MatcherContext): string {\n  return typeof context.path === \"string\" ? context.path : \"\";\n}\n\nfunction hasConfirmedSession(context: MatcherContext): boolean {\n  const id = context.context?.newSession?.user.id;\n  return typeof id === \"string\" && id.length > 0;\n}\n\nfunction isRegistration(context: MatcherContext): boolean {\n  const returned = context.context?.returned;\n  if (returned === null || typeof returned !== \"object\") {\n    return false;\n  }\n\n  try {\n    return (returned as { isRegister?: unknown }).isRegister === true;\n  } catch {\n    return false;\n  }\n}\n\nfunction isOAuthCallback(context: MatcherContext): boolean {\n  const path = pathOf(context);\n  return path.startsWith(\"/callback/\") || path.startsWith(\"/oauth2/callback/\");\n}\n\nfunction isEmailSignUp(context: MatcherContext): boolean {\n  return pathOf(context) === \"/sign-up/email\" && hasConfirmedSession(context);\n}\n\nfunction isOAuthSignUp(context: MatcherContext): boolean {\n  return (\n    isOAuthCallback(context) &&\n    hasConfirmedSession(context) &&\n    isRegistration(context)\n  );\n}\n\nfunction isInvitationSignUp(context: MatcherContext): boolean {\n  const path = pathOf(context);\n  return (\n    (path === \"/organization/signup-with-invitation\" ||\n      path.endsWith(\"/signup-with-invitation\")) &&\n    hasConfirmedSession(context)\n  );\n}\n\nfunction isPasswordSignIn(context: MatcherContext): boolean {\n  return (\n    [\"/sign-in/email\", \"/sign-in/username\", \"/sign-in/phone-number\"].includes(\n      pathOf(context),\n    ) && hasConfirmedSession(context)\n  );\n}\n\nfunction isOAuthSignIn(context: MatcherContext): boolean {\n  return (\n    isOAuthCallback(context) &&\n    hasConfirmedSession(context) &&\n    !isRegistration(context)\n  );\n}\n\nfunction isMagicLinkSignIn(context: MatcherContext): boolean {\n  return (\n    pathOf(context) === \"/magic-link/verify\" && hasConfirmedSession(context)\n  );\n}\n\nfunction isSsoSignIn(context: MatcherContext): boolean {\n  const path = pathOf(context);\n  return (\n    (path === \"/sign-in/sso\" ||\n      path.startsWith(\"/sso/callback\") ||\n      path.startsWith(\"/sso/saml2/\")) &&\n    hasConfirmedSession(context)\n  );\n}\n\nfunction isMfaSignIn(context: MatcherContext): boolean {\n  return (\n    [\n      \"/two-factor/verify-totp\",\n      \"/two-factor/verify-otp\",\n      \"/two-factor/verify-backup-code\",\n    ].includes(pathOf(context)) && hasConfirmedSession(context)\n  );\n}\n\nfunction projectSession(context: MiddlewareContext, forceMfa = false) {\n  const session = context.context.newSession;\n  if (!session?.user.id) {\n    return;\n  }\n\n  const configuredMfa = session.user.twoFactorEnabled;\n  const mfa = forceMfa\n    ? true\n    : typeof configuredMfa === \"boolean\"\n      ? configuredMfa\n      : undefined;\n\n  return {\n    user: { id: session.user.id },\n    ...(mfa === undefined ? {} : { mfa }),\n  };\n}\n\nexport const BetterAuthPlugin = plugin({\n  id: \"better-auth\",\n  events: {\n    signed_in: event({\n      id: \"auth.signed_in\",\n      version: 1,\n      schema: SignedInResult,\n      timing: \"instant\",\n      cardinality: \"single\",\n    }),\n    signed_up: event({\n      id: \"auth.signed_up\",\n      version: 1,\n      schema: SignedUpResult,\n      timing: \"instant\",\n      cardinality: \"single\",\n    }),\n  },\n  instrument({ events, record }) {\n    const recordSignedIn = (\n      method: SignInMethod,\n      context: MiddlewareContext,\n      forceMfa = false,\n    ): void => {\n      const session = projectSession(context, forceMfa);\n      if (!session) {\n        return;\n      }\n      record(events.signed_in, { method, ...session });\n    };\n\n    const recordSignedUp = (\n      method: SignUpMethod,\n      context: MiddlewareContext,\n    ): void => {\n      const session = projectSession(context);\n      if (!session) {\n        return;\n      }\n      record(events.signed_up, { method, ...session });\n    };\n\n    return function createBetterAuthAdapter(): NativeBetterAuthPlugin {\n      return {\n        id: \"amplio\",\n        hooks: {\n          after: [\n            {\n              matcher: isEmailSignUp,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedUp(\"email\", context);\n              }),\n            },\n            {\n              matcher: isInvitationSignUp,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedUp(\"invite\", context);\n              }),\n            },\n            {\n              matcher: isOAuthSignUp,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedUp(\"oauth\", context);\n              }),\n            },\n            {\n              matcher: isPasswordSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"password\", context);\n              }),\n            },\n            {\n              matcher: isOAuthSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"oauth\", context);\n              }),\n            },\n            {\n              matcher: isMagicLinkSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"magic_link\", context);\n              }),\n            },\n            {\n              matcher: isSsoSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"sso\", context);\n              }),\n            },\n            {\n              matcher: isMfaSignIn,\n              handler: createAuthMiddleware(async (context) => {\n                recordSignedIn(\"password\", context, true);\n              }),\n            },\n          ],\n        },\n      };\n    };\n  },\n});\n"
         }
       ]
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "event-payment-order-paid",
-      "title": "Payment Order Paid",
-      "description": "Wide event when a payment order is paid.",
+      "name": "plugin-resend",
+      "title": "Resend Plugin",
+      "description": "Resend contributor Plugin with privacy-safe email send observations.",
       "type": "registry:lib",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16",
+        "resend@^4.0.0"
       ],
+      "meta": {
+        "amplio": {
+          "kind": "plugin",
+          "role": "contributor",
+          "recipeVersion": "1.0.0",
+          "coreRange": ">=0.1.0-alpha.16 <1",
+          "providerRanges": {
+            "resend": ">=4 <5"
+          },
+          "testedProviderVersions": {
+            "resend": {
+              "minimum": "4.0.0",
+              "latest": "4.8.0"
+            }
+          },
+          "events": [
+            {
+              "id": "resend.send",
+              "version": 1,
+              "semanticDigest": "sha256-a584ae1d4271e1d66aff88023c4a3cbcdf7a553b07d4806cc5fc666e4b1d65d6"
+            }
+          ],
+          "semanticDigest": "sha256-af3ba6042e49d7f409c84e27d8b4879149c4ba80798b678aad737885495684c3",
+          "nativeTransform": {
+            "version": 1,
+            "digest": "sha256-7b08f30df112ead1709ebe03ed0f998b82530f21f97eae74a99ee232d3abaa52"
+          },
+          "placement": {
+            "branch": "email"
+          },
+          "provider": {
+            "package": "resend",
+            "constructor": "Resend",
+            "instrumenter": "ResendPlugin",
+            "seam": "constructor"
+          },
+          "wiringActions": [
+            {
+              "type": "wrap-constructor",
+              "description": "Wrap one unambiguous new Resend(...) composition root."
+            },
+            {
+              "type": "mount-event-subtree",
+              "description": "Mount ResendPlugin.events under the email branch."
+            }
+          ],
+          "privacy": {
+            "includes": [
+              "provider",
+              "template"
+            ],
+            "excludes": [
+              "to",
+              "cc",
+              "bcc",
+              "from",
+              "subject",
+              "html",
+              "text",
+              "react",
+              "key"
+            ]
+          }
+        }
+      },
       "files": [
         {
-          "path": "registry/events/payment/order-paid.ts",
-          "target": "~/telemetry/events/payment/order-paid.ts",
+          "path": "registry/plugins/resend.ts",
+          "target": "~/telemetry/plugins/resend.ts",
           "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PaymentOrderPaid = defineEvent(\n  \"payment.order.paid\",\n  z.object({\n    order: z.object({\n      id: z.string(),\n      currency: z.string().length(3),\n      amount_cents: z.number().int().nonnegative(),\n    }),\n    customer: z.object({\n      id: z.string(),\n      email: z.string().email().optional(),\n    }),\n    payment: z.object({\n      provider: z.enum([\"stripe\", \"polar\", \"paddle\", \"other\"]),\n      method: z.enum([\"card\", \"bank\", \"wallet\", \"other\"]).optional(),\n    }),\n  }),\n);\n"
+          "content": "import { event } from \"@useamplio/amplio\";\nimport { plugin } from \"@useamplio/amplio/plugin\";\nimport type { CreateEmailOptions, Resend } from \"resend\";\nimport { z } from \"zod\";\n\nconst ResendSend = event({\n  id: \"resend.send\",\n  version: 1,\n  schema: z.object({\n    provider: z.literal(\"resend\"),\n    template: z.string().optional(),\n  }),\n  timing: \"duration\",\n  cardinality: { many: { max: 16 } },\n});\n\nconst templateTag = (input: CreateEmailOptions): string | undefined =>\n  input.tags?.find((tag) => tag.name === \"template\")?.value;\n\nconst instrumentedClients = new WeakSet<Resend>();\n\nexport const ResendPlugin = plugin({\n  id: \"resend\",\n  events: { sends: ResendSend },\n  instrument({ events, observe }) {\n    return <Client extends Resend>(client: Client): Client => {\n      if (instrumentedClients.has(client)) {\n        return client;\n      }\n\n      const send = client.emails.send.bind(client.emails);\n      client.emails.send = observe(events.sends, send, {\n        input: ({ args: [input] }) => {\n          const template = templateTag(input);\n          return {\n            provider: \"resend\",\n            ...(template ? { template } : {}),\n          };\n        },\n        success: ({ result }) => result.error === null,\n      });\n      instrumentedClients.add(client);\n      return client;\n    };\n  },\n});\n"
         }
       ]
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "event-page-viewed",
-      "title": "Page Viewed",
-      "description": "Wide event when a page is viewed (path only — query strings stay out).",
+      "name": "runtime",
+      "title": "Runtime",
+      "description": "Init-only Amplio runtime configuration.",
       "type": "registry:lib",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
       "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16"
+      ],
+      "registryDependencies": [
+        "@useamplio/sink-console"
       ],
       "files": [
         {
-          "path": "registry/events/page/viewed.ts",
-          "target": "~/telemetry/events/page/viewed.ts",
+          "path": "registry/runtime.ts",
+          "target": "~/telemetry/runtime.ts",
           "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PageViewed = defineEvent(\n  \"page.viewed\",\n  z.object({\n    page: z.object({\n      // Pathname only (\"/pricing\") — query strings carry PII; if you need a\n      // param, add it as its own typed field instead.\n      path: z.string(),\n      title: z.string().optional(),\n      referrer: z.string().optional(),\n    }),\n    visitor: z\n      .object({\n        // Authenticated user id or anonymous visitor id — whichever you have.\n        // Optional so \"anonymous, but I know it's unauthenticated\" is valid:\n        //   visitor: { authenticated: false }\n        id: z.string().optional(),\n        authenticated: z.boolean().optional(),\n      })\n      .optional(),\n  }),\n);\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "event-job-completed",
-      "title": "Job Completed",
-      "description": "Wide event when a background job finishes (success, failed, or cancelled).",
-      "type": "registry:lib",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/events/job/completed.ts",
-          "target": "~/telemetry/events/job/completed.ts",
-          "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const JobCompleted = defineEvent(\n  \"job.completed\",\n  z.object({\n    job: z.object({\n      name: z.string(),\n      // Queue-assigned id (BullMQ, Inngest, pg-boss, …) when you have one.\n      id: z.union([z.string(), z.number()]).optional(),\n      queue: z.string().optional(),\n    }),\n    result: z.object({\n      status: z.enum([\"success\", \"failed\", \"cancelled\"]),\n      attempt: z.number().int().positive().optional(),\n      // Domain-level count (\"rows synced\"), not a timing — the auto\n      // duration_ms field already times the logger's lifetime.\n      records_processed: z.number().int().nonnegative().optional(),\n    }),\n  }),\n);\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "event-webhook-received",
-      "title": "Webhook Received",
-      "description": "Wide event when an inbound webhook arrives (provider, event type, signature validity).",
-      "type": "registry:lib",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/events/webhook/received.ts",
-          "target": "~/telemetry/events/webhook/received.ts",
-          "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const WebhookReceived = defineEvent(\n  \"webhook.received\",\n  z.object({\n    webhook: z.object({\n      provider: z.string(), // \"stripe\", \"resend\", \"github\", …\n      // The provider's event type (\"invoice.paid\") — kept separate from the\n      // amplio event name so you can group all webhook traffic in one place.\n      event_type: z.string(),\n      delivery_id: z.string().optional(),\n    }),\n    verification: z\n      .object({\n        // Emit failed verifications too — silent signature failures are the\n        // webhook bug you want a dashboard for.\n        signature_valid: z.boolean(),\n      })\n      .optional(),\n  }),\n);\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "event-payment-refunded",
-      "title": "Payment Refunded",
-      "description": "Wide event when a payment is refunded (full or partial).",
-      "type": "registry:lib",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/events/payment/refunded.ts",
-          "target": "~/telemetry/events/payment/refunded.ts",
-          "type": "registry:lib",
-          "content": "import { defineEvent } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n\nexport const PaymentRefunded = defineEvent(\n  \"payment.refunded\",\n  z.object({\n    refund: z.object({\n      id: z.string(),\n      currency: z.string().length(3),\n      amount_cents: z.number().int().nonnegative(),\n      // Partial refunds: amount_cents < the original order amount.\n      reason: z\n        .enum([\"requested_by_customer\", \"duplicate\", \"fraud\", \"other\"])\n        .optional(),\n    }),\n    order: z.object({\n      id: z.string(),\n    }),\n    payment: z.object({\n      provider: z.enum([\"stripe\", \"polar\", \"paddle\", \"other\"]),\n    }),\n  }),\n);\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "middleware-hono",
-      "title": "Hono Middleware",
-      "description": "Hono middleware that attaches request-scoped amplio context.",
-      "type": "registry:lib",
-      "docs": "Wire the middleware: `app.use(\"*\", amplioMiddleware())` in your Hono app. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
-      "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/middleware/hono.ts",
-          "target": "~/telemetry/middleware/hono.ts",
-          "type": "registry:lib",
-          "content": "import type { Context, MiddlewareHandler, Next } from \"hono\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\nconst AMPLIO_KEY = \"amplio\";\n\nexport function amplioMiddleware(): MiddlewareHandler {\n  return async (c: Context, next: Next) => {\n    const requestLogger = createRequestLogger({\n      method: c.req.method,\n      path: c.req.path,\n    }).set({\n      http: {\n        route: c.req.routePath,\n      },\n    });\n\n    c.set(AMPLIO_KEY, requestLogger);\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        await next();\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: c.res.status },\n            status: c.res.status,\n          });\n          requestLogger.emit();\n        }\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n        }\n        throw error;\n      }\n    });\n  };\n}\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(c: Context): Logger {\n  return (c.get(AMPLIO_KEY) as Logger | undefined) ?? getLogger();\n}\n\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "middleware-express",
-      "title": "Express Middleware",
-      "description": "Express middleware that attaches request-scoped amplio context.",
-      "type": "registry:lib",
-      "docs": "Wire the middleware: `app.use(amplioMiddleware())` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
-      "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/middleware/express.ts",
-          "target": "~/telemetry/middleware/express.ts",
-          "type": "registry:lib",
-          "content": "import type { NextFunction, Request, Response } from \"express\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\ndeclare global {\n  namespace Express {\n    interface Request {\n      amplio?: Logger;\n    }\n  }\n}\n\nexport function amplioMiddleware() {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const requestLogger = createRequestLogger({\n      method: req.method,\n      path: req.path,\n    }).set({\n      http: {\n        route: req.route?.path,\n        ip: req.ip,\n        user_agent: req.get(\"user-agent\") ?? undefined,\n      },\n    });\n\n    req.amplio = requestLogger;\n\n    runWithLogger(requestLogger, () => {\n      res.on(\"finish\", () => {\n        if (requestLogger.sealed) {\n          return;\n        }\n        requestLogger.set({\n          http: { status: res.statusCode },\n          status: res.statusCode,\n        });\n        requestLogger.emit();\n      });\n\n      next();\n    });\n  };\n}\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(req: Request): Logger {\n  return req.amplio ?? getLogger();\n}\n\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "middleware-next",
-      "title": "Next.js Route Handler Wrapper",
-      "description": "Route-handler wrapper (withAmplio) that owns the request wide event - this is not Next.js middleware.ts.",
-      "type": "registry:lib",
-      "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you. Also exports withAmplioRender(name, fn) to give RSC page renders an ambient page.render spine so server-caller calls and facade events correlate.",
-      "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/middleware/next.ts",
-          "target": "~/telemetry/middleware/next.ts",
-          "type": "registry:lib",
-          "content": "// Side-effect import: ensures init() from telemetry/logger runs in every module\n// graph that uses this middleware (next dev --turbo compiles instrumentation.ts\n// and route bundles separately, which would otherwise drop events silently).\nimport \"../logger\";\n\nimport {\n  createLogger,\n  createRequestId,\n  createRequestLogger,\n  getLogger,\n  runWithLogger,\n  scheduleFlush,\n  type Logger,\n} from \"@useamplio/amplio\";\nimport type { NextRequest } from \"next/server\";\n\nexport interface WithAmplioOptions {\n  waitUntil?: (promise: Promise<unknown>) => void;\n}\n\n// The `never[]` rest constraint accepts any handler shape (route context params\n// included) without resorting to `any`, which trips lint/suspicious/noExplicitAny.\nexport function withAmplio<\n  T extends (request: NextRequest, ...args: never[]) => Promise<Response>,\n>(handler: T, options?: WithAmplioOptions): T {\n  const wrapped = (async (request: NextRequest, ...rest: never[]) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.nextUrl.pathname,\n    }).set({\n      http: {\n        search: request.nextUrl.search || undefined,\n      },\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      try {\n        const response = await handler(request, ...rest);\n        if (!requestLogger.sealed) {\n          requestLogger.set({\n            http: { status: response.status },\n            status: response.status,\n          });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        return response;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          requestLogger.error(error, { status: 500 });\n          requestLogger.emit();\n          scheduleFlush(options);\n        }\n        throw error;\n      }\n    });\n  }) as T;\n\n  return wrapped;\n}\n\n// Server-side accessor for the ambient request logger. Named get*, not use*:\n// this is not a React hook and never runs on the client.\nexport function getRequestLogger(): Logger {\n  return getLogger();\n}\n\n// Next throws for control flow (redirect(), notFound()); those errors carry a\n// digest and are not render failures.\nfunction nextControlFlowDigest(error: unknown): string | undefined {\n  if (error !== null && typeof error === \"object\" && \"digest\" in error) {\n    const digest = (error as { digest?: unknown }).digest;\n    if (typeof digest === \"string\" && digest.startsWith(\"NEXT_\")) {\n      return digest;\n    }\n  }\n  return undefined;\n}\n\n/**\n * RSC render spine. Server components do not pass through withAmplio, so a\n * page render otherwise produces uncorrelated rows: standalone trpc.request\n * spines per server-caller call and request_id-less facade events. Wrapping\n * the page establishes an ambient `page.render` spine — amplioTrpcMiddleware\n * annotates it instead of creating standalone spines, and logger.event(Def)\n * rows emitted during the render share its request_id.\n *\n *   // src/app/page.tsx\n *   export default withAmplioRender(\"home\", async function Home() { … });\n *\n * Note: `next build` static generation also runs the render — those rows are\n * tagged `build_phase: true` by the runtime.\n */\nexport function withAmplioRender<A extends never[], R>(\n  page: string,\n  render: (...args: A) => R | Promise<R>,\n  options?: WithAmplioOptions,\n): (...args: A) => Promise<R> {\n  return async (...args: A) => {\n    const renderLogger = createLogger({\n      event: \"page.render\",\n      \"@event\": \"page.render\",\n      request_id: createRequestId(),\n      page: { name: page },\n    });\n\n    return runWithLogger(renderLogger, async () => {\n      try {\n        const result = await render(...args);\n        if (!renderLogger.sealed) {\n          renderLogger.set({ success: true });\n          renderLogger.emit();\n          scheduleFlush(options);\n        }\n        return result;\n      } catch (error) {\n        if (!renderLogger.sealed) {\n          const digest = nextControlFlowDigest(error);\n          if (digest) {\n            // redirect()/notFound() — record the outcome, not a failure.\n            renderLogger.set({ page: { interrupted: digest } });\n          } else {\n            renderLogger.error(error);\n          }\n          renderLogger.emit();\n          scheduleFlush(options);\n        }\n        throw error;\n      }\n    });\n  };\n}\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "middleware-fastify",
-      "title": "Fastify Middleware",
-      "description": "Fastify plugin that attaches request-scoped amplio context.",
-      "type": "registry:lib",
-      "docs": "Wire the plugin: `await app.register(amplioPlugin)` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
-      "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15",
-        "fastify-plugin@^5.0.0"
-      ],
-      "files": [
-        {
-          "path": "registry/middleware/fastify.ts",
-          "target": "~/telemetry/middleware/fastify.ts",
-          "type": "registry:lib",
-          "content": "import type { FastifyPluginAsync, FastifyRequest } from \"fastify\";\nimport fp from \"fastify-plugin\";\nimport { createRequestLogger, getLogger, runWithLogger, type Logger } from \"@useamplio/amplio\";\n\ndeclare module \"fastify\" {\n  interface FastifyRequest {\n    amplio?: Logger;\n  }\n}\n\nconst plugin: FastifyPluginAsync = async (app) => {\n  app.addHook(\"onRequest\", (request, _reply, done) => {\n    const requestLogger = createRequestLogger({\n      method: request.method,\n      path: request.url,\n    }).set({\n      http: {\n        route: request.routeOptions?.url,\n        ip: request.ip,\n        user_agent: request.headers[\"user-agent\"],\n      },\n    });\n\n    request.amplio = requestLogger;\n    runWithLogger(requestLogger, () => done());\n  });\n\n  app.addHook(\"onResponse\", async (request, reply) => {\n    const requestLogger = request.amplio;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.set({\n      http: { status: reply.statusCode },\n      status: reply.statusCode,\n    });\n    requestLogger.emit();\n  });\n\n  app.addHook(\"onError\", async (request, _reply, error) => {\n    const requestLogger = request.amplio;\n    if (!requestLogger || requestLogger.sealed) {\n      return;\n    }\n\n    requestLogger.error(error, { status: 500 });\n    requestLogger.emit();\n  });\n};\n\nexport const amplioPlugin = fp(plugin, { name: \"amplio\" });\n\n// Accessor for the request logger. Named get*, not use*: this is not a React hook.\nexport function getRequestLogger(request: FastifyRequest): Logger {\n  return request.amplio ?? getLogger();\n}\n\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "middleware-trpc",
-      "title": "tRPC Middleware",
-      "description": "tRPC middleware that annotates the ambient request wide event with trpc fields (pair with the Next.js route-handler wrapper).",
-      "type": "registry:lib",
-      "docs": "Wire into your procedure bases: `const amplioMiddleware = t.middleware(amplioTrpcMiddleware())` then `.use(amplioMiddleware)` on publicProcedure/protectedProcedure. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/server/api/trpc.ts for you.",
-      "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/middleware/trpc.ts",
-          "target": "~/telemetry/middleware/trpc.ts",
-          "type": "registry:lib",
-          "content": "/**\n * Amplio tRPC middleware. Like create-t3-app's own trpc.ts, you likely never\n * need to read or modify this file — wire amplioTrpcMiddleware() into your\n * procedure bases and you're done.\n *\n * Product stance:\n * ONE wide event per unit of work: the HTTP wrapper (withAmplio) owns the request\n * wide event (the spine). This middleware ANNOTATES that event with trpc.* fields\n * instead of emitting a sibling record. Domain events emitted in procedures are\n * intentionally separate rows — do not duplicate fields across them.\n */\n// Side-effect import: ensures init() from telemetry/logger runs in every module\n// graph that uses this middleware (next dev --turbo compiles instrumentation.ts\n// and route bundles separately, which would otherwise drop events silently).\nimport \"../logger\";\n\nimport {\n  createLogger,\n  createRequestId,\n  getLogger,\n  hasAmbientLogger,\n  runWithLogger,\n  scheduleFlush,\n  trpcErrorHttpStatus,\n  type Logger,\n} from \"@useamplio/amplio\";\n\ntype TrpcProcedureType = \"query\" | \"mutation\" | \"subscription\";\n\ntype TrpcProcedureRef = { path: string; type: TrpcProcedureType };\n\nconst batchedProcedures = new WeakMap<Logger, TrpcProcedureRef[]>();\n\nfunction isFailedMiddlewareResult(\n  result: unknown,\n): result is { ok: false; error: unknown } {\n  return (\n    result !== null &&\n    typeof result === \"object\" &&\n    \"ok\" in result &&\n    (result as { ok: unknown }).ok === false &&\n    \"error\" in result\n  );\n}\n\nfunction annotateTrpcProcedure(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n): void {\n  if (logger.sealed) {\n    return;\n  }\n\n  // Count every invocation — a batch of two calls to the SAME procedure is two\n  // units of work and must not be deduplicated away.\n  const entry: TrpcProcedureRef = { path, type };\n  const seen = batchedProcedures.get(logger) ?? [];\n  const updated = [...seen, entry];\n  batchedProcedures.set(logger, updated);\n\n  if (updated.length === 1) {\n    logger.set({ trpc: { path, type } });\n    return;\n  }\n\n  // A batch has no single path — null the scalar fields so dashboards that\n  // group by trpc.path never mix \"the request was for X\" with \"X happened to\n  // be first in a batch\". The full list lives in trpc.procedures; a failing\n  // procedure lands in trpc.failed_path (see annotateTrpcError).\n  logger.set({\n    trpc: {\n      path: null,\n      type: null,\n      batched: true,\n      batch_size: updated.length,\n      procedures: updated.map((item) => `${item.type} ${item.path}`),\n    },\n  });\n}\n\nfunction isBatchedRequest(logger: Logger): boolean {\n  return (batchedProcedures.get(logger)?.length ?? 0) > 1;\n}\n\ntype ValidationIssue = { path: Array<string | number>; message: string };\n\n// TRPCError wraps input-validation failures in a ZodError cause whose message\n// is the full pretty-printed issue list — a multiline JSON blob that is hostile\n// to columnar stores and log search. Detect that shape so the event can carry\n// structured error.issues plus a short error.message instead.\nfunction zodValidationIssues(error: unknown): ValidationIssue[] | null {\n  if (error === null || typeof error !== \"object\") {\n    return null;\n  }\n  const cause = (error as { cause?: unknown }).cause;\n  if (cause === null || typeof cause !== \"object\") {\n    return null;\n  }\n  const issues = (cause as { issues?: unknown }).issues;\n  if (!Array.isArray(issues) || issues.length === 0) {\n    return null;\n  }\n  const mapped: ValidationIssue[] = [];\n  for (const issue of issues) {\n    if (issue === null || typeof issue !== \"object\") {\n      return null;\n    }\n    const { path, message } = issue as { path?: unknown; message?: unknown };\n    if (typeof message !== \"string\" || !Array.isArray(path)) {\n      return null;\n    }\n    mapped.push({\n      path: path.filter(\n        (segment): segment is string | number =>\n          typeof segment === \"string\" || typeof segment === \"number\",\n      ),\n      message,\n    });\n  }\n  return mapped;\n}\n\nfunction shortValidationMessage(issues: ValidationIssue[]): string {\n  const parts = issues\n    .slice(0, 3)\n    .map((issue) =>\n      issue.path.length > 0 ? `${issue.path.join(\".\")}: ${issue.message}` : issue.message,\n    );\n  const suffix = issues.length > 3 ? ` (+${issues.length - 3} more)` : \"\";\n  return `input validation failed: ${parts.join(\"; \")}${suffix}`;\n}\n\nfunction annotateTrpcError(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n  error: unknown,\n  includeHttp: boolean,\n): void {\n  const status = trpcErrorHttpStatus(error);\n  if (!logger.sealed) {\n    logger.error(error, { status });\n    const issues = zodValidationIssues(error);\n    if (issues) {\n      logger.set({ error: { message: shortValidationMessage(issues), issues } });\n    }\n    // On a batch, keep trpc.path null and record the failing procedure\n    // separately — overwriting the batch path with the failer made group-bys\n    // on trpc.path a half-truth.\n    const trpcPatch = isBatchedRequest(logger)\n      ? { failed_path: path, failed_type: type }\n      : { path, type };\n    const patch: Record<string, unknown> = {\n      trpc: trpcPatch,\n      status,\n    };\n    if (includeHttp) {\n      patch.http = { status };\n    }\n    logger.set(patch);\n  }\n}\n\nfunction finalizeStandaloneRequest(\n  logger: Logger,\n  path: string,\n  type: TrpcProcedureType,\n  result: unknown,\n): void {\n  if (logger.sealed) {\n    return;\n  }\n\n  if (isFailedMiddlewareResult(result)) {\n    annotateTrpcError(logger, path, type, result.error, false);\n  } else {\n    logger.set({\n      trpc: { path, type },\n      status: 200,\n    });\n  }\n\n  logger.emit();\n  scheduleFlush();\n}\n\nexport function amplioTrpcMiddleware() {\n  return async <TResult>(opts: {\n    path: string;\n    type: TrpcProcedureType;\n    next: () => Promise<TResult>;\n  } & Record<string, unknown>): Promise<TResult> => {\n    const { path, type, next } = opts;\n\n    if (hasAmbientLogger()) {\n      const logger = getLogger();\n      annotateTrpcProcedure(logger, path, type);\n\n      try {\n        const result = await next();\n        if (isFailedMiddlewareResult(result)) {\n          annotateTrpcError(logger, path, type, result.error, true);\n        }\n        return result;\n      } catch (error) {\n        annotateTrpcError(logger, path, type, error, true);\n        throw error;\n      }\n    }\n\n    const requestLogger = createLogger({\n      event: \"trpc.request\",\n      \"@event\": \"trpc.request\",\n      request_id: createRequestId(),\n      transport: \"server-caller\",\n    });\n\n    return runWithLogger(requestLogger, async () => {\n      annotateTrpcProcedure(requestLogger, path, type);\n\n      try {\n        const result = await next();\n        finalizeStandaloneRequest(requestLogger, path, type, result);\n        return result;\n      } catch (error) {\n        if (!requestLogger.sealed) {\n          annotateTrpcError(requestLogger, path, type, error, false);\n          requestLogger.emit();\n          scheduleFlush();\n        }\n        throw error;\n      }\n    });\n  };\n}\n"
+          "content": "import { init } from \"@useamplio/amplio\";\nimport { consoleSink } from \"./sinks/console.js\";\n\ninit({\n  service: process.env.SERVICE_NAME ?? \"my-app\",\n  env: process.env.NODE_ENV ?? \"development\",\n  enrichers: [],\n  // sampling: { rate: 0.1, keep: [{ field: \"success\", equals: false }] },\n  // see @useamplio/amplio README ## Sampling\n  sinks: [consoleSink],\n});\n"
         }
       ]
     },
@@ -263,18 +612,17 @@
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
       "name": "sink-console",
       "title": "Console Sink",
-      "description": "Console sink that prints wide events as JSON.",
+      "description": "Console sink that prints Event records as JSON.",
       "type": "registry:lib",
-      "docs": "Wire the sink: add `import { consoleSink } from \"./sinks/console\"` to telemetry/logger.ts and append `consoleSink` to the init() sinks array. Prefer `npx @useamplio/cli@alpha add sink console` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16"
       ],
       "files": [
         {
           "path": "registry/sinks/console.ts",
           "target": "~/telemetry/sinks/console.ts",
           "type": "registry:lib",
-          "content": "import type { LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport const consoleSink: Sink = (record: LogRecord) => {\n  console.log(JSON.stringify(record));\n};\n"
+          "content": "import type { Sink } from \"@useamplio/amplio\";\n\nconst createJsonReplacer = () => {\n  const ancestors: object[] = [];\n  return function (this: object, _key: string, value: unknown): unknown {\n    if (typeof value === \"bigint\") {\n      return value.toString();\n    }\n    if (value === null || typeof value !== \"object\") {\n      return value;\n    }\n    while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {\n      ancestors.pop();\n    }\n    if (ancestors.includes(value)) {\n      return \"[Circular]\";\n    }\n    ancestors.push(value);\n    return value;\n  };\n};\n\nexport const consoleSink: Sink = (record) => {\n  console.log(JSON.stringify(record, createJsonReplacer()));\n};\n"
         }
       ]
     },
@@ -282,18 +630,17 @@
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
       "name": "sink-json",
       "title": "JSON Sink",
-      "description": "JSON sink that serializes wide events for streaming or files.",
+      "description": "JSONL sink for local Event verification.",
       "type": "registry:lib",
-      "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio*.jsonl to .gitignore (the default file name includes the env, e.g. amplio.development.jsonl). Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16"
       ],
       "files": [
         {
           "path": "registry/sinks/json.ts",
           "target": "~/telemetry/sinks/json.ts",
           "type": "registry:lib",
-          "content": "/**\n * Dev-grade JSONL sink — appendFileSync blocks the event loop.\n * Use sink-otlp for production. Path from AMPLIO_JSON_SINK_PATH env or option;\n * defaults to amplio.<env>.jsonl (e.g. amplio.development.jsonl) so dev rows\n * and build/production rows never interleave in one file. Add amplio*.jsonl\n * to .gitignore (amplio add sink json does this).\n */\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport type { LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport interface JsonFileSinkOptions {\n  path?: string;\n}\n\nexport function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {\n  const explicitPath =\n    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined);\n\n  return (record: LogRecord) => {\n    const env = typeof record.env === \"string\" && record.env ? record.env : \"dev\";\n    const filePath = explicitPath ?? `amplio.${env}.jsonl`;\n    const dir = path.dirname(filePath);\n    if (dir && dir !== \".\") {\n      fs.mkdirSync(dir, { recursive: true });\n    }\n    fs.appendFileSync(filePath, `${JSON.stringify(record)}\\n`, \"utf8\");\n  };\n}\n"
+          "content": "/**\n * Dev-grade JSONL sink — appendFileSync blocks the event loop.\n * Use sink-otlp for production. Path from AMPLIO_JSON_SINK_PATH env or option;\n * defaults to amplio.<env>.jsonl (e.g. amplio.development.jsonl) so dev rows\n * and build/production rows never interleave in one file. Add amplio*.jsonl\n * to .gitignore (amplio add sink json does this).\n */\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport type { Sink, SinkRecord } from \"@useamplio/amplio\";\n\nexport interface JsonFileSinkOptions {\n  path?: string;\n}\n\nexport function jsonFileSink(options: JsonFileSinkOptions = {}): Sink {\n  const explicitPath =\n    options.path ?? (process.env.AMPLIO_JSON_SINK_PATH?.trim() || undefined);\n\n  return (record: SinkRecord) => {\n    const env = typeof record.env === \"string\" && record.env ? record.env : \"dev\";\n    const filePath = explicitPath ?? `amplio.${env}.jsonl`;\n    const dir = path.dirname(filePath);\n    if (dir && dir !== \".\") {\n      fs.mkdirSync(dir, { recursive: true });\n    }\n    fs.appendFileSync(filePath, `${JSON.stringify(record)}\\n`, \"utf8\");\n  };\n}\n"
         }
       ]
     },
@@ -301,18 +648,17 @@
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
       "name": "sink-otlp",
       "title": "OTLP Sink",
-      "description": "OTLP sink that exports wide events over OpenTelemetry.",
+      "description": "OTLP sink that exports Event records over OpenTelemetry.",
       "type": "registry:lib",
-      "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (base URL, /v1/logs appended). Default is one POST per emit — pass otlpSink({ batch: true }) for production traffic. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16"
       ],
       "files": [
         {
           "path": "registry/sinks/otlp.ts",
           "target": "~/telemetry/sinks/otlp.ts",
           "type": "registry:lib",
-          "content": "/**\n * OTLP/HTTP logs sink.\n *\n * Endpoint resolution (first match wins):\n *   1. options.endpoint                          — `/v1/logs` appended unless already present\n *   2. OTEL_EXPORTER_OTLP_LOGS_ENDPOINT          — used VERBATIM (per the OTel spec,\n *      signal-specific endpoints are full URLs)\n *   3. OTEL_EXPORTER_OTLP_ENDPOINT               — base URL, `/v1/logs` appended\n *\n * Delivery: by default this sink POSTs ONE request per emit — fine for dev\n * and low traffic, not for production request rates. Pass `batch: true`\n * (100 records / 1 s) or `batch: { maxSize, maxWaitMs }` to coalesce records\n * into one export request. Batching makes the sink async-pending between\n * flushes: on serverless, pass `waitUntil` to your middleware or `await\n * flush()` before returning so the last batch is not cut off.\n */\nimport type { JsonValue, LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport interface OtlpSinkOptions {\n  endpoint?: string;\n  headers?: Record<string, string>;\n  /** When false (default), export failures warn once then stay silent. Pass true to throw. */\n  throwOnError?: boolean;\n  /**\n   * Record fields promoted to typed OTLP log attributes (the fields you can\n   * filter on in an OTel backend without parsing the JSON body). Dot paths\n   * walk nested objects (`\"trpc.path\"` → record.trpc.path). Replaces the\n   * default list; the full record always ships in the log body.\n   */\n  attributes?: string[];\n  /**\n   * Coalesce records into one export request. `true` = 100 records / 1 s;\n   * pass `{ maxSize, maxWaitMs }` to tune. Default: off (one POST per emit).\n   */\n  batch?: boolean | { maxSize?: number; maxWaitMs?: number };\n}\n\nconst DEFAULT_ATTRIBUTE_FIELDS = [\n  \"service\",\n  \"event\",\n  \"status\",\n  \"duration_ms\",\n  \"request_id\",\n  \"success\",\n  // The fields people actually filter on in an OTel backend:\n  \"trpc.path\",\n  \"http.path\",\n  \"http.method\",\n] as const;\n\nconst DEFAULT_BATCH_MAX_SIZE = 100;\nconst DEFAULT_BATCH_MAX_WAIT_MS = 1_000;\n\ntype OtlpAttributeValue =\n  | { stringValue: string }\n  | { boolValue: boolean }\n  | { intValue: number }\n  | { doubleValue: number };\n\ninterface OtlpAttribute {\n  key: string;\n  value: OtlpAttributeValue;\n}\n\nconst parseOtlpHeaders = (raw: string | undefined): Record<string, string> => {\n  if (!raw) {\n    return {};\n  }\n\n  const headers: Record<string, string> = {};\n  for (const pair of raw.split(\",\")) {\n    const trimmed = pair.trim();\n    if (!trimmed) {\n      continue;\n    }\n\n    const eq = trimmed.indexOf(\"=\");\n    if (eq === -1) {\n      continue;\n    }\n\n    const key = trimmed.slice(0, eq).trim();\n    const value = trimmed.slice(eq + 1).trim();\n    if (key) {\n      headers[key] = value;\n    }\n  }\n\n  return headers;\n};\n\n/** Flat key first (`record[\"trpc.path\"]`), then dot-path walk (`record.trpc.path`). */\nconst fieldValue = (record: LogRecord, field: string): JsonValue | undefined => {\n  const flat = record[field];\n  if (flat !== undefined || !field.includes(\".\")) {\n    return flat;\n  }\n  let current: JsonValue | undefined = record as JsonValue;\n  for (const part of field.split(\".\")) {\n    if (\n      current === null ||\n      typeof current !== \"object\" ||\n      Array.isArray(current)\n    ) {\n      return undefined;\n    }\n    current = (current as Record<string, JsonValue>)[part];\n  }\n  return current;\n};\n\nconst toOtlpAttribute = (key: string, value: JsonValue | undefined): OtlpAttribute | undefined => {\n  if (value === null || value === undefined) {\n    return undefined;\n  }\n\n  if (typeof value === \"string\") {\n    return { key, value: { stringValue: value } };\n  }\n\n  if (typeof value === \"boolean\") {\n    return { key, value: { boolValue: value } };\n  }\n\n  if (typeof value === \"number\") {\n    if (Number.isInteger(value)) {\n      return { key, value: { intValue: value } };\n    }\n    return { key, value: { doubleValue: value } };\n  }\n\n  return undefined;\n};\n\nconst toTimeUnixNano = (timestamp: JsonValue | undefined): string => {\n  let ms: number;\n\n  if (typeof timestamp === \"number\" && Number.isFinite(timestamp)) {\n    ms = timestamp;\n  } else if (typeof timestamp === \"string\" && timestamp.length > 0) {\n    const parsed = Date.parse(timestamp);\n    ms = Number.isNaN(parsed) ? Date.now() : parsed;\n  } else {\n    ms = Date.now();\n  }\n\n  return `${Math.trunc(ms)}000000`;\n};\n\nconst resolveUrl = (options: OtlpSinkOptions): string | undefined => {\n  const appendLogsPath = (endpoint: string): string => {\n    const base = endpoint.replace(/\\/$/, \"\");\n    return base.endsWith(\"/v1/logs\") ? base : `${base}/v1/logs`;\n  };\n\n  if (options.endpoint) {\n    return appendLogsPath(options.endpoint);\n  }\n  // Per the OTel spec the signal-specific endpoint is a full URL used as-is;\n  // only the base endpoint gets the signal path appended.\n  const signalEndpoint = process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT;\n  if (signalEndpoint) {\n    return signalEndpoint;\n  }\n  const baseEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;\n  if (baseEndpoint) {\n    return appendLogsPath(baseEndpoint);\n  }\n  return undefined;\n};\n\nconst resourceKeyOf = (record: LogRecord): string => {\n  const service =\n    typeof record.service === \"string\" && record.service.length > 0\n      ? record.service\n      : \"\";\n  const env =\n    typeof record.env === \"string\" && record.env.length > 0 ? record.env : \"\";\n  return `${service}\\u0000${env}`;\n};\n\nexport function otlpSink(options: OtlpSinkOptions = {}): Sink {\n  const url = resolveUrl(options);\n  const throwOnError = options.throwOnError ?? false;\n  const attributeFields = options.attributes ?? DEFAULT_ATTRIBUTE_FIELDS;\n  const headers = {\n    \"content-type\": \"application/json\",\n    ...parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS),\n    ...(options.headers ?? {}),\n  };\n\n  if (!url) {\n    let warned = false;\n    return async () => {\n      if (!warned) {\n        warned = true;\n        console.warn(\n          \"[amplio] otlpSink: no endpoint configured — set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (base URL, /v1/logs appended), or pass otlpSink({ endpoint }); OTLP export is disabled\",\n        );\n      }\n    };\n  }\n\n  let warnedExportFailure = false;\n\n  const warnExportFailure = (detail: string): void => {\n    if (throwOnError || warnedExportFailure) {\n      return;\n    }\n    warnedExportFailure = true;\n    console.warn(\n      `[amplio] otlpSink: export failed (${detail}); further failures will be silent. Pass throwOnError: true to fail hard.`,\n    );\n  };\n\n  const buildAttributes = (record: LogRecord): OtlpAttribute[] => {\n    const attributes: OtlpAttribute[] = [];\n    for (const field of attributeFields) {\n      const attr = toOtlpAttribute(field, fieldValue(record, field));\n      if (attr) {\n        attributes.push(attr);\n      }\n    }\n    return attributes;\n  };\n\n  const toLogRecord = (record: LogRecord) => {\n    const attributes = buildAttributes(record);\n    return {\n      timeUnixNano: toTimeUnixNano(record.timestamp),\n      body: { stringValue: JSON.stringify(record) },\n      ...(attributes.length > 0 ? { attributes } : {}),\n    };\n  };\n\n  // One resourceLogs entry per distinct (service, env) pair — records in a\n  // batch almost always share one, but never stamp record A with B's resource.\n  const buildPayload = (records: LogRecord[]) => {\n    const groups = new Map<string, LogRecord[]>();\n    for (const record of records) {\n      const key = resourceKeyOf(record);\n      const group = groups.get(key);\n      if (group) {\n        group.push(record);\n      } else {\n        groups.set(key, [record]);\n      }\n    }\n\n    const resourceLogs = [...groups.values()].map((group) => {\n      const first = group[0]!;\n      const resourceAttributes: OtlpAttribute[] = [];\n      if (typeof first.service === \"string\" && first.service.length > 0) {\n        resourceAttributes.push({\n          key: \"service.name\",\n          value: { stringValue: first.service },\n        });\n      }\n      if (typeof first.env === \"string\" && first.env.length > 0) {\n        resourceAttributes.push({\n          key: \"deployment.environment\",\n          value: { stringValue: first.env },\n        });\n      }\n      return {\n        ...(resourceAttributes.length > 0\n          ? { resource: { attributes: resourceAttributes } }\n          : {}),\n        scopeLogs: [{ logRecords: group.map(toLogRecord) }],\n      };\n    });\n\n    return { resourceLogs };\n  };\n\n  const exportRecords = async (records: LogRecord[]): Promise<void> => {\n    let response: Response;\n    try {\n      response = await fetch(url, {\n        method: \"POST\",\n        headers,\n        body: JSON.stringify(buildPayload(records)),\n      });\n    } catch (error) {\n      if (throwOnError) {\n        throw error;\n      }\n      warnExportFailure(error instanceof Error ? error.message : String(error));\n      return;\n    }\n\n    if (!response.ok) {\n      if (throwOnError) {\n        throw new Error(`OTLP export failed with status ${response.status}`);\n      }\n      warnExportFailure(`status ${response.status}`);\n      return;\n    }\n  };\n\n  if (!options.batch) {\n    return (record: LogRecord) => exportRecords([record]);\n  }\n\n  const batchConfig = options.batch === true ? {} : options.batch;\n  const maxSize = batchConfig.maxSize ?? DEFAULT_BATCH_MAX_SIZE;\n  const maxWaitMs = batchConfig.maxWaitMs ?? DEFAULT_BATCH_MAX_WAIT_MS;\n\n  let buffer: LogRecord[] = [];\n  let timer: ReturnType<typeof setTimeout> | null = null;\n  let pending: { promise: Promise<void>; resolve: () => void; reject: (e: unknown) => void } | null =\n    null;\n\n  const flushBatch = (): void => {\n    if (timer !== null) {\n      clearTimeout(timer);\n      timer = null;\n    }\n    const records = buffer;\n    const settled = pending;\n    buffer = [];\n    pending = null;\n    if (records.length === 0) {\n      settled?.resolve();\n      return;\n    }\n    exportRecords(records).then(\n      () => settled?.resolve(),\n      (error) => {\n        // Every emit in the batch awaited this promise — reject them all so\n        // throwOnError surfaces per-record, matching the unbatched contract.\n        if (settled) {\n          settled.reject(error);\n        }\n      },\n    );\n  };\n\n  return (record: LogRecord): Promise<void> => {\n    buffer.push(record);\n    if (pending === null) {\n      let resolve!: () => void;\n      let reject!: (e: unknown) => void;\n      const promise = new Promise<void>((res, rej) => {\n        resolve = res;\n        reject = rej;\n      });\n      pending = { promise, resolve, reject };\n    }\n    const result = pending.promise;\n    if (buffer.length >= maxSize) {\n      flushBatch();\n    } else if (timer === null) {\n      timer = setTimeout(flushBatch, maxWaitMs);\n      // Don't keep a Node process alive just for a pending batch window.\n      (timer as { unref?: () => void }).unref?.();\n    }\n    return result;\n  };\n}\n"
+          "content": "/**\n * OTLP/HTTP logs sink.\n *\n * Endpoint resolution (first match wins):\n *   1. options.endpoint                          — `/v1/logs` appended unless already present\n *   2. OTEL_EXPORTER_OTLP_LOGS_ENDPOINT          — used VERBATIM (per the OTel spec,\n *      signal-specific endpoints are full URLs)\n *   3. OTEL_EXPORTER_OTLP_ENDPOINT               — base URL, `/v1/logs` appended\n *\n * Delivery: by default this sink POSTs ONE request per emit — fine for dev\n * and low traffic, not for production request rates. Pass `batch: true`\n * (100 records / 1 s) or `batch: { maxSize, maxWaitMs }` to coalesce records\n * into one export request. Batching makes the sink async-pending between\n * flushes. Amplio's `flush()` calls the sink's active drain hook, so shutdown\n * and short-lived/serverless paths can deliver a partial batch immediately.\n */\nimport type { JsonValue, Sink, SinkRecord } from \"@useamplio/amplio\";\n\nexport interface OtlpSinkOptions {\n  endpoint?: string;\n  headers?: Record<string, string>;\n  /** When false (default), export failures warn once then stay silent. Pass true to throw. */\n  throwOnError?: boolean;\n  /**\n   * Record fields promoted to typed OTLP log attributes (the fields you can\n   * filter on in an OTel backend without parsing the JSON body). Dot paths\n   * walk nested objects (`\"http.status\"` → record.http.status). Replaces the\n   * default list; the full record always ships in the log body.\n   */\n  attributes?: string[];\n  /**\n   * Coalesce records into one export request. `true` = 100 records / 1 s;\n   * pass `{ maxSize, maxWaitMs }` to tune. Default: off (one POST per emit).\n   */\n  batch?: boolean | { maxSize?: number; maxWaitMs?: number };\n}\n\nconst DEFAULT_ATTRIBUTE_FIELDS = [\n  \"service\",\n  \"@event\",\n  \"duration_ms\",\n  \"request_id\",\n  \"success\",\n  // The fields people actually filter on in an OTel backend:\n  \"http.method\",\n  \"http.route\",\n  \"http.status\",\n  \"rpc.procedures\",\n] as const;\n\nconst DEFAULT_BATCH_MAX_SIZE = 100;\nconst DEFAULT_BATCH_MAX_WAIT_MS = 1_000;\n\ntype OtlpAttributeValue =\n  | { stringValue: string }\n  | { boolValue: boolean }\n  | { intValue: string }\n  | { doubleValue: number }\n  | { arrayValue: { values: OtlpAttributeValue[] } }\n  | { kvlistValue: { values: OtlpAttribute[] } };\n\ninterface OtlpAttribute {\n  key: string;\n  value: OtlpAttributeValue;\n}\n\nconst parseOtlpHeaders = (raw: string | undefined): Record<string, string> => {\n  if (!raw) {\n    return {};\n  }\n\n  const headers: Record<string, string> = {};\n  for (const pair of raw.split(\",\")) {\n    const trimmed = pair.trim();\n    if (!trimmed) {\n      continue;\n    }\n\n    const eq = trimmed.indexOf(\"=\");\n    if (eq === -1) {\n      continue;\n    }\n\n    const key = trimmed.slice(0, eq).trim();\n    const value = trimmed.slice(eq + 1).trim();\n    if (key) {\n      headers[key] = value;\n    }\n  }\n\n  return headers;\n};\n\n/** Flat key first (`record[\"http.status\"]`), then dot-path walk (`record.http.status`). */\nconst fieldValue = (\n  record: SinkRecord,\n  field: string,\n): JsonValue | undefined => {\n  if (field === \"@event\") {\n    return record[\"@event\"];\n  }\n  const flat = record[field];\n  if (flat !== undefined || !field.includes(\".\")) {\n    return flat;\n  }\n  let current: JsonValue | undefined = record as JsonValue;\n  for (const part of field.split(\".\")) {\n    if (\n      current === null ||\n      typeof current !== \"object\" ||\n      Array.isArray(current)\n    ) {\n      return undefined;\n    }\n    current = (current as Record<string, JsonValue>)[part];\n  }\n  return current;\n};\n\nconst toOtlpValue = (\n  value: JsonValue | undefined,\n): OtlpAttributeValue | undefined => {\n  if (value === null || value === undefined) {\n    return undefined;\n  }\n\n  if (typeof value === \"string\") {\n    return { stringValue: value };\n  }\n\n  if (typeof value === \"boolean\") {\n    return { boolValue: value };\n  }\n\n  if (typeof value === \"number\") {\n    if (Number.isInteger(value)) {\n      return { intValue: String(value) };\n    }\n    return { doubleValue: value };\n  }\n\n  if (Array.isArray(value)) {\n    const values = value\n      .map((item) => toOtlpValue(item))\n      .filter((item): item is OtlpAttributeValue => item !== undefined);\n    return { arrayValue: { values } };\n  }\n\n  const values = Object.entries(value)\n    .map(([key, item]) => toOtlpAttribute(key, item))\n    .filter((item): item is OtlpAttribute => item !== undefined);\n  return { kvlistValue: { values } };\n};\n\nconst toOtlpAttribute = (\n  key: string,\n  value: JsonValue | undefined,\n): OtlpAttribute | undefined => {\n  const converted = toOtlpValue(value);\n  return converted ? { key, value: converted } : undefined;\n};\n\nconst toTimeUnixNano = (timestamp: JsonValue | undefined): string => {\n  let ms: number;\n\n  if (typeof timestamp === \"number\" && Number.isFinite(timestamp)) {\n    ms = timestamp;\n  } else if (typeof timestamp === \"string\" && timestamp.length > 0) {\n    const parsed = Date.parse(timestamp);\n    ms = Number.isNaN(parsed) ? Date.now() : parsed;\n  } else {\n    ms = Date.now();\n  }\n\n  return `${Math.trunc(ms)}000000`;\n};\n\nconst resolveUrl = (options: OtlpSinkOptions): string | undefined => {\n  const appendLogsPath = (endpoint: string): string => {\n    const base = endpoint.replace(/\\/$/, \"\");\n    return base.endsWith(\"/v1/logs\") ? base : `${base}/v1/logs`;\n  };\n\n  if (options.endpoint) {\n    return appendLogsPath(options.endpoint);\n  }\n  // Per the OTel spec the signal-specific endpoint is a full URL used as-is;\n  // only the base endpoint gets the signal path appended.\n  const signalEndpoint = process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT;\n  if (signalEndpoint) {\n    return signalEndpoint;\n  }\n  const baseEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;\n  if (baseEndpoint) {\n    return appendLogsPath(baseEndpoint);\n  }\n  return undefined;\n};\n\nconst resourceKeyOf = (record: SinkRecord): string => {\n  const attributes = buildResourceAttributes(record).sort((left, right) =>\n    left.key.localeCompare(right.key),\n  );\n  return JSON.stringify(attributes);\n};\n\nconst buildResourceAttributes = (record: SinkRecord): OtlpAttribute[] => {\n  const attributes: OtlpAttribute[] = [];\n  const keys = new Set<string>();\n  const add = (attribute: OtlpAttribute | undefined): void => {\n    if (!attribute || keys.has(attribute.key)) return;\n    keys.add(attribute.key);\n    attributes.push(attribute);\n  };\n\n  if (typeof record.service === \"string\" && record.service.length > 0) {\n    add({ key: \"service.name\", value: { stringValue: record.service } });\n  }\n  if (typeof record.env === \"string\" && record.env.length > 0) {\n    add({\n      key: \"deployment.environment\",\n      value: { stringValue: record.env },\n    });\n  }\n\n  const resource = record.resource;\n  if (\n    resource !== null &&\n    typeof resource === \"object\" &&\n    !Array.isArray(resource)\n  ) {\n    for (const [key, value] of Object.entries(resource)) {\n      add(toOtlpAttribute(key, value));\n    }\n  }\n\n  return attributes;\n};\n\nexport function otlpSink(options: OtlpSinkOptions = {}): Sink {\n  const url = resolveUrl(options);\n  const throwOnError = options.throwOnError ?? false;\n  const attributeFields = options.attributes ?? DEFAULT_ATTRIBUTE_FIELDS;\n  const headers = {\n    \"content-type\": \"application/json\",\n    ...parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS),\n    ...(options.headers ?? {}),\n  };\n\n  if (!url) {\n    let warned = false;\n    return async () => {\n      if (!warned) {\n        warned = true;\n        console.warn(\n          \"[amplio] otlpSink: no endpoint configured — set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (base URL, /v1/logs appended), or pass otlpSink({ endpoint }); OTLP export is disabled\",\n        );\n      }\n    };\n  }\n\n  let warnedExportFailure = false;\n\n  const warnExportFailure = (detail: string): void => {\n    if (throwOnError || warnedExportFailure) {\n      return;\n    }\n    warnedExportFailure = true;\n    console.warn(\n      `[amplio] otlpSink: export failed (${detail}); further failures will be silent. Pass throwOnError: true to fail hard.`,\n    );\n  };\n\n  const buildAttributes = (record: SinkRecord): OtlpAttribute[] => {\n    const attributes: OtlpAttribute[] = [];\n    for (const field of attributeFields) {\n      // Keep the conventional OTLP attribute key `event` while sourcing the\n      // canonical semantic `@event` field by default.\n      const key = field === \"@event\" ? \"event\" : field;\n      const attr = toOtlpAttribute(key, fieldValue(record, field));\n      if (attr) {\n        attributes.push(attr);\n      }\n    }\n    return attributes;\n  };\n\n  const toLogRecord = (record: SinkRecord) => {\n    const attributes = buildAttributes(record);\n    return {\n      timeUnixNano: toTimeUnixNano(record.timestamp),\n      body: { stringValue: JSON.stringify(record) },\n      ...(attributes.length > 0 ? { attributes } : {}),\n    };\n  };\n\n  // One resourceLogs entry per distinct OTLP resource — records in a batch\n  // usually share one, but never stamp record A with B's resource attributes.\n  const buildPayload = (records: SinkRecord[]) => {\n    const groups = new Map<string, SinkRecord[]>();\n    for (const record of records) {\n      const key = resourceKeyOf(record);\n      const group = groups.get(key);\n      if (group) {\n        group.push(record);\n      } else {\n        groups.set(key, [record]);\n      }\n    }\n\n    const resourceLogs = [...groups.values()].map((group) => {\n      const first = group[0]!;\n      const resourceAttributes = buildResourceAttributes(first);\n      return {\n        ...(resourceAttributes.length > 0\n          ? { resource: { attributes: resourceAttributes } }\n          : {}),\n        scopeLogs: [{ logRecords: group.map(toLogRecord) }],\n      };\n    });\n\n    return { resourceLogs };\n  };\n\n  const exportRecords = async (records: SinkRecord[]): Promise<void> => {\n    let response: Response;\n    try {\n      response = await fetch(url, {\n        method: \"POST\",\n        headers,\n        body: JSON.stringify(buildPayload(records)),\n      });\n    } catch (error) {\n      if (throwOnError) {\n        throw error;\n      }\n      warnExportFailure(\"network_error\");\n      return;\n    }\n\n    if (!response.ok) {\n      if (throwOnError) {\n        throw new Error(`OTLP export failed with status ${response.status}`);\n      }\n      warnExportFailure(`status ${response.status}`);\n      return;\n    }\n  };\n\n  if (!options.batch) {\n    return (record: SinkRecord) => exportRecords([record]);\n  }\n\n  const batchConfig = options.batch === true ? {} : options.batch;\n  const maxSize = batchConfig.maxSize ?? DEFAULT_BATCH_MAX_SIZE;\n  const maxWaitMs = batchConfig.maxWaitMs ?? DEFAULT_BATCH_MAX_WAIT_MS;\n\n  let buffer: SinkRecord[] = [];\n  let timer: ReturnType<typeof setTimeout> | null = null;\n  let pending: {\n    promise: Promise<void>;\n    resolve: () => void;\n    reject: (e: unknown) => void;\n  } | null = null;\n\n  const flushBatch = (): Promise<void> => {\n    if (timer !== null) {\n      clearTimeout(timer);\n      timer = null;\n    }\n    const records = buffer;\n    const settled = pending;\n    buffer = [];\n    pending = null;\n    if (records.length === 0) {\n      settled?.resolve();\n      return Promise.resolve();\n    }\n    const delivery = exportRecords(records).then(\n      () => settled?.resolve(),\n      (error) => {\n        // Every emit in the batch awaited this promise — reject them all so\n        // throwOnError surfaces per-record, matching the unbatched contract.\n        if (settled) {\n          settled.reject(error);\n        }\n      },\n    );\n    return delivery;\n  };\n\n  const sink: Sink = (record: SinkRecord): Promise<void> => {\n    buffer.push(record);\n    if (pending === null) {\n      let resolve!: () => void;\n      let reject!: (e: unknown) => void;\n      const promise = new Promise<void>((res, rej) => {\n        resolve = res;\n        reject = rej;\n      });\n      pending = { promise, resolve, reject };\n    }\n    const result = pending.promise;\n    if (buffer.length >= maxSize) {\n      void flushBatch();\n    } else if (timer === null) {\n      timer = setTimeout(flushBatch, maxWaitMs);\n      // Don't keep a Node process alive just for a pending batch window.\n      (timer as { unref?: () => void }).unref?.();\n    }\n    return result;\n  };\n  sink.flush = flushBatch;\n  return sink;\n}\n"
         }
       ]
     },
@@ -320,176 +666,17 @@
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
       "name": "enricher-service-metadata",
       "title": "Service Metadata Enricher",
-      "description": "Enricher that adds service name / environment metadata.",
+      "description": "Resource enricher for bounded deployment name, version, and region attributes.",
       "type": "registry:lib",
-      "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
+        "@useamplio/amplio@^0.1.0-alpha.16"
       ],
       "files": [
         {
           "path": "registry/enrichers/service-metadata.ts",
           "target": "~/telemetry/enrichers/service-metadata.ts",
           "type": "registry:lib",
-          "content": "import type { JsonValue, LogRecord } from \"@useamplio/amplio\";\n\nfunction envOrUndefined(key: string): string | undefined {\n  const value = process.env[key];\n  if (value === undefined || value === \"\") {\n    return undefined;\n  }\n  return value;\n}\n\nexport function serviceMetadata(record: LogRecord): LogRecord {\n  const service: Record<string, JsonValue> = {\n    name: envOrUndefined(\"AMPLIO_SERVICE\") ?? record.service ?? \"\",\n  };\n\n  const version = envOrUndefined(\"AMPLIO_SERVICE_VERSION\");\n  if (version !== undefined) {\n    service.version = version;\n  }\n\n  const region = envOrUndefined(\"AMPLIO_REGION\");\n  if (region !== undefined) {\n    service.region = region;\n  }\n\n  return {\n    ...record,\n    service,\n  };\n}\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "enricher-query-allowlist",
-      "title": "Query Allowlist Enricher",
-      "description": "Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.",
-      "type": "registry:lib",
-      "docs": "Wire the enricher: add `queryAllowlist()` to the init() enrichers array in telemetry/logger.ts (pass { allow: [\"page\"] } to keep specific params). Prefer `npx @useamplio/cli@alpha add enricher query-allowlist` — it wires logger.ts for you.",
-      "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/enrichers/query-allowlist.ts",
-          "target": "~/telemetry/enrichers/query-allowlist.ts",
-          "type": "registry:lib",
-          "content": "/**\n * Global enricher for init({ enrichers }) that scrubs `http.search`.\n *\n * Request middleware records the query string verbatim, and field-level\n * redaction does not parse it — tokens or PII in `?…` params can leak.\n * This enricher drops `http.search` entirely by default; pass an allowlist\n * to keep specific params and redact the rest.\n *\n * @example\n * init({\n *   // …\n *   enrichers: [queryAllowlist()],                          // drop http.search\n *   // enrichers: [queryAllowlist({ allow: [\"page\", \"sort\"] })], // keep page/sort, redact the rest\n * });\n */\nimport type { JsonValue, LogRecord } from \"@useamplio/amplio\";\n\nexport interface QueryAllowlistOptions {\n  /** Query params to keep verbatim. Everything else becomes `[REDACTED]`. */\n  allow?: string[];\n}\n\nfunction isRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {\n  return typeof value === \"object\" && value !== null && !Array.isArray(value);\n}\n\nexport function queryAllowlist(options: QueryAllowlistOptions = {}) {\n  const allow = new Set(options.allow ?? []);\n\n  return (record: LogRecord): LogRecord => {\n    const http = record.http;\n    if (!isRecord(http) || typeof http.search !== \"string\" || http.search === \"\") {\n      return record;\n    }\n\n    if (allow.size === 0) {\n      const { search: _search, ...rest } = http;\n      return { ...record, http: rest };\n    }\n\n    let params: URLSearchParams;\n    try {\n      params = new URLSearchParams(http.search.replace(/^\\?/, \"\"));\n    } catch {\n      // Unparseable query string — safer to drop it than to pass it through.\n      const { search: _search, ...rest } = http;\n      return { ...record, http: rest };\n    }\n\n    const parts: string[] = [];\n    for (const [key, value] of params) {\n      parts.push(\n        allow.has(key)\n          ? `${encodeURIComponent(key)}=${encodeURIComponent(value)}`\n          : `${encodeURIComponent(key)}=[REDACTED]`,\n      );\n    }\n\n    const search = parts.join(\"&\");\n    return { ...record, http: { ...http, search: search ? `?${search}` : \"\" } };\n  };\n}\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "enricher-request-metadata",
-      "title": "Request Metadata Enricher",
-      "description": "Enricher that adds request id / HTTP metadata.",
-      "type": "registry:lib",
-      "docs": "requestMetadata is a per-request enricher factory — use it inside middleware/wrappers (requestLogger.set(enrich({}))), not in the init() enrichers array.",
-      "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "files": [
-        {
-          "path": "registry/enrichers/request-metadata.ts",
-          "target": "~/telemetry/enrichers/request-metadata.ts",
-          "type": "registry:lib",
-          "content": "/**\n * Per-request enricher factory for middleware and custom wrappers — NOT for global init().\n * Register the returned function inside your request scope, not via init({ enrichers }).\n *\n * @example\n * // inside your middleware/wrapper, before emit:\n * const enrich = requestMetadata({ method: req.method, path: req.path, ip: req.ip });\n * requestLogger.set(enrich({}));\n */\nimport type { LogRecord } from \"@useamplio/amplio\";\n\nexport interface RequestContext {\n  method: string;\n  path: string;\n  route?: string;\n  status?: number;\n  ip?: string;\n  userAgent?: string;\n  requestId?: string;\n}\n\nfunction nonEmpty(value: string | undefined): string | undefined {\n  return value !== undefined && value !== \"\" ? value : undefined;\n}\n\nexport function requestMetadata(context: RequestContext) {\n  return (record: LogRecord): LogRecord => {\n    const route = nonEmpty(context.route);\n    const ip = nonEmpty(context.ip);\n    const userAgent = nonEmpty(context.userAgent);\n    const requestId = nonEmpty(context.requestId) ?? record.request_id;\n\n    return {\n      ...record,\n      ...(requestId !== undefined ? { request_id: requestId } : {}),\n      http: {\n        method: context.method,\n        path: context.path,\n        ...(route !== undefined ? { route } : {}),\n        ...(context.status !== undefined ? { status: context.status } : {}),\n        ...(ip !== undefined ? { ip } : {}),\n        ...(userAgent !== undefined ? { user_agent: userAgent } : {}),\n      },\n    };\n  };\n}\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "integration-next-auth",
-      "title": "NextAuth (Auth.js) Integration",
-      "description": "NextAuth v5 events hook that emits amplio auth events (uses local message types — no next-auth type imports needed).",
-      "type": "registry:lib",
-      "docs": "Wire into your NextAuth config: `events: amplioNextAuthEvents()` (create-t3-app: src/server/auth/config.ts), and wrap src/app/api/auth/[...nextauth]/route.ts with withAmplio so rows share the request spine's request_id (`amplio init --wire` does this). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "registryDependencies": [
-        "@useamplio/event-auth-user-signed-up",
-        "@useamplio/event-auth-user-signed-in"
-      ],
-      "files": [
-        {
-          "path": "registry/integrations/next-auth.ts",
-          "target": "~/telemetry/integrations/next-auth.ts",
-          "type": "registry:lib",
-          "content": "/**\n * NextAuth (Auth.js v5) → amplio auth events.\n *\n * Wire into your NextAuth config (create-t3-app: src/server/auth/config.ts):\n *\n *   import { amplioNextAuthEvents } from \"../../../telemetry/integrations/next-auth\";\n *\n *   export const authConfig = {\n *     providers: [...],\n *     events: amplioNextAuthEvents(),\n *   } satisfies NextAuthConfig;\n *\n * These events fire inside the [...nextauth] route handler. Wrap that route\n * with withAmplio so the rows share the request spine's request_id — in a\n * stock create-t3-app layout `amplio init --yes` (or `init --wire`) does it:\n *\n *   // src/app/api/auth/[...nextauth]/route.ts\n *   const { GET: authGet, POST: authPost } = handlers;\n *   export const GET = withAmplio(authGet);\n *   export const POST = withAmplio(authPost);\n *\n * Uses structural types for the NextAuth event messages instead of importing\n * from next-auth (its v5 type exports are still beta-unstable).\n */\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\ntype NextAuthUser = {\n  id?: string;\n  email?: string | null;\n};\n\ntype NextAuthAccount = {\n  provider?: string;\n  type?: string;\n} | null;\n\nexport type NextAuthSignInMessage = {\n  user: NextAuthUser;\n  account?: NextAuthAccount;\n  isNewUser?: boolean;\n};\n\nexport type NextAuthCreateUserMessage = {\n  user: NextAuthUser;\n};\n\ntype SignInMethod = \"password\" | \"oauth\" | \"magic_link\" | \"sso\";\n\nfunction signInMethod(account: NextAuthAccount | undefined): SignInMethod {\n  switch (account?.type) {\n    case \"credentials\":\n      return \"password\";\n    case \"email\":\n      return \"magic_link\";\n    default:\n      // oidc / oauth / webauthn all reach the app via a provider flow.\n      return \"oauth\";\n  }\n}\n\nfunction userFields(user: NextAuthUser): { id: string; email?: string } | null {\n  if (!user.id) {\n    return null;\n  }\n  return { id: user.id, ...(user.email ? { email: user.email } : {}) };\n}\n\n// `createUser` (adapter created a user row) is the reliable \"signed up\"\n// signal — `isNewUser` on signIn is not set for database-session credential\n// flows. createUser has no account, though, so it cannot name the signup\n// method; instead of emitting a half-empty row here we mark the id and let\n// the signIn event (which fires right after, with the account) emit\n// auth.user.signed_up exactly once with the real method. Bounded so a\n// long-lived process never grows it past ~1000 ids.\nconst newlyCreatedUserIds = new Set<string>();\nconst NEWLY_CREATED_CAP = 1000;\n\nexport function trackNextAuthCreateUser(message: NextAuthCreateUserMessage): void {\n  const user = userFields(message.user);\n  if (!user) {\n    return;\n  }\n  if (newlyCreatedUserIds.size >= NEWLY_CREATED_CAP) {\n    newlyCreatedUserIds.clear();\n  }\n  newlyCreatedUserIds.add(user.id);\n}\n\nexport function trackNextAuthSignIn(message: NextAuthSignInMessage) {\n  const user = userFields(message.user);\n  if (!user) {\n    return null;\n  }\n\n  // NextAuth fires one signIn event for both flows; isNewUser (or a\n  // createUser event seen just before) distinguishes a first-time\n  // registration. Emit signed_up as an extra row so both funnels stay\n  // queryable on their own event name.\n  const isNewUser = message.isNewUser === true || newlyCreatedUserIds.has(user.id);\n  newlyCreatedUserIds.delete(user.id);\n  if (isNewUser) {\n    logger\n      .event(AuthUserSignedUp)\n      .set({\n        user,\n        signup: {\n          method: message.account?.type === \"credentials\" ? \"email\" : \"oauth\",\n        },\n      })\n      .emit();\n  }\n\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user,\n      session: { method: signInMethod(message.account) },\n    })\n    .emit();\n}\n\n/**\n * Drop-in `events` object for NextAuth(config). Inside a withAmplio-wrapped\n * route these rows correlate with the http.request spine via request_id;\n * outside one they still emit as standalone rows.\n *\n * Covered: signIn (auth.user.signed_in) and createUser + signIn\n * (auth.user.signed_up — reliable even when isNewUser is not set, e.g.\n * database-session credential flows).\n *\n * Not covered by default — this file is open code, extend it in place:\n *\n *   signOut: NextAuth's message shape depends on session strategy\n *   ({ token } for JWT, { session } for database). Scaffold an event with\n *   `amplio add event auth.user.signed_out`, then add:\n *\n *     signOut: (message: { token?: { sub?: string } | null }) => {\n *       const id = message.token?.sub;\n *       if (id) {\n *         logger.event(AuthUserSignedOut).set({ user: { id } }).emit();\n *       }\n *     },\n *\n *   linkAccount: fires when an OAuth account is linked to an existing user\n *   (message: { user, account }). Scaffold `amplio add event\n *   auth.account.linked` and emit `{ user, account: { provider } }` the same\n *   way.\n */\nexport function amplioNextAuthEvents() {\n  return {\n    createUser: (message: NextAuthCreateUserMessage) => {\n      trackNextAuthCreateUser(message);\n    },\n    signIn: (message: NextAuthSignInMessage) => {\n      trackNextAuthSignIn(message);\n    },\n  };\n}\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "integration-better-auth",
-      "title": "Better Auth Integration",
-      "description": "Better Auth helpers that emit amplio auth events.",
-      "type": "registry:lib",
-      "docs": "Wire the plugin: add `createBetterAuthAmplioPlugin()` to your betterAuth({ plugins: [...] }) config. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15",
-        "better-auth@^1.2.0"
-      ],
-      "registryDependencies": [
-        "@useamplio/event-auth-user-signed-up",
-        "@useamplio/event-auth-user-signed-in"
-      ],
-      "files": [
-        {
-          "path": "registry/integrations/better-auth.ts",
-          "target": "~/telemetry/integrations/better-auth.ts",
-          "type": "registry:lib",
-          "content": "import type { BetterAuthPlugin } from \"better-auth\";\nimport { createAuthMiddleware } from \"better-auth/api\";\nimport { getAccountCookie } from \"better-auth/cookies\";\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\ntype AuthHookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];\n\nexport function trackBetterAuthSignUp(input: {\n  user: { id: string; email: string };\n  method: \"email\" | \"oauth\" | \"invite\";\n  referrer?: string;\n}) {\n  return logger\n    .event(AuthUserSignedUp)\n    .set({\n      user: input.user,\n      signup: {\n        method: input.method,\n        ...(input.referrer ? { referrer: input.referrer } : {}),\n      },\n    })\n    .emit();\n}\n\nexport function trackBetterAuthSignIn(input: {\n  user: { id: string; email: string };\n  session: { id: string; method: \"password\" | \"oauth\" | \"magic_link\" | \"sso\"; mfa?: boolean };\n}) {\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user: input.user,\n      session: input.session,\n    })\n    .emit();\n}\n\nfunction readBody(ctx: AuthHookContext): Record<string, unknown> {\n  const body = ctx.body;\n  return body && typeof body === \"object\" ? (body as Record<string, unknown>) : {};\n}\n\nfunction readUser(ctx: AuthHookContext): { id: string; email: string } | null {\n  const user = ctx.context.newSession?.user;\n  if (!user?.id || !user.email) {\n    return null;\n  }\n  return { id: user.id, email: user.email };\n}\n\nfunction readReferrer(ctx: AuthHookContext): string | undefined {\n  const body = readBody(ctx);\n  const referrer = typeof body.referrer === \"string\" ? body.referrer : undefined;\n  const callbackURL = typeof body.callbackURL === \"string\" ? body.callbackURL : undefined;\n  return referrer ?? callbackURL;\n}\n\nfunction hasInvitationId(ctx: AuthHookContext): boolean {\n  const body = readBody(ctx);\n  return typeof body.invitationId === \"string\" && body.invitationId.length > 0;\n}\n\nfunction isSocialRegistration(ctx: AuthHookContext): boolean {\n  const returned = ctx.context.returned;\n  if (returned && typeof returned === \"object\" && \"isRegister\" in returned) {\n    return Boolean((returned as { isRegister?: boolean }).isRegister);\n  }\n  return false;\n}\n\nfunction readMfa(ctx: AuthHookContext): boolean | undefined {\n  const body = readBody(ctx);\n  if (typeof body.mfa === \"boolean\") {\n    return body.mfa;\n  }\n  const session = ctx.context.newSession?.session as { mfa?: boolean } | undefined;\n  return session?.mfa;\n}\n\nasync function readOAuthProvider(ctx: AuthHookContext): Promise<string | undefined> {\n  const params = ctx.params as { id?: string } | undefined;\n  if (typeof params?.id === \"string\") {\n    return params.id;\n  }\n  try {\n    const account = await getAccountCookie(ctx);\n    return account?.providerId;\n  } catch {\n    return undefined;\n  }\n}\n\nfunction trackSignUpFromContext(ctx: AuthHookContext, method: \"email\" | \"oauth\" | \"invite\") {\n  const user = readUser(ctx);\n  if (!user) {\n    return;\n  }\n  const referrer = readReferrer(ctx);\n  trackBetterAuthSignUp({\n    user,\n    method,\n    ...(referrer !== undefined ? { referrer } : {}),\n  });\n}\n\nfunction trackSignInFromContext(\n  ctx: AuthHookContext,\n  method: \"password\" | \"oauth\" | \"magic_link\" | \"sso\",\n) {\n  const user = readUser(ctx);\n  const session = ctx.context.newSession?.session;\n  if (!user || !session?.id) {\n    return;\n  }\n  const mfa = readMfa(ctx);\n  trackBetterAuthSignIn({\n    user,\n    session: {\n      id: session.id,\n      method,\n      ...(mfa !== undefined ? { mfa } : {}),\n    },\n  });\n}\n\nexport function createBetterAuthAmplioPlugin(): BetterAuthPlugin {\n  return {\n    id: \"amplio\",\n    hooks: {\n      after: [\n        {\n          matcher: (ctx) => ctx.path === \"/sign-up/email\" && !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignUpFromContext(ctx, hasInvitationId(ctx) ? \"invite\" : \"email\");\n          }),\n        },\n        {\n          matcher: (ctx) =>\n            (ctx.path === \"/organization/signup-with-invitation\" ||\n              ctx.path.endsWith(\"/signup-with-invitation\")) &&\n            !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignUpFromContext(ctx, \"invite\");\n          }),\n        },\n        {\n          matcher: (ctx) =>\n            ctx.path.startsWith(\"/callback/\") &&\n            !!ctx.context.newSession?.user &&\n            isSocialRegistration(ctx),\n          handler: createAuthMiddleware(async (ctx) => {\n            await readOAuthProvider(ctx);\n            trackSignUpFromContext(ctx, hasInvitationId(ctx) ? \"invite\" : \"oauth\");\n          }),\n        },\n        {\n          matcher: (ctx) => ctx.path === \"/sign-in/email\" && !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignInFromContext(ctx, \"password\");\n          }),\n        },\n        {\n          matcher: (ctx) =>\n            ctx.path.startsWith(\"/callback/\") &&\n            !!ctx.context.newSession?.user &&\n            !isSocialRegistration(ctx),\n          handler: createAuthMiddleware(async (ctx) => {\n            await readOAuthProvider(ctx);\n            trackSignInFromContext(ctx, \"oauth\");\n          }),\n        },\n        {\n          matcher: (ctx) => ctx.path === \"/magic-link/verify\" && !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignInFromContext(ctx, \"magic_link\");\n          }),\n        },\n        {\n          matcher: (ctx) =>\n            (ctx.path === \"/sign-in/sso\" ||\n              ctx.path.startsWith(\"/sso/callback\") ||\n              ctx.path.startsWith(\"/sso/saml2/\")) &&\n            !!ctx.context.newSession?.user,\n          handler: createAuthMiddleware(async (ctx) => {\n            trackSignInFromContext(ctx, \"sso\");\n          }),\n        },\n      ],\n    },\n  };\n}\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "integration-clerk",
-      "title": "Clerk Integration",
-      "description": "Clerk helpers that emit amplio auth events.",
-      "type": "registry:lib",
-      "docs": "Call handleClerkWebhook from your Clerk webhook route (user.created / session.created). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15",
-        "@clerk/backend@^1.25.0"
-      ],
-      "registryDependencies": [
-        "@useamplio/event-auth-user-signed-up",
-        "@useamplio/event-auth-user-signed-in"
-      ],
-      "files": [
-        {
-          "path": "registry/integrations/clerk.ts",
-          "target": "~/telemetry/integrations/clerk.ts",
-          "type": "registry:lib",
-          "content": "import type { WebhookEvent } from \"@clerk/backend/webhooks\";\nimport { logger } from \"../logger\";\nimport { AuthUserSignedIn } from \"../events/auth/user-signed-in\";\nimport { AuthUserSignedUp } from \"../events/auth/user-signed-up\";\n\nexport type ClerkWebhookEvent = WebhookEvent;\n\ntype ClerkUserPayload = {\n  id: string;\n  primary_email_address_id?: string | null;\n  email_addresses?: Array<{ id: string; email_address: string }>;\n  external_accounts?: Array<{ provider: string }>;\n  enterprise_accounts?: Array<{ provider: string }>;\n  password_enabled?: boolean;\n  two_factor_enabled?: boolean;\n  public_metadata?: Record<string, unknown> | null;\n  unsafe_metadata?: Record<string, unknown> | null;\n  private_metadata?: Record<string, unknown> | null;\n};\n\ntype ClerkSessionPayload = {\n  id: string;\n  user_id: string;\n  user: ClerkUserPayload | null;\n};\n\nexport function trackClerkUserCreated(input: {\n  user: { id: string; email: string };\n  method: \"email\" | \"oauth\" | \"invite\";\n  referrer?: string;\n}) {\n  return logger\n    .event(AuthUserSignedUp)\n    .set({\n      user: input.user,\n      signup: {\n        method: input.method,\n        ...(input.referrer ? { referrer: input.referrer } : {}),\n      },\n    })\n    .emit();\n}\n\nexport function trackClerkSessionCreated(input: {\n  user: { id: string; email?: string };\n  session: { id: string; method: \"password\" | \"oauth\" | \"magic_link\" | \"sso\"; mfa?: boolean };\n}) {\n  return logger\n    .event(AuthUserSignedIn)\n    .set({\n      user: input.user,\n      session: input.session,\n    })\n    .emit();\n}\n\nfunction clerkPrimaryEmail(user: ClerkUserPayload): string | undefined {\n  const addresses = user.email_addresses ?? [];\n  if (addresses.length === 0) {\n    return undefined;\n  }\n  const primary = user.primary_email_address_id\n    ? addresses.find((address) => address.id === user.primary_email_address_id)\n    : addresses[0];\n  return primary?.email_address;\n}\n\nfunction metadataReferrer(user: ClerkUserPayload): string | undefined {\n  for (const metadata of [user.public_metadata, user.unsafe_metadata, user.private_metadata]) {\n    if (!metadata || typeof metadata !== \"object\") {\n      continue;\n    }\n    const referrer = metadata.referrer ?? metadata.referral;\n    if (typeof referrer === \"string\" && referrer.length > 0) {\n      return referrer;\n    }\n  }\n  return undefined;\n}\n\nfunction metadataIndicatesInvite(user: ClerkUserPayload): boolean {\n  for (const metadata of [user.public_metadata, user.unsafe_metadata, user.private_metadata]) {\n    if (!metadata || typeof metadata !== \"object\") {\n      continue;\n    }\n    if (\"invitation_id\" in metadata || \"invite\" in metadata || \"invitationId\" in metadata) {\n      return true;\n    }\n  }\n  return false;\n}\n\nfunction inferClerkSignUpMethod(user: ClerkUserPayload): \"email\" | \"oauth\" | \"invite\" {\n  if (metadataIndicatesInvite(user)) {\n    return \"invite\";\n  }\n  if ((user.external_accounts?.length ?? 0) > 0) {\n    return \"oauth\";\n  }\n  return \"email\";\n}\n\nfunction inferClerkSignInMethod(user: ClerkUserPayload): \"password\" | \"oauth\" | \"magic_link\" | \"sso\" {\n  if ((user.enterprise_accounts?.length ?? 0) > 0) {\n    return \"sso\";\n  }\n  if ((user.external_accounts?.length ?? 0) > 0) {\n    return \"oauth\";\n  }\n  if (user.password_enabled === false) {\n    return \"magic_link\";\n  }\n  return \"password\";\n}\n\nfunction mapClerkUserCreated(data: ClerkUserPayload) {\n  const email = clerkPrimaryEmail(data);\n  if (!email) {\n    return undefined;\n  }\n  const referrer = metadataReferrer(data);\n  return trackClerkUserCreated({\n    user: { id: data.id, email },\n    method: inferClerkSignUpMethod(data),\n    ...(referrer ? { referrer } : {}),\n  });\n}\n\nfunction mapClerkSessionCreated(data: ClerkSessionPayload) {\n  const user = data.user;\n  const userId = user?.id ?? data.user_id;\n  if (!userId) {\n    return undefined;\n  }\n  const email = user ? clerkPrimaryEmail(user) : undefined;\n  const signInMethod = user ? inferClerkSignInMethod(user) : \"password\";\n  return trackClerkSessionCreated({\n    user: {\n      id: userId,\n      ...(email ? { email } : {}),\n    },\n    session: {\n      id: data.id,\n      method: signInMethod,\n      ...(user?.two_factor_enabled ? { mfa: true } : {}),\n    },\n  });\n}\n\nexport function handleClerkWebhook(event: ClerkWebhookEvent) {\n  switch (event.type) {\n    case \"user.created\":\n      return mapClerkUserCreated(event.data);\n    case \"session.created\":\n      return mapClerkSessionCreated(event.data);\n    default:\n      return undefined;\n  }\n}\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "integration-resend",
-      "title": "Resend Integration",
-      "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).",
-      "type": "registry:lib",
-      "docs": "Call trackResendEmail after sending, or handleResendWebhook from your Resend webhook route. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "registryDependencies": [
-        "@useamplio/event-email-sent"
-      ],
-      "files": [
-        {
-          "path": "registry/integrations/resend.ts",
-          "target": "~/telemetry/integrations/resend.ts",
-          "type": "registry:lib",
-          "content": "import { logger } from \"../logger\";\nimport { EmailSent } from \"../events/email/sent\";\n\ntype ResendEmailEventData = {\n  email_id: string;\n  to: string[];\n  subject: string;\n  tags?: Record<string, string> | Array<{ name: string; value: string }>;\n  template_id?: string;\n};\n\nexport type ResendWebhookEvent = {\n  type: \"email.sent\" | \"email.delivered\" | \"email.bounced\" | \"email.complained\";\n  created_at?: string;\n  data: ResendEmailEventData;\n};\n\nexport function trackResendEmail(input: {\n  message: { id: string; to: string; subject: string };\n  template: string;\n  status: \"queued\" | \"sent\" | \"failed\";\n}) {\n  return logger\n    .event(EmailSent)\n    .set({\n      email: {\n        id: input.message.id,\n        template: input.template,\n        to: input.message.to,\n        subject: input.message.subject,\n      },\n      delivery: {\n        provider: \"resend\",\n        status: input.status,\n      },\n    })\n    .emit();\n}\n\nfunction tagValue(\n  tags: ResendEmailEventData[\"tags\"],\n  name: string,\n): string | undefined {\n  if (!tags) {\n    return undefined;\n  }\n  if (Array.isArray(tags)) {\n    return tags.find((entry) => entry.name === name)?.value;\n  }\n  return tags[name];\n}\n\nfunction templateFromTags(\n  tags: ResendEmailEventData[\"tags\"],\n  templateId?: string,\n): string {\n  const tagged =\n    tagValue(tags, \"template\") ??\n    tagValue(tags, \"category\") ??\n    tagValue(tags, \"template_id\") ??\n    tagValue(tags, \"templateId\");\n  if (tagged) {\n    return tagged;\n  }\n  return templateId ?? \"unknown\";\n}\n\nfunction resendDeliveryStatus(\n  type: ResendWebhookEvent[\"type\"],\n): \"queued\" | \"sent\" | \"failed\" {\n  switch (type) {\n    case \"email.sent\":\n    case \"email.delivered\":\n      return \"sent\";\n    case \"email.bounced\":\n    case \"email.complained\":\n      return \"failed\";\n    default:\n      return \"queued\";\n  }\n}\n\nexport function handleResendWebhook(event: ResendWebhookEvent) {\n  switch (event.type) {\n    case \"email.sent\":\n    case \"email.delivered\":\n    case \"email.bounced\":\n    case \"email.complained\": {\n      const to = event.data.to[0];\n      if (!to) {\n        return undefined;\n      }\n      return trackResendEmail({\n        message: {\n          id: event.data.email_id,\n          to,\n          subject: event.data.subject,\n        },\n        template: templateFromTags(event.data.tags, event.data.template_id),\n        status: resendDeliveryStatus(event.type),\n      });\n    }\n    default:\n      return undefined;\n  }\n}\n"
-        }
-      ]
-    },
-    {
-      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-      "name": "integration-polar",
-      "title": "Polar Integration",
-      "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed).",
-      "type": "registry:lib",
-      "docs": "Call handlePolarWebhook (or trackPolarOrderPaid) from your Polar webhook route (order.paid). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio@^0.1.0-alpha.15"
-      ],
-      "registryDependencies": [
-        "@useamplio/event-payment-order-paid"
-      ],
-      "files": [
-        {
-          "path": "registry/integrations/polar.ts",
-          "target": "~/telemetry/integrations/polar.ts",
-          "type": "registry:lib",
-          "content": "import { logger } from \"../logger\";\nimport { PaymentOrderPaid } from \"../events/payment/order-paid\";\n\ntype PolarOrderData = {\n  id: string;\n  checkout_id?: string | null;\n  checkoutId?: string | null;\n  total_amount?: number;\n  totalAmount?: number;\n  currency: string;\n  customer?: {\n    id: string;\n    email?: string | null;\n  };\n  customer_id?: string;\n  customerId?: string;\n};\n\ntype PolarCheckoutData = {\n  id: string;\n  status: string;\n  total_amount?: number;\n  totalAmount?: number;\n  currency: string;\n  customer_id?: string | null;\n  customerId?: string | null;\n  customer_email?: string | null;\n  customerEmail?: string | null;\n};\n\nexport type PolarWebhookEvent =\n  | { type: \"order.paid\"; data: PolarOrderData }\n  | { type: \"checkout.updated\"; data: PolarCheckoutData };\n\nexport function trackPolarOrderPaid(input: {\n  checkout: { id: string; amount: number; currency: string };\n  customer: { id: string; email?: string };\n  method?: \"card\" | \"bank\" | \"wallet\" | \"other\";\n}) {\n  return logger\n    .event(PaymentOrderPaid)\n    .set({\n      order: {\n        id: input.checkout.id,\n        currency: input.checkout.currency.toUpperCase(),\n        amount_cents: input.checkout.amount,\n      },\n      customer: {\n        id: input.customer.id,\n        ...(input.customer.email ? { email: input.customer.email } : {}),\n      },\n      payment: {\n        provider: \"polar\",\n        ...(input.method ? { method: input.method } : {}),\n      },\n    })\n    .emit();\n}\n\nfunction readAmount(data: { total_amount?: number; totalAmount?: number }): number {\n  return data.totalAmount ?? data.total_amount ?? 0;\n}\n\nfunction mapPolarOrderPaid(data: PolarOrderData) {\n  const customerId = data.customer?.id ?? data.customerId ?? data.customer_id;\n  if (!customerId) {\n    return undefined;\n  }\n  const checkoutId = data.checkoutId ?? data.checkout_id ?? data.id;\n  return trackPolarOrderPaid({\n    checkout: {\n      id: checkoutId,\n      amount: readAmount(data),\n      currency: data.currency,\n    },\n    customer: {\n      id: customerId,\n      ...(data.customer?.email ? { email: data.customer.email } : {}),\n    },\n  });\n}\n\nfunction mapPolarCheckoutPaid(data: PolarCheckoutData) {\n  const customerId = data.customerId ?? data.customer_id;\n  if (!customerId) {\n    return undefined;\n  }\n  const customerEmail = data.customerEmail ?? data.customer_email;\n  return trackPolarOrderPaid({\n    checkout: {\n      id: data.id,\n      amount: readAmount(data),\n      currency: data.currency,\n    },\n    customer: {\n      id: customerId,\n      ...(customerEmail ? { email: customerEmail } : {}),\n    },\n  });\n}\n\nexport function handlePolarWebhook(event: PolarWebhookEvent) {\n  switch (event.type) {\n    case \"order.paid\":\n      return mapPolarOrderPaid(event.data);\n    case \"checkout.updated\":\n      if (event.data.status !== \"paid\") {\n        return undefined;\n      }\n      return mapPolarCheckoutPaid(event.data);\n    default:\n      return undefined;\n  }\n}\n"
+          "content": "type ResourceAttributes = Readonly<Record<string, string | number | boolean>>;\ntype ResourceEnricher = (\n  current: ResourceAttributes,\n) => ResourceAttributes | undefined;\n\nfunction envOrUndefined(key: string): string | undefined {\n  const value = process.env[key]?.trim();\n  return value ? value : undefined;\n}\n\n/** Adds bounded operational attributes under `record.resource`. */\nexport const serviceMetadata: ResourceEnricher = (\n  current: ResourceAttributes,\n) => ({\n  ...current,\n  ...(envOrUndefined(\"AMPLIO_SERVICE\")\n    ? { \"deployment.name\": envOrUndefined(\"AMPLIO_SERVICE\")! }\n    : {}),\n  ...(envOrUndefined(\"AMPLIO_SERVICE_VERSION\")\n    ? { \"deployment.version\": envOrUndefined(\"AMPLIO_SERVICE_VERSION\")! }\n    : {}),\n  ...(envOrUndefined(\"AMPLIO_REGION\")\n    ? { \"deployment.region\": envOrUndefined(\"AMPLIO_REGION\")! }\n    : {}),\n});\n"
         }
       ]
     }

@@ -16,7 +16,7 @@ describe("next/server runtime probe", () => {
   });
 
   it("dist keeps the webpackIgnore comment after minification", () => {
-    const distPath = path.join(pkgRoot, "dist/index.js");
+    const distPath = path.join(pkgRoot, "dist/legacy.js");
     if (!existsSync(distPath)) {
       // dist is produced by `pnpm build`; CI always builds before testing.
       return;

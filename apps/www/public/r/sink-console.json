@@ -2,18 +2,17 @@
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "sink-console",
   "title": "Console Sink",
-  "description": "Console sink that prints wide events as JSON.",
+  "description": "Console sink that prints Event records as JSON.",
   "type": "registry:lib",
-  "docs": "Wire the sink: add `import { consoleSink } from \"./sinks/console\"` to telemetry/logger.ts and append `consoleSink` to the init() sinks array. Prefer `npx @useamplio/cli@alpha add sink console` — it wires logger.ts for you.",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.15"
+    "@useamplio/amplio@^0.1.0-alpha.16"
   ],
   "files": [
     {
       "path": "registry/sinks/console.ts",
       "target": "~/telemetry/sinks/console.ts",
       "type": "registry:lib",
-      "content": "import type { LogRecord, Sink } from \"@useamplio/amplio\";\n\nexport const consoleSink: Sink = (record: LogRecord) => {\n  console.log(JSON.stringify(record));\n};\n"
+      "content": "import type { Sink } from \"@useamplio/amplio\";\n\nconst createJsonReplacer = () => {\n  const ancestors: object[] = [];\n  return function (this: object, _key: string, value: unknown): unknown {\n    if (typeof value === \"bigint\") {\n      return value.toString();\n    }\n    if (value === null || typeof value !== \"object\") {\n      return value;\n    }\n    while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {\n      ancestors.pop();\n    }\n    if (ancestors.includes(value)) {\n      return \"[Circular]\";\n    }\n    ancestors.push(value);\n    return value;\n  };\n};\n\nexport const consoleSink: Sink = (record) => {\n  console.log(JSON.stringify(record, createJsonReplacer()));\n};\n"
     }
   ]
 }

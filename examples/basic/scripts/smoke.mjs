@@ -27,15 +27,11 @@ function fail(message, code = 1) {
 }
 
 const port = await freePort();
-const child = spawn(
-  process.execPath,
-  ["--import", "tsx", "src/index.ts"],
-  {
-    cwd: root,
-    env: { ...process.env, PORT: String(port), SERVICE_NAME: "example-basic" },
-    stdio: ["ignore", "pipe", "pipe"],
-  },
-);
+const child = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], {
+  cwd: root,
+  env: { ...process.env, PORT: String(port), SERVICE_NAME: "example-basic" },
+  stdio: ["ignore", "pipe", "pipe"],
+});
 
 let stdout = "";
 let stderr = "";
@@ -71,10 +67,27 @@ async function waitReady(timeoutMs = 8000) {
 try {
   await waitReady();
 
-  const res = await fetch(`http://127.0.0.1:${port}/health`);
+  const hostileRequestId = "tenant/../../orders?token=private";
+  const res = await fetch(`http://127.0.0.1:${port}/health`, {
+    headers: { "x-request-id": hostileRequestId },
+  });
   if (!res.ok) fail(`GET /health returned ${res.status}`);
   const body = await res.json();
-  if (body?.ok !== true) fail(`unexpected health body: ${JSON.stringify(body)}`);
+  if (body?.ok !== true)
+    fail(`unexpected health body: ${JSON.stringify(body)}`);
+
+  const returnedFailureRes = await fetch(
+    `http://127.0.0.1:${port}/returned-failure`,
+  );
+  if (returnedFailureRes.status !== 503)
+    fail(`GET /returned-failure returned ${returnedFailureRes.status}`);
+  const failureRes = await fetch(`http://127.0.0.1:${port}/failure`);
+  if (failureRes.status !== 418)
+    fail(`GET /failure returned ${failureRes.status}`);
+  const signupRes = await fetch(`http://127.0.0.1:${port}/signup`, {
+    method: "POST",
+  });
+  if (!signupRes.ok) fail(`POST /signup returned ${signupRes.status}`);
 
   // allow finish handler to emit
   await new Promise((r) => setTimeout(r, 150));
@@ -85,13 +98,17 @@ try {
     .filter((l) => l.startsWith("{") && l.endsWith("}"));
 
   let record;
+  let failureRecord;
+  let returnedFailureRecord;
+  let signupRecord;
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line);
-      if (parsed?.http?.path === "/health" || parsed?.http?.method === "GET") {
-        record = parsed;
-        break;
-      }
+      if (parsed?.http?.route === "/health") record = parsed;
+      if (parsed?.http?.route === "/failure") failureRecord = parsed;
+      if (parsed?.http?.route === "/returned-failure")
+        returnedFailureRecord = parsed;
+      if (parsed?.http?.route === "/signup") signupRecord = parsed;
     } catch {
       // ignore non-json noise
     }
@@ -100,17 +117,54 @@ try {
   if (!record) {
     fail(`no JSON wide-event for /health in stdout:\n${stdout}`);
   }
+  if (!failureRecord || failureRecord.http?.status !== 418) {
+    fail(`no onError status-418 wide event for /failure in stdout:\n${stdout}`);
+  }
+  if (failureRecord.success !== false) {
+    fail(`expected /failure success false, got ${failureRecord.success}`);
+  }
+  if (
+    !returnedFailureRecord ||
+    returnedFailureRecord.http?.status !== 503 ||
+    returnedFailureRecord.success !== false
+  ) {
+    fail(`no failed status-503 wide event for /returned-failure:\n${stdout}`);
+  }
+  if (signupRecord?.auth?.signed_up?.user?.id !== "user_demo") {
+    fail(`sign-up Plugin did not contribute to request Event:\n${stdout}`);
+  }
 
   if (record.http?.status !== 200 && record.status !== 200) {
-    fail(`expected status 200, got ${JSON.stringify({ http: record.http, status: record.status })}`);
+    fail(
+      `expected status 200, got ${JSON.stringify({ http: record.http, status: record.status })}`,
+    );
   }
 
   if (!record.http || typeof record.http !== "object") {
     fail("emitted record missing nested http object");
   }
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(record.request_id)) {
+    fail(
+      `expected generated request_id, got ${JSON.stringify(record.request_id)}`,
+    );
+  }
+  if (
+    record.request_id === hostileRequestId ||
+    JSON.stringify(record).includes(hostileRequestId)
+  ) {
+    fail(
+      `hostile request ID leaked into wide event: ${JSON.stringify(record)}`,
+    );
+  }
 
   console.log("example-basic ok");
-  console.log(JSON.stringify({ service: record.service, http: record.http, status: record.status }));
+  console.log(
+    JSON.stringify({
+      service: record.service,
+      event: record["@event"],
+      http: record.http,
+    }),
+  );
   cleanup();
   await new Promise((r) => child.once("exit", r));
   process.exit(0);

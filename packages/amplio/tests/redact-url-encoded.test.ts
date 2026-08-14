@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redactRecord } from "../src/index.js";
+import { redactRecord } from "../src/legacy.js";
 
 describe("redactRecord URL-encoded PII", () => {
   it("redacts percent-encoded email in tRPC-style query string", () => {

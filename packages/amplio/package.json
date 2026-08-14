@@ -1,7 +1,7 @@
 {
   "name": "@useamplio/amplio",
-  "version": "0.1.0-alpha.15",
-  "description": "Tiny schema-first wide-event telemetry runtime",
+  "version": "0.1.0-alpha.16",
+  "description": "Composable semantic runtime for open-code wide events",
   "type": "module",
   "license": "MIT",
   "publishConfig": {
@@ -22,7 +22,7 @@
     "observability",
     "wide-events",
     "logging",
-    "schema-first",
+    "composable-semantics",
     "structured-logging"
   ],
   "sideEffects": false,
@@ -31,9 +31,17 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./events": {
-      "types": "./dist/events.d.ts",
-      "import": "./dist/events.js"
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./legacy": {
+      "types": "./dist/legacy.d.ts",
+      "import": "./dist/legacy.js"
     }
   },
   "main": "./dist/index.js",
@@ -42,7 +50,6 @@
     "dist",
     "README.md",
     "LICENSE",
-    "ALPHA.md",
     "docs"
   ],
   "scripts": {
@@ -53,14 +60,6 @@
     "typecheck": "tsc --noEmit",
     "bench": "vitest bench --run",
     "size": "node scripts/size.mjs"
-  },
-  "peerDependencies": {
-    "zod": "^3.0.0 || ^4.0.0"
-  },
-  "peerDependenciesMeta": {
-    "zod": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

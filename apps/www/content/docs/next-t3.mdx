@@ -1,168 +1,180 @@
 ---
 title: create-t3-app
-description: Next.js 15, tRPC v11, App Router wiring for amplio.
+description: Next.js App Router and tRPC v11 inside one declared HTTP Event.
 ---
 
-The most polished path: create-t3-app with `src/` layout and `telemetry/` at repo root.
+The create-t3-app shape keeps telemetry source at the repository root. Route and procedure code
+stays ordinary; Next and tRPC Plugins attach at their native seams.
 
 ## Scaffold
 
 ```bash
-npx @useamplio/cli@alpha init --service t3-app --yes
+npx @useamplio/cli@alpha init --service t3-app --paths
+npx @useamplio/cli@alpha add plugin next --source-only
+npx @useamplio/cli@alpha add plugin trpc --event http.request
 ```
 
-Under `--yes`, `init` auto-wires:
+Next route selection is application-specific, so `--source-only` copies editable source without
+pretending it is active. Attach `withAmplio()` to the intended route export below, then promote that
+verified manual boundary with `add plugin next --target <route-file>`. The tRPC command can wire one
+unambiguous `initTRPC` construction and its direct procedure bases atomically.
 
-- `src/app/api/trpc/[trpc]/route.ts` → `withAmplio`
-- `src/server/api/trpc.ts` → `amplioTrpcMiddleware`
-- `src/app/api/auth/[...nextauth]/route.ts` → `withAmplio` (when present)
-- `src/instrumentation.ts` → imports `telemetry/logger` (Node runtime guard)
+Target tree:
 
-`instrumentation.ts` is required — without it, `.emit()` before `init()` drops silently.
+```text
+telemetry/
+  events/
+    http-request.ts
+  plugins/
+    next.ts
+    trpc.ts
+  sinks/
+    console.ts
+  runtime.ts
+instrumentation.ts
+```
 
-```typescript
+Load runtime once from Next instrumentation:
+
+```ts
+// instrumentation.ts
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    await import("../telemetry/logger");
+    await import("./telemetry/runtime");
   }
 }
 ```
 
-## Manual wiring
+## Mount tRPC in the HTTP Event
 
-If your files have drifted from the stock T3 shape, `init` leaves them alone and prints the manual snippets. Two edits:
+```ts
+// telemetry/events/http-request.ts
+import { event } from "@useamplio/amplio";
+import { z } from "zod";
+import { TrpcPlugin } from "../plugins/trpc";
 
-```typescript
+export const HttpRequest = event({
+  id: "http.request",
+  version: 1,
+  schema: z.object({
+    request_id: z.string(),
+    http: z.object({
+      method: z.string(),
+      route: z.string().optional(),
+      status: z.number().int().optional(),
+    }),
+  }),
+  tree: {
+    rpc: TrpcPlugin.events,
+  },
+});
+```
+
+`TrpcPlugin.events.procedures` is a bounded repeated duration Event for queries and mutations. Every
+recorded occurrence owns its stable path, type, duration, success, and structured failure state.
+Subscriptions pass through unchanged because this middleware seam cannot observe stream completion.
+
+## Own the App Router boundary
+
+Wrap the catch-all route with an explicit stable route template:
+
+```ts
 // src/app/api/trpc/[trpc]/route.ts
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { withAmplio } from "../../../../../telemetry/middleware/next";
-import { appRouter } from "@/server/api/root";
-import { createTRPCContext } from "@/server/api/trpc";
+import type { NextRequest } from "next/server";
+import { withAmplio } from "~telemetry/plugins/next";
 
-const handler = (request: Request) =>
+const handler = (request: NextRequest) =>
   fetchRequestHandler({
     endpoint: "/api/trpc",
     req: request,
     router: appRouter,
-    createContext: () => createTRPCContext({ headers: request.headers }),
+    createContext: createTRPCContext,
   });
 
-export const GET = withAmplio(handler);
-export const POST = withAmplio(handler);
+export const GET = withAmplio("/api/trpc/[trpc]", handler);
+export const POST = withAmplio("/api/trpc/[trpc]", handler);
 ```
 
-```typescript
+The Next Plugin records method, explicit route, returned status, and duration. A thrown handler keeps
+method and route but does not invent a final HTTP status that Next never exposed. The route argument
+is required; the Plugin intentionally has no `withAmplio(handler)` overload.
+
+Record this exact customer-owned route as the active boundary:
+
+```bash
+npx @useamplio/cli@alpha add plugin next \
+  --target 'src/app/api/trpc/[trpc]/route.ts'
+```
+
+The CLI authenticates the local Plugin import, stable route literal, handler argument, and exported
+HTTP method. It stores the selected composition root but does not rewrite the route. If verification
+fails, source-only state and every project byte are preserved.
+
+## Attach tRPC once
+
+```ts
 // src/server/api/trpc.ts
-import { amplioTrpcMiddleware } from "../../../telemetry/middleware/trpc";
+import { TrpcPlugin } from "~telemetry/plugins/trpc";
 
-const amplioMiddleware = t.middleware(amplioTrpcMiddleware());
-export const publicProcedure = t.procedure.use(amplioMiddleware);
-// repeat for protectedProcedure / other bases
+export const publicProcedure = t.procedure.use(TrpcPlugin());
+export const protectedProcedure = t.procedure.use(TrpcPlugin());
 ```
 
-`withAmplio` owns the `http.request` spine; `amplioTrpcMiddleware` annotates it with `trpc.path`, `trpc.type`, and status — it does not emit a sibling row. `amplioTrpcMiddleware()` typechecks under strict `tsconfig` without casts.
+tRPC v11 represents downstream failures as a resolved `{ ok: false, error }` value. The Plugin marks
+the nested Event failed and returns that same resolved value; thrown values are rethrown unchanged.
+Subscriptions are returned by Promise identity and omitted rather than reported with a false duration.
 
-## Domain events from procedures
+For a batched HTTP request, procedure Events remain in invocation order beneath the single root
+record.
 
-```typescript
-import { getLogger } from "@useamplio/amplio";
-import { AuthUserSignedUp } from "../../../telemetry/events/auth/user-signed-up";
+## Add provider Plugins
 
-export const authRouter = createTRPCRouter({
-  register: publicProcedure.mutation(async () => {
-    getLogger()
-      .child(AuthUserSignedUp)
-      .set({ user: { id: "u_123" }, signup: { method: "email" } })
-      .emit();
-  }),
+```bash
+pnpm add resend
+npx @useamplio/cli@alpha add plugin resend --event http.request
+```
+
+The CLI mounts `ResendPlugin.events` in the same root and wraps the existing Resend construction
+once. Route and procedure code continues calling the normal provider client.
+
+## Server callers
+
+A direct server caller that does not run inside the HTTP root cannot contribute to that HTTP Event.
+If it represents an independent unit of work, give it its own root Event and boundary Plugin. Do not
+pretend it belongs to an unrelated browser request.
+
+## RSC rendering
+
+Rendering can use an independent root Event:
+
+```ts
+const PageRender = event({
+  id: "page.render",
+  version: 1,
+  schema: z.object({ page: z.object({ name: z.string() }) }),
 });
-```
 
-To time the work itself, create the child before it — or use `.time()`, which does that plus error recording:
-
-```typescript
-const user = await getLogger().time(AuthUserSignedUp, async (ev) => {
-  const user = await createUser();
-  ev.set({ user: { id: user.id } });
-  return user;
-}); // duration_ms = createUser() time
-```
-
-Annotate every authenticated spine in one place — one `.set()` in `protectedProcedure` makes every authenticated request row user-scoped:
-
-```typescript
-export const protectedProcedure = t.procedure
-  .use(amplioMiddleware) // init --wire adds this
-  .use(({ ctx, next }) => {
-    if (!ctx.session?.user) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
-    getLogger().set({ user: { id: ctx.session.user.id } }); // annotates the spine
-    return next({ ctx: { session: { ...ctx.session, user: ctx.session.user } } });
+export function withAmplioRender(page, render) {
+  return PageRender.handle(render, {
+    input: () => ({ page: { name: page } }),
   });
+}
 ```
 
-This annotates the ambient spine only — domain rows created afterwards with `.child()` do **not** inherit it (children copy only `request_id`); set `user` on them explicitly when the schema wants it.
+This does not claim procedure calls executed outside its actual async context.
 
-## RSC page renders
-
-Server-caller tRPC calls (`createCaller`, no HTTP request) get their own `trpc.request` spine with `transport: "server-caller"` — but by default, multiple calls in one render do **not** correlate. Wrap the page with `withAmplioRender` to create one `page.render` spine that server-caller procedures annotate and domain rows correlate with:
-
-```tsx
-import { withAmplioRender } from "~telemetry/middleware/next";
-
-export default withAmplioRender("home", async function Home() {
-  const latest = await api.post.getLatest(); // annotates the render spine
-  return <div>{latest?.name}</div>;
-});
-```
-
-`redirect()` / `notFound()` are recorded as `page.interrupted`, not as errors. Note that `next build` executes prerendered RSC pages, so events emitted there fire at build time — those rows are tagged `build_phase: true` (filter with `build_phase != true`), or set `AMPLIO_DISABLED=1` in CI to drop every emit.
-
-## NextAuth (Auth.js v5)
-
-NextAuth `events` callbacks run inside the `[...nextauth]` route — `init --yes` wraps it with `withAmplio` in a stock layout. Then install the integration and wire it:
+## Validate
 
 ```bash
-npx @useamplio/cli@alpha add integration next-auth
-```
-
-```typescript
-// src/server/auth/config.ts
-import { amplioNextAuthEvents } from "../../../telemetry/integrations/next-auth";
-
-export const authConfig = {
-  providers: [/* … */],
-  events: amplioNextAuthEvents(),
-} satisfies NextAuthConfig;
-```
-
-Every sign-in emits `auth.user.signed_in` (plus `auth.user.signed_up` for first-time registrations), correlated with the request spine via `request_id`. `signOut` / `linkAccount` are not wired by default — the integration file carries commented recipes; it is open code, edit it.
-
-## Errors
-
-tRPC v11 returns `{ ok: false, error }` from `next()` instead of throwing for many procedure failures. The middleware inspects that result and annotates the spine via `.error()`: `error.message`, `error.name` (thrown class name), and `status` / `http.status` derived from the tRPC code (`BAD_REQUEST` → 400, `UNAUTHORIZED` → 401, …). Thrown errors are handled the same way.
-
-When a procedure's Zod input parsing fails, the middleware detects the wrapped `ZodError` and emits structured `error.issues` (`[{ path, message }]`) plus a short `error.message` (`input validation failed: name: …`) — not the pretty-printed multiline ZodError JSON.
-
-## Batched requests
-
-With `httpBatchLink` / `httpBatchStreamLink`, multiple procedures share one HTTP request. The spine gets `trpc.batched: true`, `trpc.batch_size`, and `trpc.procedures`; `trpc.path` / `trpc.type` are **`null`** on a batch (group-bys stay honest), and a failing procedure lands in `trpc.failed_path` / `trpc.failed_type`. `status` is the transport status of the shared response (often `207`). For clean per-procedure attribution, emit domain events inside each procedure.
-
-## Verify
-
-```bash
-pnpm dev
 npx @useamplio/cli@alpha doctor
-pnpm amplio smoke 'http://localhost:3000/api/trpc/post.hello?batch=1&input=…'
+pnpm exec tsc --noEmit
+pnpm build
 ```
 
-Requires JSON sink (`amplio add sink json`) for `smoke`. Confirm the port Next actually bound — it silently moves to 3001+ when 3000 is busy, and a wrong-port curl looks identical to dropped events (`smoke` turns that into an explicit FAIL).
+`doctor --strict` verifies the adopted Next route through the same native-shape predicate used by
+installation. Removal never rewrites this customer-owned file and refuses to delete the Plugin while
+the route still imports or references it. Detach the wrapper and import, then retry removal. A real
+route request and captured Event remains the final proof that the application executes the boundary.
 
-## Turbopack
-
-`next dev --turbo` can compile `instrumentation.ts` and route handlers into separate module graphs. The runtime shares `init()` / ALS state on `globalThis`, and the generated middleware files start with a side-effect `import "../logger";` so each graph runs `init()`. After a CLI upgrade, run `amplio doctor` — it flags stale scaffolds missing that import or the `NEXT_RUNTIME` guard; regenerate with `amplio add middleware next --force` (or `trpc --force`).
-
-## Server-only rule
-
-Do not import `telemetry/logger` or `getLogger()` from `"use client"` — the runtime uses `node:async_hooks`. Event **definitions** from `@useamplio/amplio/events` are client-safe; emit server-side.
+Next uses bundler-mode extensionless imports throughout the generated telemetry graph. Generic
+NodeNext projects use explicit `.js` specifiers.

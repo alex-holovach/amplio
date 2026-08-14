@@ -12,11 +12,11 @@ import {
   useLogger,
   type LogRecord,
   type Sink,
-} from "../src/index.js";
+} from "../src/legacy.js";
 import { getContextNoopLogger } from "../src/noop-logger.js";
 
 const EMIT_BEFORE_INIT_WARNING =
-  '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See https://github.com/alex-holovach/amplio/blob/main/ALPHA.md.';
+  '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See https://github.com/alex-holovach/amplio/blob/main/packages/amplio/README.md#compatibility.';
 const USE_LOGGER_DEPRECATED_WARNING =
   "[amplio] useLogger() is deprecated and will be removed before 1.0 — use getLogger() (same behavior; renamed because lint tools mistake useLogger for a React hook).";
 const GET_LOGGER_OUTSIDE_SCOPE_WARNING =

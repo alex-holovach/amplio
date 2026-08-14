@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { redactRecord, shouldSample } from "../src/index.js";
-import type { LogRecord } from "../src/index.js";
+import { redactRecord, shouldSample } from "../src/legacy.js";
+import type { LogRecord } from "../src/legacy.js";
 
 describe("shouldSample", () => {
   it("keeps status>=400 when rate=0 and keep rule {field:'status',gte:400}", () => {

@@ -9,6 +9,15 @@ import {
   type PackageManager,
 } from "../utils/detect-package-manager.js";
 import { ensureDir, pathExists, writeFileOrSkip } from "../utils/fs.js";
+import {
+  normalizeGeneratedLocalImports,
+  usesExtensionlessGeneratedImports,
+} from "../utils/generated-imports.js";
+import {
+  isCanonicallyWithin,
+  isPathWithin,
+  isPortableAbsolute,
+} from "../utils/path-containment.js";
 import { resolveProjectPaths } from "../utils/paths.js";
 
 export interface InstallOptions {
@@ -26,48 +35,137 @@ export interface InstallResult {
   skipped: string[];
 }
 
-function resolveTargetPath(
+interface PlannedRegistryFile {
+  content: string;
+  targetPath: string;
+}
+
+async function resolveTargetPath(
   cwd: string,
   telemetryDir: string,
   target: string,
-): string {
+): Promise<string> {
+  const projectRoot = path.resolve(cwd);
+  if (
+    target.length === 0 ||
+    target.includes("\\") ||
+    isPortableAbsolute(target) ||
+    path.posix.normalize(target) !== target ||
+    target.split("/").some((segment) => segment === ".." || segment === ".")
+  ) {
+    throw new Error(
+      `Registry target "${target}" escapes the project root; no files were changed.`,
+    );
+  }
+  let targetPath: string;
   if (target.startsWith("~/")) {
-    return path.join(cwd, target.slice(2));
+    targetPath = path.resolve(projectRoot, target.slice(2));
+  } else if (target.startsWith("telemetry/")) {
+    targetPath = path.resolve(projectRoot, target);
+  } else {
+    targetPath = path.resolve(projectRoot, telemetryDir, target);
   }
-  if (target.startsWith("telemetry/")) {
-    return path.join(cwd, target);
+  if (!isPathWithin(projectRoot, targetPath)) {
+    throw new Error(
+      `Registry target "${target}" escapes the project root; no files were changed.`,
+    );
   }
-  return path.join(path.resolve(cwd, telemetryDir), target);
+
+  try {
+    if (!(await isCanonicallyWithin(projectRoot, targetPath))) {
+      throw new Error(
+        `Registry target "${target}" resolves through a symlink outside the project root; no files were changed.`,
+      );
+    }
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("outside the project root")
+    ) {
+      throw error;
+    }
+    throw new Error(
+      `Registry target "${target}" resolves through an invalid symlink or unreadable path; no files were changed.`,
+      { cause: error },
+    );
+  }
+  return targetPath;
 }
 
-export async function installRegistryItem(
+async function planRegistryItem(
   item: RegistryItem,
   options: InstallOptions,
-): Promise<InstallResult> {
+  extensionlessLocalImports: boolean,
+): Promise<PlannedRegistryFile[]> {
   const telemetryDir = options.telemetryDir ?? "telemetry";
-  const result: InstallResult = { created: [], updated: [], skipped: [] };
+  const plannedTargets: Array<{
+    file: RegistryItem["files"][number];
+    targetPath: string;
+  }> = [];
 
   for (const file of item.files) {
     if (!file.target) {
       continue;
     }
+    plannedTargets.push({
+      file,
+      targetPath: await resolveTargetPath(
+        options.cwd,
+        telemetryDir,
+        file.target,
+      ),
+    });
+  }
 
-    const content = await readRegistryFileContent(
-      options.registryPath,
-      file.path,
-      file.content,
+  const plan: PlannedRegistryFile[] = [];
+  for (const { file, targetPath } of plannedTargets) {
+    const content = normalizeGeneratedLocalImports(
+      await readRegistryFileContent(
+        options.registryPath,
+        file.path,
+        file.content,
+      ),
+      extensionlessLocalImports,
     );
+    plan.push({ content, targetPath });
+  }
+  return plan;
+}
 
-    const targetPath = resolveTargetPath(options.cwd, telemetryDir, file.target);
+export async function installRegistryItems(
+  items: RegistryItem[],
+  options: InstallOptions,
+): Promise<InstallResult> {
+  // Resolve every source and destination in the dependency closure before the
+  // first write, so a hostile later recipe cannot leave a partial install.
+  const extensionlessLocalImports = await usesExtensionlessGeneratedImports(
+    options.cwd,
+  );
+  const plan: PlannedRegistryFile[] = [];
+  for (const item of items) {
+    plan.push(
+      ...(await planRegistryItem(item, options, extensionlessLocalImports)),
+    );
+  }
 
+  const result: InstallResult = { created: [], updated: [], skipped: [] };
+  for (const { content, targetPath } of plan) {
     let status: "created" | "updated" | "skipped";
     if (options.dryRun) {
       // Mirror writeFileOrSkip's decision without touching the filesystem.
       const exists = await pathExists(targetPath);
-      status = exists ? ((options.force ?? false) ? "updated" : "skipped") : "created";
+      status = exists
+        ? (options.force ?? false)
+          ? "updated"
+          : "skipped"
+        : "created";
     } else {
       await ensureDir(path.dirname(targetPath));
-      status = await writeFileOrSkip(targetPath, content, options.force ?? false);
+      status = await writeFileOrSkip(
+        targetPath,
+        content,
+        options.force ?? false,
+      );
     }
     if (status === "created") {
       result.created.push(targetPath);
@@ -79,6 +177,13 @@ export async function installRegistryItem(
   }
 
   return result;
+}
+
+export async function installRegistryItem(
+  item: RegistryItem,
+  options: InstallOptions,
+): Promise<InstallResult> {
+  return installRegistryItems([item], options);
 }
 
 function splitDep(dep: string): { name: string; version: string | null } {
@@ -127,47 +232,60 @@ export async function mergePackageDependencies(
   pkg.dependencies ??= {};
   pkg.devDependencies ??= {};
 
-  const existing = new Set([
-    ...Object.keys(pkg.dependencies),
-    ...Object.keys(pkg.devDependencies),
-  ]);
-
-  const addedNames: string[] = [];
+  const addedRuntimeNames: string[] = [];
+  const movedRuntimeNames: string[] = [];
+  const addedDevelopmentNames: string[] = [];
 
   for (const dep of dependencies) {
     const { name, version } = splitDep(dep);
-    if (existing.has(name)) {
+    if (pkg.dependencies[name] !== undefined) {
+      if (pkg.devDependencies[name] !== undefined) {
+        delete pkg.devDependencies[name];
+        movedRuntimeNames.push(name);
+      }
       continue;
     }
-    const resolved = version ?? resolveDefaultVersion(name);
-    pkg.dependencies[name] = resolved;
-    existing.add(name);
-    addedNames.push(name);
+    if (pkg.devDependencies[name] !== undefined) {
+      pkg.dependencies[name] = pkg.devDependencies[name];
+      delete pkg.devDependencies[name];
+      movedRuntimeNames.push(name);
+      continue;
+    }
+    pkg.dependencies[name] = version ?? resolveDefaultVersion(name);
+    addedRuntimeNames.push(name);
   }
 
   for (const dep of devDependencies) {
     const { name, version } = splitDep(dep);
-    if (existing.has(name)) {
+    if (
+      pkg.dependencies[name] !== undefined ||
+      pkg.devDependencies[name] !== undefined
+    ) {
       continue;
     }
-    const resolved = version ?? resolveDefaultVersion(name);
-    pkg.devDependencies[name] = resolved;
-    existing.add(name);
-    addedNames.push(name);
+    pkg.devDependencies[name] = version ?? resolveDefaultVersion(name);
+    addedDevelopmentNames.push(name);
   }
 
-  if (addedNames.length === 0) {
+  const addedNames = [...addedRuntimeNames, ...addedDevelopmentNames];
+  if (addedNames.length === 0 && movedRuntimeNames.length === 0) {
     return false;
   }
 
   if (dryRun) {
-    console.log(`  ~ package.json (would add: ${addedNames.join(", ")})`);
+    if (addedNames.length > 0) {
+      console.log(`  ~ package.json (would add: ${addedNames.join(", ")})`);
+    }
+    if (movedRuntimeNames.length > 0) {
+      console.log(
+        `  ~ package.json (would move ${movedRuntimeNames.join(", ")} from devDependencies to dependencies)`,
+      );
+    }
     return false;
   }
 
-  await fs.writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
-
   const pm = await resolvePackageManager(cwd);
+  await fs.writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
   console.log(`\nRun: ${pm} install`);
   return true;
 }

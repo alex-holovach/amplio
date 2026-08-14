@@ -1,0 +1,88 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "plugin-trpc",
+  "title": "tRPC Plugin",
+  "description": "tRPC contributor Plugin recording nested query and mutation duration Events while leaving subscriptions unchanged.",
+  "type": "registry:lib",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.16",
+    "@trpc/server@^11.0.0"
+  ],
+  "meta": {
+    "amplio": {
+      "kind": "plugin",
+      "role": "contributor",
+      "recipeVersion": "1.0.0",
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": {
+        "@trpc/server": ">=11 <12"
+      },
+      "testedProviderVersions": {
+        "@trpc/server": {
+          "minimum": "11.0.0",
+          "latest": "11.18.0"
+        }
+      },
+      "events": [
+        {
+          "id": "trpc.procedure",
+          "version": 1,
+          "semanticDigest": "sha256-d7284786798beac2d0f885995c88004e91824f0c0fd3830624b2182097cf3dd4"
+        }
+      ],
+      "semanticDigest": "sha256-72ec8ead1a474da39797076f69fae3c0512d0f3a70ceaacbd19358c318d75b4c",
+      "nativeTransform": {
+        "version": 1,
+        "digest": "sha256-e8becd5f52821d024ce3fe89ebaaf86d25a8fd8f98801f3771e8b1f2379da552"
+      },
+      "placement": {
+        "branch": "rpc"
+      },
+      "provider": {
+        "package": "@trpc/server",
+        "instrumenter": "TrpcPlugin",
+        "seam": "trpc-middleware",
+        "initializer": "initTRPC"
+      },
+      "wiringActions": [
+        {
+          "type": "mount-event-subtree",
+          "description": "Mount TrpcPlugin.events under the rpc branch."
+        },
+        {
+          "type": "register-contributor",
+          "export": "TrpcPlugin",
+          "description": "Register with the application's ordinary tRPC middleware builder."
+        }
+      ],
+      "privacy": {
+        "includes": [
+          "path",
+          "type",
+          "duration_ms",
+          "success"
+        ],
+        "excludes": [
+          "input",
+          "output",
+          "context",
+          "headers",
+          "auth",
+          "session",
+          "tokens",
+          "error message",
+          "stack"
+        ]
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "registry/plugins/trpc.ts",
+      "target": "~/telemetry/plugins/trpc.ts",
+      "type": "registry:lib",
+      "content": "import { event } from \"@useamplio/amplio\";\nimport { plugin } from \"@useamplio/amplio/plugin\";\nimport { z } from \"zod\";\n\ntype TrpcProcedureType = \"query\" | \"mutation\" | \"subscription\";\ntype TrpcFailure = { ok: false; error: unknown };\n\nconst TrpcProcedure = event({\n  id: \"trpc.procedure\",\n  version: 1,\n  schema: z.object({\n    path: z.string(),\n    type: z.enum([\"query\", \"mutation\"]),\n  }),\n  timing: \"duration\",\n  cardinality: { many: { max: 64 } },\n});\n\nfunction isFailure(value: unknown): value is TrpcFailure {\n  try {\n    return (\n      typeof value === \"object\" &&\n      value !== null &&\n      \"ok\" in value &&\n      value.ok === false &&\n      \"error\" in value\n    );\n  } catch {\n    return false;\n  }\n}\n\nexport const TrpcPlugin = plugin({\n  id: \"trpc\",\n  events: { procedures: TrpcProcedure },\n  instrument({ events, begin }) {\n    return function trpcMiddleware() {\n      return <Result>(options: {\n        path: string;\n        type: TrpcProcedureType;\n        next: () => Promise<Result>;\n      }): Promise<Result> => {\n        // The middleware promise only represents subscription setup, not the\n        // stream's lifetime. Preserve it exactly rather than claiming false\n        // duration or completion semantics.\n        if (options.type === \"subscription\") return options.next();\n\n        const observation = begin(events.procedures, {\n          path: options.path,\n          type: options.type,\n        });\n        return observation.run(async () => {\n          try {\n            const result = await options.next();\n            if (isFailure(result)) observation.fail(result.error);\n            else observation.end();\n            return result;\n          } catch (error) {\n            observation.fail(error);\n            throw error;\n          }\n        });\n      };\n    };\n  },\n});\n"
+    }
+  ]
+}

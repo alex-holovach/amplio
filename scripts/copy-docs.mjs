@@ -11,11 +11,9 @@ if (!packageDir) {
 }
 
 const dest = path.resolve(packageDir);
-const alphaSrc = path.join(repoRoot, "ALPHA.md");
 const docsSrc = path.join(repoRoot, "docs");
 const docsDest = path.join(dest, "docs");
 
-await cp(alphaSrc, path.join(dest, "ALPHA.md"));
 await rm(docsDest, { recursive: true, force: true });
 await cp(docsSrc, docsDest, { recursive: true });
-console.log(`Copied ALPHA.md + docs/ → ${path.relative(repoRoot, dest)}/`);
+console.log(`Copied docs/ → ${path.relative(repoRoot, dest)}/`);

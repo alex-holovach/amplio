@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Breaking: Event and Plugin vNext
+
+- The public semantic model is now two concepts: an `Event` declares a versioned schema and nested
+  Event tree; a `Plugin` observes a native library seam and contributes Events to that tree.
+- Application code no longer receives, retrieves, or passes a logger. Duration root Events wrap
+  ordinary functions with `.handle()`, while installed Plugins preserve the provider's native
+  interface and record through their scoped `record`, `observe`, and `begin` tools.
+- A completed root Event delivers one immutable record containing its nested Event occurrences,
+  duration, outcome, and bounded runtime diagnostics. Cardinality, depth, key, string, occurrence,
+  record-size, and pending-delivery limits prevent unbounded telemetry growth without changing
+  application behavior.
+- Error capture is privacy-safe by construction: generic errors expose only approved types, and
+  explicit cancellation reason codes remain available for lifecycle boundaries. Sink failures and
+  diagnostics never print arbitrary thrown values.
+- `init()` is operational setup only. It configures sinks, resource enrichers, sampling, redaction,
+  delivery, and limits, but exports no logger. Active Events retain their initialization generation
+  through asynchronous completion and flush.
+- The mutable alpha builder API is quarantined at `@useamplio/amplio/legacy`; it is absent from the
+  main, Plugin, and testing declaration graphs. `@useamplio/amplio/plugin` contains Plugin-author
+  tools, and `@useamplio/amplio/testing` provides schema-aware Event assertions and diagnostics.
+
+### Open-code Plugins and CLI
+
+- `amplio init --yes` creates `telemetry/runtime.ts`, `telemetry/events/http-request.ts`, a console
+  sink, and the supported detected boundary Plugin. `amplio add event` creates project-owned Events;
+  `amplio add plugin <name> --event <id>` copies and composes editable Plugin source.
+- Registry Plugins cover Hono, Express, Fastify, Next.js route handlers, tRPC, Better Auth, and
+  Resend. Framework boundaries own the root Event lifecycle; contributor Plugins mount under an
+  explicit branch and use native hooks, middleware, constructors, or clients.
+- Provider packages are not dependencies of the core library. Registry manifests declare compatible
+  host-owned provider ranges, Plugin wiring actions, Event placement, and minimum/current tested
+  versions. The CLI shows the complete dependency and wiring plan, requires approval before a
+  missing host dependency is installed, and fails before tracked writes when a native seam or
+  dependency is ambiguous or incompatible.
+- `amplio diff plugin`, `amplio update plugin`, and `amplio remove plugin` use content-addressed
+  recipe bases plus reversible wiring snapshots. Updates preserve non-overlapping customer edits and
+  fail closed for semantic, privacy, native-wiring, or merge conflicts; removal retains host-owned
+  provider dependencies.
+- Registry CI executes every Plugin against the minimum and latest supported provider release and
+  rejects the declared upper/prerelease boundary. The compatibility fixtures exercise native
+  lifecycles, concurrency, privacy, and provider-specific TypeScript resolution.
+- Generated code and examples use only `telemetry/events`, `telemetry/plugins`,
+  `telemetry/sinks`, and `telemetry/runtime.ts`; the discarded component, integration, middleware,
+  workload, and logger vocabulary is not part of the vNext interface.
+
+### Alpha automation limits
+
+- Active boundary wiring is automated for one unambiguous Hono or Fastify composition root.
+  Express and Next.js boundary recipes are copied with `--source-only`, attached explicitly, then
+  promoted with `--target <relative-source-file>` after exact native-shape verification. The CLI
+  records this wiring as customer-owned, strict doctor re-verifies it, and removal never rewrites it.
+- `--target` narrows constructor, Better Auth, tRPC, Hono, Fastify, Next.js, and Express discovery to
+  one contained source file. Absolute, traversing, missing, non-source, and escaping targets fail
+  before writes. Multiple supported seams inside that file still fail closed, and an active Plugin
+  cannot be silently retargeted.
+- `update plugin` fails closed when a recipe changes Event identity/version, privacy, placement,
+  provider instrumenter, or native wiring. Those contract migrations require an explicit Event
+  version decision and remove/reinstall workflow rather than an automatic rewrite.
+
 ## [0.1.0-alpha.15] - 2026-08-09
 
 Dogfood iter 10 — build-phase tagging, RSC render correlation (`withAmplioRender`), `amplio smoke`, integration wiring output, alias imports by default, env-split JSONL, `.time()` sugar.
@@ -161,7 +222,7 @@ Dogfood iter 6 — dependency hygiene, doctor reverse barrel checks, init script
 - **`amplio.json` documented** (fields, hand-editing, CLI-only) and `--force` regeneration semantics, in README + CLI README.
 - **`duration_ms` on domain events documented** (clock starts at `.child()`; create the child before the work to time the work) in README, runtime README, and t3.md.
 - **components.json interaction documented** — what `init` writes when the file is absent and how a later `npx shadcn init` interacts with it; hosted-registry domain flagged as temporary with the migration story (re-run `amplio init`).
-- Generated logger.ts ships the canonical sampling example (keep all errors — `success: false` *and* `status gte 400` — sample 10% of the rest).
+- Generated logger.ts ships the canonical sampling example (keep all errors — `success: false` _and_ `status gte 400` — sample 10% of the rest).
 
 ## [0.1.0-alpha.10] - 2026-08-09
 
@@ -186,7 +247,7 @@ Dogfood iter 5 — close the init → first-event gap (T3 auto-wiring), lint-cle
 
 ### Registry templates
 
-- **tRPC batch counting fixed** — a batch of N calls to the *same* procedure now reports `trpc.batched: true`, new `trpc.batch_size: N`, and N `procedures` entries (was: deduplicated to a single-call spine).
+- **tRPC batch counting fixed** — a batch of N calls to the _same_ procedure now reports `trpc.batched: true`, new `trpc.batch_size: N`, and N `procedures` entries (was: deduplicated to a single-call spine).
 - **Lint-clean under strict biome** — `withAmplio` drops `any[]` for a `never[]` rest-constraint generic, the tRPC template drops its non-null assertion, and all templates call `getLogger()`.
 - **`auth.user.signed_in`** — `session.id` is now optional (NextAuth/Clerk/Better Auth fire sign-in events before a session row exists).
 - **shadcn parity** — sink and Next/tRPC middleware registry items now carry `docs` post-install notes explaining wiring (`npx shadcn add @useamplio/sink-*` no longer walks away silently).
@@ -266,12 +327,14 @@ Dogfood iter 4 — packaging, docs, and emit/sampling semantics alignment.
 ## [0.1.0-alpha.7] - 2026-08-09
 
 ### Added
+
 - **tRPC v11 middleware** — rewritten for result inspection (`{ ok: false, error }` annotates the request spine); generic `amplioTrpcMiddleware()` plugs into `t.middleware(...)` / `procedure.use(...)` without casts; batched links set `trpc.batched: true` and `trpc.procedures` while `trpc.path` stays on the first procedure.
 - **`amplio doctor`** — wiring checks (middleware exports referenced, event schemas, tsconfig paths) with fix hints.
 - **Registry strict typecheck** — CI fixture typechecks all registry sources under create-t3-app-style strict `tsconfig` (incl. tRPC no-cast contract).
 - **Docs** — ALPHA.md `## tRPC (v11)` wiring guide; README accuracy for emit-before-init, error shape, `http.request` spine, query-string redaction caveat, registry `~/` targets.
 
 ### Changed
+
 - **`.error(err)`** — records `error.name` (thrown class name); sets `error.code` only when the value carries a real string/number `code` (not on plain `Error`).
 - **Request wide events** — `createRequestLogger` sets `event` / `@event` to `http.request` (filterable HTTP spine).
 - **Registry build** — `registryDependencies` namespaced as `@useamplio/…`; file targets root-anchored as `~/telemetry/…` so shadcn and CLI agree on placement in `src/` layouts.
@@ -279,16 +342,19 @@ Dogfood iter 4 — packaging, docs, and emit/sampling semantics alignment.
 - **CLI init** — default `--service` from `package.json` name; tRPC detected alongside Next scaffolds `telemetry/middleware/trpc.ts`; wiring snippets point at ALPHA.md.
 
 ### Fixed
+
 - **OTLP sink** — type fixes for strict `tsconfig` (`JsonValue` attribute mapping, timestamp parsing).
 - **shadcn registry** — namespaced dependencies and `~/telemetry/…` targets fix misplaced installs in monorepos with `src/`.
 
 ### Performance
+
 - Redaction: compile config once at `init()` (gated regex prechecks, copy-on-write subtrees); `redact: false` stays zero-cost; nested emit uses an inline leaf walk with safe-string / pattern-scan gates (~166k ops/s on ~1 KB nested payload vs ~1M flat with redaction on).
 - Logger: class instances with shared prototype methods (`InternalLoggerImpl`) — no per-instance closure factories or `defineProperty` sealed getter.
 - Payload ownership: `_ownsData` enables in-place `.set()` and skips emit-time clone when the logger owns its data; single-pass `.set()` and flat-path fast paths in `deepMerge`.
 - Emit: one record build (stamp `service`/`env`/timestamp once, single `resolveConfig()`, skip payload copy when nothing mutates it); `alwaysSample` fast path when sampling cannot drop.
 
 ### Notes
+
 - P1#9: Hero quick start omits email (uses `user.id` + `signup.method`); `AuthUserSignedUp` schema makes `user.email` optional in registry, CLI template, and example-basic.
 - P1#9: README redaction note no longer demos `[REDACTED]` in the hero JSON; example-basic `/signup` needs no request body.
 - Docs sync: AGENTS.md, SPEC.md, and packages/amplio/README.md match shipped API (no-op `useLogger` outside ALS, sealed no-op loggers, `.error()`/`flush()`, sync `emit()`, soft-fail validation, default redaction, `defineEvent(name, schema)`, Next middleware flush).

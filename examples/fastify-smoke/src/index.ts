@@ -1,14 +1,10 @@
-import Fastify from "fastify";
-import { amplioPlugin, useRequestLogger } from "../telemetry/middleware/fastify";
-import "../telemetry/logger.js";
+import { createApp, failure, health } from "./app.js";
+import { FastifyPlugin } from "../telemetry/plugins/fastify.js";
 
-const app = Fastify();
-
-await app.register(amplioPlugin);
-
-app.get("/health", async (request) => {
-  useRequestLogger(request).set({ route: { name: "health" } });
-  return { ok: true };
+const app = createApp({
+  requestBoundary: FastifyPlugin,
+  health,
+  failure,
 });
 
 const port = Number(process.env.PORT ?? 3002);

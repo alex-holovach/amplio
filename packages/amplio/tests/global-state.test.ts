@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { getGlobalState, getGlobalStateKey } from "../src/global-state.js";
-import { init, isInitialized, resetConfigForTests } from "../src/index.js";
+import { init, isInitialized, resetConfigForTests } from "../src/legacy.js";
 
 beforeEach(() => {
   resetConfigForTests();

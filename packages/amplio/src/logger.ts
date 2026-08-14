@@ -1,7 +1,12 @@
 import { isInitialized, resolveAlwaysSample, resolveConfig } from "./config.js";
 import { hasAmbientLogger } from "./context.js";
 import { createError } from "./error.js";
-import { isAmplioDisabled, isDevelopment, isNextBuildPhase, isTest } from "./env.js";
+import {
+  isAmplioDisabled,
+  isDevelopment,
+  isNextBuildPhase,
+  isTest,
+} from "./env.js";
 import { getGlobalState } from "./global-state.js";
 import { getSealedNoopLogger } from "./noop-logger.js";
 import { AmplioValidationError } from "./validation-error.js";
@@ -32,9 +37,13 @@ type InternalLogger = Logger & {
   _seal: SealState;
 };
 
-const warnSealed = (action: "set" | "error" | "emit" | "create" | "event"): void => {
+const warnSealed = (
+  action: "set" | "error" | "emit" | "create" | "event",
+): void => {
   if (isDevelopment()) {
-    console.warn(`[amplio] logger.${action}() ignored: logger is sealed after emit()`);
+    console.warn(
+      `[amplio] logger.${action}() ignored: logger is sealed after emit()`,
+    );
   }
 };
 
@@ -90,7 +99,9 @@ const finalizeRecord = (
       record.success = status >= 200 && status < 400;
     } else if (typeof status === "string") {
       const code = Number(status);
-      record.success = Number.isFinite(code) ? code >= 200 && code < 400 : status === "ok";
+      record.success = Number.isFinite(code)
+        ? code >= 200 && code < 400
+        : status === "ok";
     }
   }
 
@@ -106,6 +117,7 @@ const emitInternal = (logger: InternalLogger): LogRecord | null => {
   const enrichers = config.enrichers;
   let payload: Record<string, unknown>;
   let ownsPayload = logger._ownsData;
+  const semanticData = logger._skipValidation ? logger._data : undefined;
 
   if (enrichers && enrichers.length > 0) {
     if (!ownsPayload) {
@@ -120,14 +132,18 @@ const emitInternal = (logger: InternalLogger): LogRecord | null => {
         const next = enricher(payload as LogRecord);
         if (next == null || typeof next !== "object" || Array.isArray(next)) {
           if (isDevelopment()) {
-            console.warn("[amplio] enricher failed: must return a plain object record");
+            console.warn(
+              "[amplio] enricher failed: must return a plain object record",
+            );
           }
           continue;
         }
-        payload = next as Record<string, unknown>;
+        payload = { ...(next as Record<string, unknown>) };
+        ownsPayload = true;
       } catch (error) {
         if (isDevelopment()) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           console.warn(`[amplio] enricher failed: ${message}`);
         }
       }
@@ -164,7 +180,9 @@ const emitInternal = (logger: InternalLogger): LogRecord | null => {
         success: false,
       };
       if (isDevelopment()) {
-        console.warn(`[amplio] emit() schema validation failed (soft): ${error.message}`);
+        console.warn(
+          `[amplio] emit() schema validation failed (soft): ${error.message}`,
+        );
       }
     }
   }
@@ -178,6 +196,18 @@ const emitInternal = (logger: InternalLogger): LogRecord | null => {
     payload["@event"] = logger._event;
   }
 
+  if (semanticData) {
+    payload.success = semanticData.success;
+    for (const key of ["error", "@amplio"] as const) {
+      const value = semanticData[key];
+      if (value === undefined) {
+        delete payload[key];
+      } else {
+        payload[key] = value;
+      }
+    }
+  }
+
   if (!ownsPayload) {
     payload = { ...payload };
   }
@@ -185,7 +215,8 @@ const emitInternal = (logger: InternalLogger): LogRecord | null => {
   const now = Date.now();
   const record = finalizeRecord(logger, payload, config, now);
 
-  const delivered = resolveAlwaysSample() || shouldSample(record, config.sampling);
+  const delivered =
+    resolveAlwaysSample() || shouldSample(record, config.sampling);
   if (!delivered) {
     return null;
   }
@@ -306,7 +337,7 @@ class InternalLoggerImpl implements InternalLogger {
     if (!isInitialized()) {
       if (isDevelopment()) {
         console.warn(
-          '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See https://github.com/alex-holovach/amplio/blob/main/ALPHA.md.',
+          '[amplio] emit() before init(): event dropped. Call init({ service, env, sinks }) once at startup — in Next.js, import your telemetry/logger from instrumentation.ts so it runs on boot. If init() already runs at boot but events still drop, a bundler may have loaded a separate copy of @useamplio/amplio into this module graph (e.g. next dev --turbo) — add a side-effect import "../logger" to the file that emits, and check that only one version of @useamplio/amplio is installed. See https://github.com/alex-holovach/amplio/blob/main/packages/amplio/README.md#compatibility.',
         );
       }
       return null;
@@ -374,7 +405,9 @@ class InternalLoggerImpl implements InternalLogger {
     }
     const parentEventName =
       this._event ??
-      (typeof this._data["event"] === "string" ? this._data["event"] : undefined);
+      (typeof this._data["event"] === "string"
+        ? this._data["event"]
+        : undefined);
 
     // .event(OtherDef) on an already-named spine used to rebind + seal it,
     // silently losing the request row — the classic footgun. Behave as

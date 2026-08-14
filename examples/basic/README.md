@@ -1,13 +1,14 @@
 # example-basic
 
-Minimal Hono app showing amplio wide events in an open-code `telemetry/` tree.
+Minimal Hono app showing one request Event assembled by open-code Plugins.
 
 ## What this demonstrates
 
-- `telemetry/logger.ts` calls `init()` once and exposes `wideEvent()` for standalone emits
-- `telemetry/middleware/hono.ts` creates one request-scoped wide event and auto-emits on response
-- Handlers call `useRequestLogger(c)` to add context with `.set()` — no manual emit in handlers
-- Schema-bound events live in `telemetry/events/` and emit via `wideEvent().event(...)`
+- `telemetry/events/http-request.ts` declares the complete request Event tree
+- `telemetry/plugins/hono.ts` owns the real Hono request lifecycle
+- `telemetry/plugins/signup.ts` wraps one ordinary function at its exported seam
+- `telemetry/runtime.ts` only configures sinks and calls `init()`
+- Handlers and domain calls contain no logger, `.set()`, `.emit()`, or telemetry mutation
 
 ## Run
 
@@ -28,20 +29,11 @@ curl -X POST http://127.0.0.1:3000/signup
 
 Each request prints one JSON wide event to stdout.
 
-## Install more registry items
-
-```bash
-pnpm registry:build
-npx shadcn@latest add ./public/r/event-email-sent.json
-```
-
-Items land under `telemetry/` and stay editable like normal app code.
-
 ## Smoke
 
 ```bash
 pnpm --filter @useamplio/example-basic smoke
 ```
 
-Starts the Hono app, hits `GET /health`, asserts one JSON wide event with nested `http` and status 200.
-
+Starts the Hono app and verifies success, returned-failure, thrown-error, and sign-up Events. The
+sign-up request contains `auth.signed_up` inside the single `http.request` record.

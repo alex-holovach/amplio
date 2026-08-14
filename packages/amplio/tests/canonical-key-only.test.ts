@@ -6,7 +6,7 @@ import {
   init,
   logger,
   resetConfigForTests,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 beforeEach(() => {
   resetConfigForTests();

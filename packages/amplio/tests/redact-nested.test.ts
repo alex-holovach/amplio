@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createLogger, init, resetConfigForTests } from "../src/index.js";
-import type { LogRecord, Sink } from "../src/index.js";
+import {
+  createLogger,
+  init,
+  redactRecord,
+  resetConfigForTests,
+} from "../src/legacy.js";
+import type { LogRecord, Sink } from "../src/legacy.js";
 
 const capture = (): { records: LogRecord[]; sink: Sink } => {
   const records: LogRecord[] = [];
@@ -72,5 +77,51 @@ describe("nested redaction on emit", () => {
     };
     expect(nested.level1.level2.contact).toBe("reach me at [REDACTED] please");
     expect(nested.level1.level2.email).toBe("[REDACTED]");
+  });
+
+  it("replaces object and array back-edges without mutating the input", () => {
+    const payload: Record<string, unknown> = {
+      email: "cycle@example.com",
+    };
+    const items: unknown[] = [];
+    payload.self = payload;
+    payload.items = items;
+    items.push(items);
+
+    const redacted = redactRecord(payload as LogRecord);
+
+    expect(redacted).not.toBe(payload);
+    expect(redacted.email).toBe("[REDACTED]");
+    expect(redacted.self).toBe("[Circular]");
+    expect(redacted.items).toEqual(["[Circular]"]);
+    expect(payload.self).toBe(payload);
+    expect(items[0]).toBe(items);
+    expect(() => JSON.stringify(redacted)).not.toThrow();
+  });
+
+  it("does not mistake repeated non-cyclic references for back-edges", () => {
+    const shared = { email: "shared@example.com" };
+    const redacted = redactRecord({
+      first: shared,
+      second: shared,
+    } as LogRecord);
+
+    expect(redacted).toEqual({
+      first: { email: "[REDACTED]" },
+      second: { email: "[REDACTED]" },
+    });
+  });
+
+  it("emits a JSON-safe record when application data is cyclic", () => {
+    const { records, sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+    const payload: Record<string, unknown> = { id: "cyclic" };
+    payload.self = payload;
+
+    expect(() => createLogger().set({ payload }).emit()).not.toThrow();
+
+    expect(records).toHaveLength(1);
+    expect(records[0]?.payload).toEqual({ id: "cyclic", self: "[Circular]" });
+    expect(() => JSON.stringify(records[0])).not.toThrow();
   });
 });

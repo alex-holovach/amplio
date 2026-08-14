@@ -1,6 +1,17 @@
-import type { LogRecord } from "@useamplio/amplio";
+import { flush, init, type Sink, type SinkRecord } from "@useamplio/amplio";
+import { resetConfigForTests } from "@useamplio/amplio/legacy";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { otlpSink } from "../../../registry/sinks/otlp.ts";
+import {
+  otlpSink as createOtlpSink,
+  type OtlpSinkOptions,
+} from "../../../registry/sinks/otlp.ts";
+
+type RecordFixture = Pick<SinkRecord, "@event"> & Partial<SinkRecord>;
+type FixtureSink = ((record: RecordFixture) => ReturnType<Sink>) &
+  Pick<Sink, "flush">;
+
+const otlpSink = (options: OtlpSinkOptions = {}): FixtureSink =>
+  createOtlpSink(options) as FixtureSink;
 
 describe("otlpSink", () => {
   const originalEnv = process.env;
@@ -18,6 +29,7 @@ describe("otlpSink", () => {
   });
 
   afterEach(() => {
+    resetConfigForTests();
     process.env = originalEnv;
     vi.unstubAllGlobals();
     warnSpy.mockRestore();
@@ -25,7 +37,7 @@ describe("otlpSink", () => {
 
   it("missing endpoint -> no-op sink, no throw, fetch not called, console.warn once", async () => {
     const sink = otlpSink();
-    const record: LogRecord = { event: "test.event", service: "my-api" };
+    const record: RecordFixture = { "@event": "test.event", service: "my-api" };
 
     await expect(sink(record)).resolves.toBeUndefined();
     await expect(sink(record)).resolves.toBeUndefined();
@@ -45,7 +57,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls[0]![0]).toBe(
@@ -60,63 +72,126 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
-    expect(fetchMock.mock.calls[0]![0]).toBe("https://logs.example.com/v1/logs");
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://logs.example.com/v1/logs",
+    );
   });
 
   it("options.endpoint wins over both env endpoints", async () => {
-    process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT = "https://logs.example.com/v1/logs";
+    process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT =
+      "https://logs.example.com/v1/logs";
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://base.example.com";
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink({ endpoint: "https://option.example.com" });
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
-    expect(fetchMock.mock.calls[0]![0]).toBe("https://option.example.com/v1/logs");
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://option.example.com/v1/logs",
+    );
   });
 
-  it("promotes nested trpc.path / http.path / http.method by default", async () => {
+  it("promotes the current HTTP method, route, and status fields by default", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
 
     await sink({
-      event: "trpc.request",
-      trpc: { path: "post.create", type: "mutation" },
-      http: { path: "/api/trpc/post.create", method: "POST" },
-    } as LogRecord);
+      "@event": "http.request",
+      http: { method: "POST", route: "orders.create", status: 503 },
+    } as RecordFixture);
 
     const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
     const attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0]
       .attributes as Array<{ key: string; value: Record<string, unknown> }>;
-    expect(attributes.find((a) => a.key === "trpc.path")).toEqual({
-      key: "trpc.path",
-      value: { stringValue: "post.create" },
-    });
-    expect(attributes.find((a) => a.key === "http.path")).toEqual({
-      key: "http.path",
-      value: { stringValue: "/api/trpc/post.create" },
-    });
     expect(attributes.find((a) => a.key === "http.method")).toEqual({
       key: "http.method",
       value: { stringValue: "POST" },
     });
-    // trpc.type is not in the default promotion list
-    expect(attributes.map((a) => a.key)).not.toContain("trpc.type");
+    expect(attributes.find((a) => a.key === "http.route")).toEqual({
+      key: "http.route",
+      value: { stringValue: "orders.create" },
+    });
+    expect(attributes.find((a) => a.key === "http.status")).toEqual({
+      key: "http.status",
+      value: { intValue: "503" },
+    });
+    expect(attributes.map((a) => a.key)).not.toContain("status");
+    expect(attributes.map((a) => a.key)).not.toContain("http.path");
+  });
+
+  it("promotes repeated rpc.procedures as an OTLP array of key-value lists", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({ endpoint: "https://otel.example.com" });
+
+    await sink({
+      "@event": "http.request",
+      rpc: {
+        procedures: [
+          { path: "post.create", type: "mutation" },
+          { path: "post.list", type: "query" },
+        ],
+      },
+    } as RecordFixture);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    const attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0]
+      .attributes as Array<{ key: string; value: Record<string, unknown> }>;
+    expect(attributes.find((a) => a.key === "rpc.procedures")).toEqual({
+      key: "rpc.procedures",
+      value: {
+        arrayValue: {
+          values: [
+            {
+              kvlistValue: {
+                values: [
+                  { key: "path", value: { stringValue: "post.create" } },
+                  { key: "type", value: { stringValue: "mutation" } },
+                ],
+              },
+            },
+            {
+              kvlistValue: {
+                values: [
+                  { key: "path", value: { stringValue: "post.list" } },
+                  { key: "type", value: { stringValue: "query" } },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it("promotes canonical @event under the compatible event attribute", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({ endpoint: "https://otel.example.com" });
+
+    await sink({ "@event": "api.canonical_route" } as RecordFixture);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    const attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0]
+      .attributes as Array<{ key: string; value: Record<string, unknown> }>;
+    expect(attributes.find((attribute) => attribute.key === "event")).toEqual({
+      key: "event",
+      value: { stringValue: "api.canonical_route" },
+    });
   });
 
   it("attributes option replaces the default promotion list", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
     const sink = otlpSink({
       endpoint: "https://otel.example.com",
-      attributes: ["event", "trpc.type"],
+      attributes: ["@event", "trpc.type"],
     });
 
     await sink({
-      event: "trpc.request",
+      "@event": "trpc.request",
       service: "my-api",
       trpc: { path: "post.create", type: "mutation" },
-    } as LogRecord);
+    } as RecordFixture);
 
     const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
     const attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0]
@@ -136,9 +211,9 @@ describe("otlpSink", () => {
     });
 
     const deliveries = [
-      sink({ event: "a", service: "my-api" } as LogRecord),
-      sink({ event: "b", service: "my-api" } as LogRecord),
-      sink({ event: "c", service: "my-api" } as LogRecord),
+      sink({ "@event": "a", service: "my-api" } as RecordFixture),
+      sink({ "@event": "b", service: "my-api" } as RecordFixture),
+      sink({ "@event": "c", service: "my-api" } as RecordFixture),
     ];
     await Promise.all(deliveries);
 
@@ -155,7 +230,26 @@ describe("otlpSink", () => {
       batch: { maxSize: 100, maxWaitMs: 10 },
     });
 
-    await sink({ event: "solo" } as LogRecord);
+    await sink({ "@event": "solo" } as RecordFixture);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    expect(body.resourceLogs[0].scopeLogs[0].logRecords).toHaveLength(1);
+  });
+
+  it("batch: core flush immediately drains a partial batch", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      batch: { maxSize: 100, maxWaitMs: 60_000 },
+    });
+    init({ service: "flush-test", env: "test", sinks: [sink] });
+
+    const delivery = sink({ "@event": "short-lived" } as RecordFixture);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await flush();
+    await delivery;
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
@@ -170,19 +264,64 @@ describe("otlpSink", () => {
     });
 
     await Promise.all([
-      sink({ event: "a", service: "api-one" } as LogRecord),
-      sink({ event: "b", service: "api-two" } as LogRecord),
+      sink({ "@event": "a", service: "api-one" } as RecordFixture),
+      sink({ "@event": "b", service: "api-two" } as RecordFixture),
     ]);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
     expect(body.resourceLogs).toHaveLength(2);
     const names = body.resourceLogs.map(
-      (rl: { resource: { attributes: Array<{ key: string; value: { stringValue: string } }> } }) =>
-        rl.resource.attributes.find((a: { key: string }) => a.key === "service.name")!
-          .value.stringValue,
+      (rl: {
+        resource: {
+          attributes: Array<{ key: string; value: { stringValue: string } }>;
+        };
+      }) =>
+        rl.resource.attributes.find(
+          (a: { key: string }) => a.key === "service.name",
+        )!.value.stringValue,
     );
     expect(names.sort()).toEqual(["api-one", "api-two"]);
+  });
+
+  it("batch: records with different resource attributes land in separate resourceLogs groups", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      batch: { maxSize: 2, maxWaitMs: 60_000 },
+    });
+
+    await Promise.all([
+      sink({
+        "@event": "west",
+        service: "orders-api",
+        env: "production",
+        resource: { "deployment.region": "us-west-2" },
+      } as RecordFixture),
+      sink({
+        "@event": "east",
+        service: "orders-api",
+        env: "production",
+        resource: { "deployment.region": "us-east-1" },
+      } as RecordFixture),
+    ]);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    expect(body.resourceLogs).toHaveLength(2);
+    const regions = body.resourceLogs.map(
+      (resourceLog: {
+        resource: {
+          attributes: Array<{
+            key: string;
+            value: { stringValue: string };
+          }>;
+        };
+      }) =>
+        resourceLog.resource.attributes.find(
+          (attribute) => attribute.key === "deployment.region",
+        )!.value.stringValue,
+    );
+    expect(regions.sort()).toEqual(["us-east-1", "us-west-2"]);
   });
 
   it("batch + fetch 500 (default throwOnError) -> resolves, warns once", async () => {
@@ -192,8 +331,12 @@ describe("otlpSink", () => {
       batch: { maxSize: 1, maxWaitMs: 10 },
     });
 
-    await expect(sink({ event: "a" } as LogRecord)).resolves.toBeUndefined();
-    await expect(sink({ event: "b" } as LogRecord)).resolves.toBeUndefined();
+    await expect(
+      sink({ "@event": "a" } as RecordFixture),
+    ).resolves.toBeUndefined();
+    await expect(
+      sink({ "@event": "b" } as RecordFixture),
+    ).resolves.toBeUndefined();
     expect(warnSpy).toHaveBeenCalledOnce();
   });
 
@@ -205,7 +348,7 @@ describe("otlpSink", () => {
       batch: { maxSize: 1, maxWaitMs: 10 },
     });
 
-    await expect(sink({ event: "a" } as LogRecord)).rejects.toThrow(
+    await expect(sink({ "@event": "a" } as RecordFixture)).rejects.toThrow(
       "OTLP export failed with status 500",
     );
   });
@@ -214,7 +357,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
-    const record: LogRecord = { event: "test.event", service: "my-api" };
+    const record: RecordFixture = { "@event": "test.event", service: "my-api" };
 
     await sink(record);
 
@@ -226,8 +369,13 @@ describe("otlpSink", () => {
     const body = JSON.parse(init?.body as string);
     const attributes =
       body.resourceLogs[0].scopeLogs[0].logRecords[0].attributes;
-    const serviceAttr = attributes.find((a: { key: string }) => a.key === "service");
-    expect(serviceAttr).toEqual({ key: "service", value: { stringValue: "my-api" } });
+    const serviceAttr = attributes.find(
+      (a: { key: string }) => a.key === "service",
+    );
+    expect(serviceAttr).toEqual({
+      key: "service",
+      value: { stringValue: "my-api" },
+    });
     const resourceAttrs = body.resourceLogs[0].resource.attributes;
     const serviceNameAttr = resourceAttrs.find(
       (a: { key: string }) => a.key === "service.name",
@@ -238,13 +386,11 @@ describe("otlpSink", () => {
     });
   });
 
-
-
   it("successful export uses fetch method POST", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -255,7 +401,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
-    await sink({ event: "test.event", service: "my-api" } as LogRecord);
+    await sink({ "@event": "test.event", service: "my-api" } as RecordFixture);
 
     const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
     expect(body.resourceLogs).toHaveLength(1);
@@ -263,11 +409,10 @@ describe("otlpSink", () => {
     expect(body.resourceLogs[0].scopeLogs[0].logRecords).toHaveLength(1);
   });
 
-
   it("OTLP log record body.stringValue equals JSON.stringify(record) for event + service", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
-    const record: LogRecord = { event: "test.event", service: "my-api" };
+    const record: RecordFixture = { "@event": "test.event", service: "my-api" };
     await sink(record);
     const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
     expect(body.resourceLogs[0].scopeLogs[0].logRecords[0].body).toEqual({
@@ -280,8 +425,8 @@ describe("otlpSink", () => {
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
 
     for (const record of [
-      { event: "test.event" } as LogRecord,
-      { event: "test.event", service: "", env: "" } as LogRecord,
+      { "@event": "test.event" } as RecordFixture,
+      { "@event": "test.event", service: "", env: "" } as RecordFixture,
     ]) {
       fetchMock.mockClear();
       await sink(record);
@@ -295,7 +440,7 @@ describe("otlpSink", () => {
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
 
     fetchMock.mockClear();
-    await sink({ event: "test.event", env: "production" } as LogRecord);
+    await sink({ "@event": "test.event", env: "production" } as RecordFixture);
     let body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
     let resourceAttrs = body.resourceLogs[0].resource.attributes;
     expect(resourceAttrs).toEqual([
@@ -307,10 +452,10 @@ describe("otlpSink", () => {
 
     fetchMock.mockClear();
     await sink({
-      event: "test.event",
+      "@event": "test.event",
       service: "my-api",
       env: "production",
-    } as LogRecord);
+    } as RecordFixture);
     body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
     resourceAttrs = body.resourceLogs[0].resource.attributes;
     expect(resourceAttrs).toEqual([
@@ -325,9 +470,42 @@ describe("otlpSink", () => {
     ]);
   });
 
+  it("maps record.resource values to typed OTLP resource attributes", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    const sink = otlpSink({ endpoint: "https://otel.example.com" });
+
+    await sink({
+      "@event": "http.request",
+      service: "orders-api",
+      env: "production",
+      resource: {
+        "deployment.region": "us-west-2",
+        "service.version": "release-123",
+        "host.replicas": 3,
+        "feature.canary": false,
+      },
+    } as RecordFixture);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    expect(body.resourceLogs[0].resource.attributes).toEqual([
+      { key: "service.name", value: { stringValue: "orders-api" } },
+      {
+        key: "deployment.environment",
+        value: { stringValue: "production" },
+      },
+      {
+        key: "deployment.region",
+        value: { stringValue: "us-west-2" },
+      },
+      { key: "service.version", value: { stringValue: "release-123" } },
+      { key: "host.replicas", value: { intValue: "3" } },
+      { key: "feature.canary", value: { boolValue: false } },
+    ]);
+  });
+
   it("endpoint already ending with /v1/logs (with or without trailing slash) POSTs once to that path", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
-    const record: LogRecord = { event: "test.event" };
+    const record: RecordFixture = { "@event": "test.event" };
 
     for (const endpoint of [
       "https://otel.example.com/v1/logs",
@@ -337,14 +515,16 @@ describe("otlpSink", () => {
       const sink = otlpSink({ endpoint });
       await sink(record);
       expect(fetchMock).toHaveBeenCalledOnce();
-      expect(fetchMock.mock.calls[0]![0]).toBe("https://otel.example.com/v1/logs");
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://otel.example.com/v1/logs",
+      );
       expect(fetchMock.mock.calls[0]![1]?.method).toBe("POST");
     }
   });
 
   it("endpoint with path prefix appends /v1/logs under that prefix", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
-    const record: LogRecord = { event: "test.event" };
+    const record: RecordFixture = { "@event": "test.event" };
 
     for (const endpoint of [
       "https://otel.example.com/otlp",
@@ -364,17 +544,22 @@ describe("otlpSink", () => {
   it("fetch 500 + throwOnError true -> throws OTLP export failed with status 500", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500 });
 
-    const sink = otlpSink({ endpoint: "https://otel.example.com", throwOnError: true });
-    const record: LogRecord = { event: "test.event" };
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      throwOnError: true,
+    });
+    const record: RecordFixture = { "@event": "test.event" };
 
-    await expect(sink(record)).rejects.toThrow("OTLP export failed with status 500");
+    await expect(sink(record)).rejects.toThrow(
+      "OTLP export failed with status 500",
+    );
   });
 
   it("fetch 500 + default throwOnError -> resolves, warns once", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500 });
 
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
-    const record: LogRecord = { event: "test.event" };
+    const record: RecordFixture = { "@event": "test.event" };
 
     await expect(sink(record)).resolves.toBeUndefined();
     await expect(sink(record)).resolves.toBeUndefined();
@@ -388,32 +573,46 @@ describe("otlpSink", () => {
   it("fetch 500 + throwOnError false -> resolves, warns once", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500 });
 
-    const sink = otlpSink({ endpoint: "https://otel.example.com", throwOnError: false });
-    const record: LogRecord = { event: "test.event" };
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      throwOnError: false,
+    });
+    const record: RecordFixture = { "@event": "test.event" };
 
     await expect(sink(record)).resolves.toBeUndefined();
     await expect(sink(record)).resolves.toBeUndefined();
     expect(warnSpy).toHaveBeenCalledOnce();
   });
 
-  it("fetch reject (network) + throwOnError false -> resolves, warns once", async () => {
-    fetchMock.mockRejectedValue(new Error("network down"));
+  it("fetch reject + throwOnError false warns with a constant code and no caught detail", async () => {
+    const privateDetail =
+      "network down for api_key=secret-customer@example.com";
+    fetchMock.mockRejectedValue(new Error(privateDetail));
 
-    const sink = otlpSink({ endpoint: "https://otel.example.com", throwOnError: false });
-    const record: LogRecord = { event: "test.event" };
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      throwOnError: false,
+    });
+    const record: RecordFixture = { "@event": "test.event" };
 
     await expect(sink(record)).resolves.toBeUndefined();
     await expect(sink(record)).resolves.toBeUndefined();
     expect(warnSpy).toHaveBeenCalledOnce();
-    expect(warnSpy.mock.calls[0]![0]).toContain("network down");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[amplio] otlpSink: export failed (network_error); further failures will be silent. Pass throwOnError: true to fail hard.",
+    );
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(privateDetail);
   });
 
   it("fetch reject (network) + throwOnError true -> rejects with the network error", async () => {
     const networkError = new Error("network down");
     fetchMock.mockRejectedValue(networkError);
 
-    const sink = otlpSink({ endpoint: "https://otel.example.com", throwOnError: true });
-    const record: LogRecord = { event: "test.event" };
+    const sink = otlpSink({
+      endpoint: "https://otel.example.com",
+      throwOnError: true,
+    });
+    const record: RecordFixture = { "@event": "test.event" };
 
     await expect(sink(record)).rejects.toBe(networkError);
   });
@@ -422,8 +621,8 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
-    const record: LogRecord = {
-      event: "test.event",
+    const record: RecordFixture = {
+      "@event": "test.event",
       timestamp: "2026-01-15T12:00:00.000Z",
     };
 
@@ -439,8 +638,8 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
-    const record: LogRecord = {
-      event: "test.event",
+    const record: RecordFixture = {
+      "@event": "test.event",
       timestamp: 1768478400000,
     };
 
@@ -452,7 +651,6 @@ describe("otlpSink", () => {
     );
   });
 
-
   it("unparseable timestamp -> POST succeeds, timeUnixNano falls back to now", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
@@ -462,9 +660,9 @@ describe("otlpSink", () => {
     try {
       const sink = otlpSink({ endpoint: "https://otel.example.com" });
       const record = {
-        event: "test.event",
+        "@event": "test.event",
         timestamp: "not-a-date",
-      } as LogRecord;
+      } as RecordFixture;
 
       await expect(sink(record)).resolves.toBeUndefined();
       expect(fetchMock).toHaveBeenCalledOnce();
@@ -487,7 +685,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    const record: LogRecord = { event: "test.event" };
+    const record: RecordFixture = { "@event": "test.event" };
 
     await sink(record);
 
@@ -507,7 +705,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -528,7 +726,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    const record: LogRecord = { event: "test.event" };
+    const record: RecordFixture = { "@event": "test.event" };
 
     await sink(record);
 
@@ -550,7 +748,7 @@ describe("otlpSink", () => {
       headers: { Authorization: "Bearer x" },
     });
 
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -568,7 +766,7 @@ describe("otlpSink", () => {
       headers: { "content-type": "application/x-protobuf" },
     });
 
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -585,7 +783,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink({ headers: { Authorization: "Bearer opt" } });
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     const [, init] = fetchMock.mock.calls[0]!;
     expect(init?.headers).toMatchObject({
@@ -596,13 +794,12 @@ describe("otlpSink", () => {
 
   it("OTEL_EXPORTER_OTLP_HEADERS skips empty header keys (=novalue)", async () => {
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://otel.example.com";
-    process.env.OTEL_EXPORTER_OTLP_HEADERS =
-      "=novalue,Authorization=Bearer x";
+    process.env.OTEL_EXPORTER_OTLP_HEADERS = "=novalue,Authorization=Bearer x";
 
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     const [, init] = fetchMock.mock.calls[0]!;
     expect(init?.headers).toMatchObject({
@@ -620,7 +817,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -639,7 +836,9 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await expect(sink({ event: "test.event" } as LogRecord)).resolves.toBeUndefined();
+    await expect(
+      sink({ "@event": "test.event" } as RecordFixture),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -657,7 +856,9 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await expect(sink({ event: "test.event" } as LogRecord)).resolves.toBeUndefined();
+    await expect(
+      sink({ "@event": "test.event" } as RecordFixture),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -675,14 +876,15 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await expect(sink({ event: "test.event" } as LogRecord)).resolves.toBeUndefined();
+    await expect(
+      sink({ "@event": "test.event" } as RecordFixture),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
     expect(init?.headers).toEqual({ "content-type": "application/json" });
     expect(init?.headers?.[""]).toBeUndefined();
   });
-
 
   it('OTEL_EXPORTER_OTLP_HEADERS="   ,  , " (whitespace + empty segments) → fetch headers only default content-type; no throw', async () => {
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://otel.example.com";
@@ -691,14 +893,15 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await expect(sink({ event: "test.event" } as LogRecord)).resolves.toBeUndefined();
+    await expect(
+      sink({ "@event": "test.event" } as RecordFixture),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
     expect(init?.headers).toEqual({ "content-type": "application/json" });
     expect(init?.headers?.[""]).toBeUndefined();
   });
-
 
   it('OTEL_EXPORTER_OTLP_HEADERS="" (empty string) with endpoint → fetch headers only default content-type; no throw', async () => {
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "https://otel.example.com";
@@ -707,7 +910,9 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await expect(sink({ event: "test.event" } as LogRecord)).resolves.toBeUndefined();
+    await expect(
+      sink({ "@event": "test.event" } as RecordFixture),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -715,11 +920,10 @@ describe("otlpSink", () => {
     expect(init?.headers?.[""]).toBeUndefined();
   });
 
-
   it("OTEL_EXPORTER_OTLP_HEADERS unset (deleted) + endpoint via options or env → fetch headers only default content-type", async () => {
     delete process.env.OTEL_EXPORTER_OTLP_HEADERS;
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
-    const record: LogRecord = { event: "test.event" };
+    const record: RecordFixture = { "@event": "test.event" };
 
     // endpoint via options
     delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
@@ -748,7 +952,7 @@ describe("otlpSink", () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
     const sink = otlpSink();
-    await sink({ event: "test.event" } as LogRecord);
+    await sink({ "@event": "test.event" } as RecordFixture);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0]!;
@@ -764,26 +968,25 @@ describe("otlpSink", () => {
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
 
     await sink({
-      event: "test.event",
+      "@event": "test.event",
       duration_ms: 42,
       success: true,
-    } as LogRecord);
+    } as RecordFixture);
 
     let body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
-    let attributes =
-      body.resourceLogs[0].scopeLogs[0].logRecords[0].attributes;
+    let attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0].attributes;
     expect(
       attributes.find((a: { key: string }) => a.key === "duration_ms"),
-    ).toEqual({ key: "duration_ms", value: { intValue: 42 } });
+    ).toEqual({ key: "duration_ms", value: { intValue: "42" } });
     expect(
       attributes.find((a: { key: string }) => a.key === "success"),
     ).toEqual({ key: "success", value: { boolValue: true } });
 
     fetchMock.mockClear();
     await sink({
-      event: "test.event",
+      "@event": "test.event",
       duration_ms: 1.5,
-    } as LogRecord);
+    } as RecordFixture);
 
     body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
     attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0].attributes;
@@ -797,28 +1000,29 @@ describe("otlpSink", () => {
     const sink = otlpSink({ endpoint: "https://otel.example.com" });
 
     await sink({
-      event: "ok",
+      "@event": "ok",
       request_id: null,
       success: true,
       meta: { nested: true, depth: 1 },
-    } as LogRecord);
+    } as RecordFixture);
 
     const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
-    const attributes =
-      body.resourceLogs[0].scopeLogs[0].logRecords[0].attributes as Array<{
-        key: string;
-        value: Record<string, unknown>;
-      }>;
+    const attributes = body.resourceLogs[0].scopeLogs[0].logRecords[0]
+      .attributes as Array<{
+      key: string;
+      value: Record<string, unknown>;
+    }>;
     const keys = attributes.map((a) => a.key);
 
-    expect(
-      attributes.find((a) => a.key === "event"),
-    ).toEqual({ key: "event", value: { stringValue: "ok" } });
-    expect(
-      attributes.find((a) => a.key === "success"),
-    ).toEqual({ key: "success", value: { boolValue: true } });
+    expect(attributes.find((a) => a.key === "event")).toEqual({
+      key: "event",
+      value: { stringValue: "ok" },
+    });
+    expect(attributes.find((a) => a.key === "success")).toEqual({
+      key: "success",
+      value: { boolValue: true },
+    });
     expect(keys).not.toContain("request_id");
     expect(keys).not.toContain("meta");
   });
-
 });

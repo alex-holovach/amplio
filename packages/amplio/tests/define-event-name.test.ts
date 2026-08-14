@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineEvent } from "../src/index.js";
+import { defineEvent } from "../src/legacy.js";
 
 describe("defineEvent name", () => {
   it("rejects object-style options mistaken for name", () => {

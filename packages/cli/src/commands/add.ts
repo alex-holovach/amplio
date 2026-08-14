@@ -1,642 +1,939 @@
+import fs from "node:fs/promises";
 import path from "node:path";
+import { valid } from "semver";
+import {
+  findRegistryItem,
+  loadRegistry,
+  readRegistryFileContent,
+  resolveRegistryDependencies,
+  assertRegistryExists,
+} from "../registry/resolve.js";
+import {
+  installRegistryItems,
+  mergePackageDependencies,
+  type InstallResult,
+} from "../registry/install.js";
+import {
+  assertPluginCompatibility,
+  installContributorPlugin,
+  planBoundaryPluginWiring,
+} from "../registry/plugin-install.js";
+import type { RegistryItem } from "../registry/types.js";
+import {
+  assertPluginCacheContained,
+  contentHash,
+  persistPluginState,
+  planPluginState,
+  type PluginInstallMetadata,
+} from "../registry/plugin-state.js";
+import { renderEventTemplate } from "../templates/event.js";
+import {
+  readAmplioConfig,
+  resolveRegistryPath,
+  resolveTelemetryDir,
+} from "../utils/config.js";
+import { detectPackageManager } from "../utils/detect-package-manager.js";
 import {
   assertValidEventName,
   eventNameToExport,
-  eventNameToRegistryId,
   eventNameToRelativePath,
 } from "../utils/event-name.js";
-import { readAmplioConfig, resolveRegistryPath } from "../utils/config.js";
 import { formatGeneratedFiles } from "../utils/format-files.js";
-import fs from "node:fs/promises";
-import { ensureDir, pathExists, upsertBarrelExport, writeFileOrSkip } from "../utils/fs.js";
-import { updateLoggerWithEnricher } from "../utils/logger-enricher.js";
-import { updateLoggerWithSink } from "../utils/logger-sink.js";
-import { resolveProjectPaths } from "../utils/paths.js";
+import { ensureDir, pathExists, writeFileOrSkip } from "../utils/fs.js";
 import {
-  assertRegistryExists,
-  findRegistryItem,
-  loadRegistry,
-  resolveRegistryDependencies,
-} from "../registry/resolve.js";
-import { installRegistryItem, mergePackageDependencies } from "../registry/install.js";
-import { renderAuthUserSignedUpEvent, renderEventTemplate } from "../templates/event.js";
-import { findDependency, INTEGRATION_DEP_RULES } from "../utils/has-dep.js";
-import { hasTelemetryPathAlias } from "../utils/wire-t3.js";
-import { T3_MD_URL } from "../help.js";
+  normalizeGeneratedFileLocalImports,
+  normalizeGeneratedLocalImports,
+  usesExtensionlessGeneratedImports,
+} from "../utils/generated-imports.js";
+import {
+  isEnricherWired,
+  updateRuntimeWithEnricher,
+} from "../utils/logger-enricher.js";
+import { isSinkWired, updateRuntimeWithSink } from "../utils/logger-sink.js";
+import { resolveProjectPaths } from "../utils/paths.js";
+import { ensurePluginProviderDependency } from "../utils/provider-dependency.js";
+import { isCanonicallyWithin } from "../utils/path-containment.js";
 
-const MIDDLEWARE_IDS = new Set(["hono", "express", "next", "fastify", "trpc"]);
-const SINK_IDS = new Set(["console", "otlp", "json"]);
-const ENRICHER_REGISTRY_IDS = new Set([
-  "service-metadata",
-  "request-metadata",
-  "query-allowlist",
-]);
-const ENRICHER_ALIASES: Record<string, string> = { request: "request-metadata" };
-
-function resolveEnricherId(id: string): string {
-  return ENRICHER_ALIASES[id] ?? id;
-}
-
-async function appendGitignoreJsonSink(
-  cwd: string,
-  dryRun = false,
-): Promise<"created" | "updated" | "skipped"> {
-  const gitignorePath = path.join(cwd, ".gitignore");
-  // Glob, not exact: the sink's default file name includes the env
-  // (amplio.development.jsonl, amplio.production.jsonl, …).
-  const block = "# amplio JSON sink output\namplio*.jsonl\n";
-
-  if (await pathExists(gitignorePath)) {
-    const current = await fs.readFile(gitignorePath, "utf8");
-    if (/(^|\n)\s*amplio\*\.jsonl(\s|$)/m.test(current)) {
-      return "skipped";
-    }
-    if (/(^|\n)\s*amplio\.jsonl(\s|$)/m.test(current)) {
-      // Legacy exact entry from older CLIs — widen it to the env-aware glob.
-      if (!dryRun) {
-        const next = current.replace(
-          /(^|\n)(\s*)amplio\.jsonl(?=\s|$)/m,
-          "$1$2amplio*.jsonl",
-        );
-        await fs.writeFile(gitignorePath, next, "utf8");
-      }
-      return "updated";
-    }
-    if (!dryRun) {
-      const next = current.endsWith("\n") ? `${current}${block}` : `${current}\n${block}`;
-      await fs.writeFile(gitignorePath, next, "utf8");
-    }
-    return "updated";
-  }
-
-  if (!dryRun) {
-    await fs.writeFile(gitignorePath, block, "utf8");
-  }
-  return "created";
-}
-
-async function appendEnvExampleJsonSink(
-  cwd: string,
-  dryRun = false,
-): Promise<"updated" | "skipped"> {
-  const envExamplePath = path.join(cwd, ".env.example");
-  if (!(await pathExists(envExamplePath))) {
-    return "skipped";
-  }
-
-  const current = await fs.readFile(envExamplePath, "utf8");
-  if (current.includes("AMPLIO_JSON_SINK_PATH")) {
-    return "skipped";
-  }
-
-  if (!dryRun) {
-    const block =
-      "\n# Path for the amplio JSON file sink (defaults to amplio.<env>.jsonl, e.g. amplio.development.jsonl)\n# AMPLIO_JSON_SINK_PATH=amplio.dev.jsonl\n";
-    const next = current.endsWith("\n") ? `${current}${block.slice(1)}` : `${current}${block}`;
-    await fs.writeFile(envExamplePath, next, "utf8");
-  }
-  return "updated";
-}
-
-const INTEGRATION_IDS = new Set(["better-auth", "clerk", "next-auth", "resend", "polar"]);
-
-/** Integrations whose files declare their third-party message shapes locally —
- * tsc stays green without the target package installed. */
-const INTEGRATION_SELF_CONTAINED_TYPES = new Set(["next-auth", "resend", "polar"]);
-
-/**
- * Manual wiring steps per integration — installing the files is only half the
- * job, and stopping silently after "5 files created" leaves the other half in
- * the docs where nobody is looking. importBase is `~telemetry` when the
- * tsconfig alias exists, else the telemetry dir.
- */
-const INTEGRATION_WIRING: Record<string, (importBase: string) => string[]> = {
-  "next-auth": (importBase) => [
-    "Wire it up (2 manual steps):",
-    "  1. Wrap the [...nextauth] route with withAmplio so auth events share the request spine",
-    "     (stock create-t3-app: `amplio init --wire` does this):",
-    "       const { GET: authGet, POST: authPost } = handlers;",
-    "       export const GET = withAmplio(authGet);",
-    "       export const POST = withAmplio(authPost);",
-    "  2. Add the events to your NextAuth config (T3: src/server/auth/config.ts):",
-    `       import { amplioNextAuthEvents } from "${importBase}/integrations/next-auth";`,
-    "       export const authConfig = { /* … */, events: amplioNextAuthEvents() };",
-    `  Guide: node_modules/@useamplio/amplio/docs/t3.md §6 (also ${T3_MD_URL})`,
-  ],
-  "better-auth": (importBase) => [
-    "Wire it up: add the plugin to your betterAuth() config:",
-    `  import { createBetterAuthAmplioPlugin } from "${importBase}/integrations/better-auth";`,
-    "  export const auth = betterAuth({ /* … */, plugins: [createBetterAuthAmplioPlugin()] });",
-  ],
-  clerk: (importBase) => [
-    "Wire it up: call handleClerkWebhook(event) from your Clerk webhook route after verifying the signature:",
-    `  import { handleClerkWebhook } from "${importBase}/integrations/clerk";`,
-    "  // e.g. src/app/api/webhooks/clerk/route.ts, after verifyWebhook(...)",
-    "  handleClerkWebhook(event);",
-  ],
-  resend: (importBase) => [
-    "Wire it up: call handleResendWebhook(event) from your Resend webhook route,",
-    "or trackResendEmail(...) right after resend.emails.send():",
-    `  import { handleResendWebhook, trackResendEmail } from "${importBase}/integrations/resend";`,
-  ],
-  polar: (importBase) => [
-    "Wire it up: call handlePolarWebhook(event) from your Polar webhook handler:",
-    `  import { handlePolarWebhook } from "${importBase}/integrations/polar";`,
-  ],
-};
+const SINK_IDS = new Set(["console", "json", "otlp"]);
+const ENRICHER_IDS = new Set(["service-metadata"]);
 
 export interface AddOptions {
   cwd: string;
   force?: boolean;
-  /** Preview mode: print what would be created/updated/wired, write nothing. */
   dryRun?: boolean;
+  event?: string;
+  sourceOnly?: boolean;
+  yes?: boolean;
+  target?: string;
 }
 
-function itemId(kind: string, id: string): string {
-  return `${kind}-${id}`;
+const PLUGIN_LOCKFILES = [
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
+] as const;
+
+interface PluginFileSnapshot {
+  path: string;
+  existed: boolean;
+  content?: Buffer;
 }
 
-function fileStatusLine(
-  rel: string,
-  status: "created" | "updated" | "skipped",
-  dryRun: boolean,
-): string {
-  if (status === "created") {
-    return dryRun ? `✓ ${rel} (would create)` : `✓ ${rel}`;
-  }
-  if (status === "updated") {
-    return dryRun ? `↻ ${rel} (would overwrite)` : `↻ ${rel}`;
-  }
-  return `· ${rel} (exists — --force to overwrite)`;
-}
-
-function printDryRunFooter(): void {
-  console.log("  (dry run — nothing was written)");
-}
-
-async function getTelemetryDir(cwd: string): Promise<string> {
-  const config = await readAmplioConfig(cwd);
-  return config?.telemetryDir ?? "telemetry";
-}
-
-async function formatTelemetry(cwd: string): Promise<void> {
-  const telemetryDir = await getTelemetryDir(cwd);
-  const formatted = await formatGeneratedFiles(cwd, [telemetryDir]);
-  if (formatted) {
-    console.log(`  ✓ formatted with ${formatted}`);
-  }
-}
-
-async function installByName(
+async function snapshotPluginFiles(
   cwd: string,
-  registryItemName: string,
-  options: AddOptions,
+  filePaths: string[],
+): Promise<PluginFileSnapshot[]> {
+  const root = path.resolve(cwd);
+  const snapshots: PluginFileSnapshot[] = [];
+  for (const filePath of [
+    ...new Set(filePaths.map((file) => path.resolve(file))),
+  ]) {
+    if (!(await isCanonicallyWithin(root, filePath))) {
+      throw new Error(
+        `Plugin transaction path ${path.relative(root, filePath)} resolves outside the project. No files were changed.`,
+      );
+    }
+    const existed = await pathExists(filePath);
+    snapshots.push({
+      path: filePath,
+      existed,
+      ...(existed ? { content: await fs.readFile(filePath) } : {}),
+    });
+  }
+  return snapshots;
+}
+
+async function restorePluginFiles(
+  snapshots: PluginFileSnapshot[],
 ): Promise<void> {
+  for (const snapshot of [...snapshots].reverse()) {
+    if (snapshot.existed) {
+      await ensureDir(path.dirname(snapshot.path));
+      await fs.writeFile(snapshot.path, snapshot.content!);
+    } else {
+      await fs.rm(snapshot.path, { force: true });
+    }
+  }
+}
+
+async function trackedPlugin(
+  configPath: string,
+  slug: string,
+): Promise<PluginInstallMetadata | undefined> {
+  const config = JSON.parse(await fs.readFile(configPath, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  return (
+    config.plugins as Record<string, PluginInstallMetadata> | undefined
+  )?.[slug];
+}
+
+async function assertUntrackedPluginSourceAdoptable(options: {
+  cwd: string;
+  pluginPath: string;
+  pluginSource: string;
+  metadata?: PluginInstallMetadata;
+  force?: boolean;
+}): Promise<void> {
+  if (options.metadata || !(await pathExists(options.pluginPath))) return;
+  const existing = await fs.readFile(options.pluginPath, "utf8");
+  if (existing === options.pluginSource || options.force) return;
+  throw new Error(
+    `${path.relative(options.cwd, options.pluginPath)} is an untracked Plugin source that differs from the registry recipe. Rerun with --force to overwrite it transactionally. No files were changed.`,
+  );
+}
+
+function printInstallResult(
+  cwd: string,
+  result: InstallResult,
+  dryRun: boolean,
+): void {
+  for (const file of result.created) {
+    console.log(
+      `  ✓ ${path.relative(cwd, file)}${dryRun ? " (would create)" : ""}`,
+    );
+  }
+  for (const file of result.updated) {
+    console.log(
+      `  ↻ ${path.relative(cwd, file)}${dryRun ? " (would overwrite)" : ""}`,
+    );
+  }
+  for (const file of result.skipped) {
+    console.log(`  · ${path.relative(cwd, file)} (exists)`);
+  }
+}
+
+async function installRecipe(
+  item: RegistryItem,
+  options: AddOptions,
+  installOptions: { skipPackageDependencies?: boolean } = {},
+): Promise<{ files: string[]; registryPath: string }> {
+  const registryPath = await resolveRegistryPath(options.cwd);
+  await assertRegistryExists(registryPath);
+  const manifest = await loadRegistry(registryPath);
+  const ordered = await resolveRegistryDependencies(
+    registryPath,
+    manifest,
+    item,
+  );
+  const dir = await resolveTelemetryDir(options.cwd);
+  const files: string[] = [];
+  const dependencies = new Set<string>();
+  const devDependencies = new Set<string>();
+
+  const result = await installRegistryItems(ordered, {
+    cwd: options.cwd,
+    registryPath,
+    telemetryDir: dir,
+    force: options.force,
+    dryRun: options.dryRun,
+  });
+  printInstallResult(options.cwd, result, options.dryRun ?? false);
+  files.push(...result.created, ...result.updated, ...result.skipped);
+
+  for (const recipe of ordered) {
+    for (const dependency of recipe.dependencies ?? []) {
+      dependencies.add(dependency);
+    }
+    for (const dependency of recipe.devDependencies ?? []) {
+      devDependencies.add(dependency);
+    }
+  }
+
+  if (!installOptions.skipPackageDependencies) {
+    await mergePackageDependencies(
+      options.cwd,
+      [...dependencies],
+      [...devDependencies],
+      options.dryRun,
+    );
+  }
+  return { files, registryPath };
+}
+
+async function preflightRecipeInstall(
+  item: RegistryItem,
+  options: AddOptions,
+): Promise<string[]> {
+  const registryPath = await resolveRegistryPath(options.cwd);
+  await assertRegistryExists(registryPath);
+  const manifest = await loadRegistry(registryPath);
+  const ordered = await resolveRegistryDependencies(
+    registryPath,
+    manifest,
+    item,
+  );
+  const result = await installRegistryItems(ordered, {
+    cwd: options.cwd,
+    registryPath,
+    telemetryDir: await resolveTelemetryDir(options.cwd),
+    force: options.force,
+    dryRun: true,
+  });
+  return [...result.created, ...result.updated, ...result.skipped];
+}
+
+async function recipeDependencyClosure(
+  item: RegistryItem,
+  cwd: string,
+): Promise<{ dependencies: string[]; devDependencies: string[] }> {
   const registryPath = await resolveRegistryPath(cwd);
   await assertRegistryExists(registryPath);
-
   const manifest = await loadRegistry(registryPath);
-  const item = findRegistryItem(manifest, registryItemName);
-  if (!item) {
-    throw new Error(`Registry item "${registryItemName}" not found.`);
+  const ordered = await resolveRegistryDependencies(
+    registryPath,
+    manifest,
+    item,
+  );
+  return {
+    dependencies: [
+      ...new Set(ordered.flatMap((recipe) => recipe.dependencies ?? [])),
+    ],
+    devDependencies: [
+      ...new Set(ordered.flatMap((recipe) => recipe.devDependencies ?? [])),
+    ],
+  };
+}
+
+async function installContributorRecipeSupport(
+  item: RegistryItem,
+  options: AddOptions,
+  dryRun: boolean,
+): Promise<string[]> {
+  const registryPath = await resolveRegistryPath(options.cwd);
+  await assertRegistryExists(registryPath);
+  const manifest = await loadRegistry(registryPath);
+  const ordered = await resolveRegistryDependencies(
+    registryPath,
+    manifest,
+    item,
+  );
+  const supportItems = ordered.filter((recipe) => recipe.name !== item.name);
+  const result = await installRegistryItems(supportItems, {
+    cwd: options.cwd,
+    registryPath,
+    telemetryDir: await resolveTelemetryDir(options.cwd),
+    force: options.force,
+    dryRun,
+  });
+  printInstallResult(options.cwd, result, dryRun);
+
+  return [...result.created, ...result.updated, ...result.skipped];
+}
+
+async function registryItem(
+  cwd: string,
+  name: string,
+): Promise<{ item: RegistryItem; registryPath: string }> {
+  const registryPath = await resolveRegistryPath(cwd);
+  await assertRegistryExists(registryPath);
+  const manifest = await loadRegistry(registryPath);
+  const item = findRegistryItem(manifest, name);
+  if (!item) throw new Error(`Registry item "${name}" not found.`);
+  return { item, registryPath };
+}
+
+async function pluginPackageManager(cwd: string) {
+  const config = await readAmplioConfig(cwd);
+  return config?.packageManager ?? (await detectPackageManager(cwd));
+}
+
+async function formatFiles(cwd: string, files: string[]): Promise<void> {
+  const targets = files.map((file) => path.relative(cwd, file));
+  const formatter = await formatGeneratedFiles(cwd, [...new Set(targets)]);
+  if (formatter) console.log(`  ✓ formatted with ${formatter}`);
+}
+
+async function trackBoundaryPlugin(options: {
+  cwd: string;
+  item: RegistryItem;
+  sourcePath: string;
+  recipePath: string;
+  recipeSource: string;
+  compositionRoot?: string;
+  compositionBefore?: string;
+  compositionInstalled?: string;
+  wiringOwnership?: "managed" | "adopted";
+  wiringAnchor?: string;
+  sourceOnly?: boolean;
+}): Promise<void> {
+  const slug = options.item.name.replace(/^plugin-/, "");
+  const wiring =
+    options.compositionRoot &&
+    options.compositionBefore !== undefined &&
+    options.compositionInstalled !== undefined
+      ? [
+          {
+            file: options.compositionRoot,
+            kind: "boundary-registration" as const,
+            anchor:
+              options.wiringAnchor ??
+              options.item.wiringActions?.find(
+                (action) =>
+                  action.type === "register-boundary" ||
+                  action.type === "wrap-boundary",
+              )?.export ??
+              slug,
+            before: options.compositionBefore,
+            installed: options.compositionInstalled,
+            ...(options.wiringOwnership
+              ? { ownership: options.wiringOwnership }
+              : {}),
+          },
+        ]
+      : [];
+  await persistPluginState({
+    cwd: options.cwd,
+    slug,
+    plan: planPluginState({
+      cwd: options.cwd,
+      slug,
+      item: options.item,
+      role: "boundary",
+      sourcePath: options.sourcePath,
+      recipePath: options.recipePath,
+      recipeSource: options.recipeSource,
+      ...(options.item.events?.[0]?.id
+        ? { event: options.item.events[0].id }
+        : {}),
+      ...(options.compositionRoot
+        ? { compositionRoot: options.compositionRoot }
+        : {}),
+      ...(options.sourceOnly ? { sourceOnly: true } : {}),
+      wiring,
+    }),
+  });
+}
+
+async function trackSourceOnlyContributor(options: {
+  cwd: string;
+  item: RegistryItem;
+  eventId: string;
+  sourcePath: string;
+  recipePath: string;
+  recipeSource: string;
+}): Promise<void> {
+  const slug = options.item.name.replace(/^plugin-/, "");
+  await persistPluginState({
+    cwd: options.cwd,
+    slug,
+    plan: planPluginState({
+      cwd: options.cwd,
+      slug,
+      item: options.item,
+      role: "contributor",
+      sourcePath: options.sourcePath,
+      recipePath: options.recipePath,
+      recipeSource: options.recipeSource,
+      event: options.eventId,
+      ...(options.item.placement?.branch
+        ? { branch: options.item.placement.branch }
+        : {}),
+      sourceOnly: true,
+    }),
+  });
+}
+
+export async function runAddEvent(
+  id: string,
+  options: AddOptions,
+): Promise<void> {
+  assertValidEventName(id);
+  const dir = await resolveTelemetryDir(options.cwd);
+  const relative = eventNameToRelativePath(id);
+  const eventPath = path.join(options.cwd, dir, relative);
+  const source = renderEventTemplate(id, eventNameToExport(id));
+  const exists = await pathExists(eventPath);
+  const status = exists ? (options.force ? "updated" : "skipped") : "created";
+
+  console.log(`amplio add event ${id}`);
+  if (!options.dryRun) {
+    await writeFileOrSkip(eventPath, source, options.force ?? false);
   }
-
-  const items = await resolveRegistryDependencies(registryPath, manifest, item);
-  const telemetryDir = await getTelemetryDir(cwd);
-  const paths = resolveProjectPaths(cwd, telemetryDir);
-  const dryRun = options.dryRun ?? false;
-
-  if (!dryRun) {
-    for (const entry of items) {
-      if (entry.files.some((file) => file.target?.includes("/middleware/"))) {
-        await ensureDir(paths.middleware);
-      }
-      if (entry.files.some((file) => file.target?.includes("/sinks/"))) {
-        await ensureDir(paths.sinks);
-      }
-      if (entry.files.some((file) => file.target?.includes("/enrichers/"))) {
-        await ensureDir(paths.enrichers);
-      }
-      if (entry.files.some((file) => file.target?.includes("/integrations/"))) {
-        await ensureDir(paths.integrations);
-      }
-      if (entry.files.some((file) => file.target?.includes("/events/"))) {
-        await ensureDir(paths.events);
-      }
-    }
+  const marker = status === "created" ? "✓" : status === "updated" ? "↻" : "·";
+  console.log(
+    `  ${marker} ${path.relative(options.cwd, eventPath)}${options.dryRun && status !== "skipped" ? ` (would ${status === "created" ? "create" : "overwrite"})` : ""}`,
+  );
+  await mergePackageDependencies(
+    options.cwd,
+    ["@useamplio/amplio", "zod"],
+    [],
+    options.dryRun,
+  );
+  if (!options.dryRun && status !== "skipped") {
+    await formatFiles(options.cwd, [eventPath]);
   }
+}
 
-  const mergedDeps = new Set<string>();
-  const mergedDevDeps = new Set<string>();
-  const installedEventFiles: string[] = [];
-
-  for (const entry of items) {
-    const result = await installRegistryItem(entry, {
-      cwd,
-      registryPath,
-      telemetryDir,
-      force: options.force,
-      dryRun,
-    });
-
-    for (const file of [...result.created, ...result.updated, ...result.skipped]) {
-      const rel = path.relative(cwd, file);
-      const status = result.created.includes(file)
-        ? "created"
-        : result.updated.includes(file)
-          ? "updated"
-          : "skipped";
-      console.log(`  ${fileStatusLine(rel, status, dryRun)}`);
-      if (rel.replace(/\\/g, "/").includes("/events/")) {
-        installedEventFiles.push(file);
+async function appendJsonSinkSupport(
+  cwd: string,
+  dryRun: boolean,
+): Promise<void> {
+  const gitignorePath = path.join(cwd, ".gitignore");
+  const entry = "amplio*.jsonl";
+  if (await pathExists(gitignorePath)) {
+    const source = await fs.readFile(gitignorePath, "utf8");
+    if (!source.split("\n").some((line) => line.trim() === entry)) {
+      if (!dryRun) {
+        await fs.writeFile(
+          gitignorePath,
+          `${source}${source.endsWith("\n") ? "" : "\n"}${entry}\n`,
+          "utf8",
+        );
       }
-    }
-
-    for (const dep of entry.dependencies ?? []) {
-      mergedDeps.add(dep);
-    }
-    for (const dep of entry.devDependencies ?? []) {
-      mergedDevDeps.add(dep);
-    }
-  }
-
-  // Registry-dependency events (e.g. an integration pulling in its event)
-  // must be wired into the barrels like a direct `add event`, or the install
-  // is only half done and tsc/doctor complain immediately after. One printed
-  // set for the whole install — an integration pulling in two events touches
-  // the same barrels twice, but the report should say so once.
-  const printedBarrels = new Set<string>();
-  if (dryRun) {
-    for (const file of installedEventFiles) {
-      const domainBarrel = path.join(path.dirname(file), "index.ts");
-      const rootBarrel = path.join(cwd, telemetryDir, "events", "index.ts");
-      for (const barrel of [domainBarrel, rootBarrel]) {
-        const rel = path.relative(cwd, barrel);
-        if (!printedBarrels.has(rel)) {
-          printedBarrels.add(rel);
-          console.log(`  ~ ${rel} (would wire barrel export)`);
-        }
-      }
+      console.log(`  ✓ .gitignore${dryRun ? " (would update)" : ""}`);
     }
   } else {
-    for (const file of installedEventFiles) {
-      await wireInstalledEventBarrels(cwd, telemetryDir, file, printedBarrels);
-    }
+    if (!dryRun) await fs.writeFile(gitignorePath, `${entry}\n`, "utf8");
+    console.log(`  ✓ .gitignore${dryRun ? " (would create)" : ""}`);
   }
-
-  await mergePackageDependencies(cwd, [...mergedDeps], [...mergedDevDeps], dryRun);
 }
 
-const DEFINE_EVENT_EXPORT_RE =
-  /export\s+const\s+([A-Za-z0-9_$]+)\s*=\s*defineEvent\s*\(\s*["']([^"']+)["']/;
-
-async function wireInstalledEventBarrels(
-  cwd: string,
-  telemetryDir: string,
-  eventFile: string,
-  printed?: Set<string>,
+export async function runAddSink(
+  id: string,
+  options: AddOptions,
 ): Promise<void> {
-  try {
-    const source = await fs.readFile(eventFile, "utf8");
-    const match = DEFINE_EVENT_EXPORT_RE.exec(source);
-    if (!match) {
-      return;
-    }
-    const [, exportName, eventName] = match;
-    const relativePath = path
-      .relative(path.join(cwd, telemetryDir), eventFile)
-      .replace(/\\/g, "/");
-    if (relativePath !== eventNameToRelativePath(eventName!)) {
-      return;
-    }
-    await updateEventBarrels(cwd, telemetryDir, relativePath, exportName!, printed);
-  } catch {
-    // best effort — doctor --fix covers anything missed here
+  if (!SINK_IDS.has(id)) {
+    throw new Error(
+      `Unknown sink "${id}". Choose: ${[...SINK_IDS].join(", ")}`,
+    );
   }
+  const { item } = await registryItem(options.cwd, `sink-${id}`);
+  const dir = await resolveTelemetryDir(options.cwd);
+  const runtime = resolveProjectPaths(options.cwd, dir).runtime;
+  const alreadyWired = await isSinkWired(runtime, id);
+  const plannedUpdate = alreadyWired
+    ? null
+    : await updateRuntimeWithSink(runtime, id, true);
+  if (!alreadyWired && !plannedUpdate) {
+    throw new Error(
+      `${path.relative(options.cwd, runtime)} cannot be safely wired with sink "${id}"; no files were changed`,
+    );
+  }
+  console.log(`amplio add sink ${id}`);
+  const installed = await installRecipe(item, options);
+  const update = alreadyWired
+    ? null
+    : await updateRuntimeWithSink(runtime, id, options.dryRun);
+  if (update) {
+    console.log(
+      `  ✓ ${path.relative(options.cwd, runtime)}${options.dryRun ? " (would wire)" : " (wired)"}`,
+    );
+  } else if (!(await pathExists(runtime))) {
+    console.log("  ! sink installed but runtime.ts is absent; run amplio init");
+  }
+  if (id === "json")
+    await appendJsonSinkSupport(options.cwd, options.dryRun ?? false);
+  if (!options.dryRun && (await pathExists(runtime))) {
+    await normalizeGeneratedFileLocalImports(options.cwd, runtime);
+  }
+  if (!options.dryRun) await formatFiles(options.cwd, installed.files);
 }
 
-export async function updateEventBarrels(
-  cwd: string,
-  telemetryDir: string,
-  eventRelativePath: string,
-  exportName: string,
-  /** Barrel paths already reported this run — suppresses duplicate ✓ lines. */
-  printed?: Set<string>,
+export async function runAddEnricher(
+  id: string,
+  options: AddOptions,
 ): Promise<void> {
-  const telemetryRoot = path.join(cwd, telemetryDir);
-  const eventFile = path.join(telemetryRoot, eventRelativePath);
-  const domainDir = path.dirname(eventRelativePath);
-  const importPath = `./${path.basename(eventRelativePath, ".ts")}`;
-
-  const domainBarrel = path.join(telemetryRoot, domainDir, "index.ts");
-  const rootBarrel = path.join(telemetryRoot, "events", "index.ts");
-
-  await upsertBarrelExport(
-    domainBarrel,
-    `export { ${exportName} } from "${importPath}";`,
-  );
-
-  // Same extensionless, index-implicit style as the domain barrel ("./sent",
-  // "./post") so generator and doctor --fix produce identical diffs.
-  const domainExportPath = `./${domainDir.split("/").slice(1).join("/")}`;
-  await upsertBarrelExport(
-    rootBarrel,
-    `export { ${exportName} } from "${domainExportPath}";`,
-  );
-
-  for (const barrel of [domainBarrel, rootBarrel]) {
-    const rel = path.relative(cwd, barrel);
-    if (printed) {
-      if (printed.has(rel)) {
-        continue;
-      }
-      printed.add(rel);
-    }
-    console.log(`  ✓ ${rel}`);
+  if (!ENRICHER_IDS.has(id)) {
+    throw new Error(
+      `Unknown enricher "${id}". Choose: ${[...ENRICHER_IDS].join(", ")}`,
+    );
   }
+  const { item } = await registryItem(options.cwd, `enricher-${id}`);
+  const dir = await resolveTelemetryDir(options.cwd);
+  const runtime = resolveProjectPaths(options.cwd, dir).runtime;
+  const alreadyWired = await isEnricherWired(runtime, id);
+  const plannedUpdate = alreadyWired
+    ? false
+    : await updateRuntimeWithEnricher(runtime, id, true);
+  if (!alreadyWired && !plannedUpdate) {
+    throw new Error(
+      `${path.relative(options.cwd, runtime)} cannot be safely wired with enricher "${id}"; no files were changed`,
+    );
+  }
+  console.log(`amplio add enricher ${id}`);
+  const installed = await installRecipe(item, options);
+  const wired = alreadyWired
+    ? false
+    : await updateRuntimeWithEnricher(runtime, id, options.dryRun);
+  if (wired) {
+    console.log(
+      `  ✓ ${path.relative(options.cwd, runtime)}${options.dryRun ? " (would wire)" : " (wired)"}`,
+    );
+  } else if (!(await pathExists(runtime))) {
+    console.log(
+      "  ! enricher installed but runtime.ts is absent; run amplio init",
+    );
+  }
+  if (!options.dryRun && (await pathExists(runtime))) {
+    await normalizeGeneratedFileLocalImports(options.cwd, runtime);
+  }
+  if (!options.dryRun) await formatFiles(options.cwd, installed.files);
 }
 
-const DEFINE_EVENT_NAME_RE = /defineEvent\s*\(\s*["']([^"']+)["']/;
+export async function runAddPlugin(
+  id: string,
+  options: AddOptions,
+): Promise<void> {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(id)) {
+    throw new Error(`Invalid Plugin slug "${id}".`);
+  }
+  if (options.target && options.sourceOnly) {
+    throw new Error(
+      "--target selects an active Plugin seam and cannot be used with --source-only. No files were changed.",
+    );
+  }
+  const { item, registryPath } = await registryItem(
+    options.cwd,
+    `plugin-${id}`,
+  );
+  if (!item.recipeVersion || valid(item.recipeVersion) === null) {
+    throw new Error(
+      `Plugin "${id}" has missing or invalid SemVer recipeVersion metadata. No files were changed.`,
+    );
+  }
+  await assertPluginCacheContained(options.cwd);
 
-/**
- * `list` shows hyphenated registry ids alongside events; accept those as
- * `add event` input by mapping the id back to the dot name in the item's
- * defineEvent call (hyphen→dot is ambiguous with underscores, so read it
- * from the template instead of guessing).
- */
-async function resolveEventNameArg(name: string, cwd: string): Promise<string> {
-  try {
-    assertValidEventName(name);
-    return name;
-  } catch (error) {
-    if (!name.includes("-") || !/^[a-z][a-z0-9-]*$/.test(name)) {
-      throw error;
+  if (item.role === "boundary") {
+    if (options.event?.trim()) {
+      throw new Error(`Boundary Plugin "${id}" selects its own root Event.`);
     }
-    try {
-      const registryPath = await resolveRegistryPath(cwd);
-      const manifest = await loadRegistry(registryPath);
-      const item = findRegistryItem(
-        manifest,
-        name.startsWith("event-") ? name : `event-${name}`,
+    const configPath = path.join(options.cwd, "amplio.json");
+    if (!(await pathExists(configPath))) {
+      throw new Error(
+        "amplio.json is missing; run amplio init before adding a Plugin. No files were changed.",
       );
-      for (const file of item?.files ?? []) {
-        const match = file.content ? DEFINE_EVENT_NAME_RE.exec(file.content) : null;
-        if (match) {
-          return match[1]!;
-        }
-      }
-    } catch {
-      // fall through to the original validation error
     }
-    throw error;
-  }
-}
-
-export async function runAddEvent(rawEventName: string, options: AddOptions): Promise<void> {
-  const eventName = await resolveEventNameArg(rawEventName, options.cwd);
-  const telemetryDir = await getTelemetryDir(options.cwd);
-  const paths = resolveProjectPaths(options.cwd, telemetryDir);
-  const exportName = eventNameToExport(eventName);
-  const relativePath = eventNameToRelativePath(eventName);
-  const targetPath = path.join(paths.telemetry, relativePath);
-
-  const dryRun = options.dryRun ?? false;
-  if (!dryRun) {
-    await ensureDir(path.dirname(targetPath));
-  }
-  console.log(`amplio add event ${eventName}`);
-  if (eventName !== rawEventName) {
-    console.log(`  (registry id ${rawEventName} → event ${eventName})`);
-  }
-
-  try {
-    const registryPath = await resolveRegistryPath(options.cwd);
-    const manifest = await loadRegistry(registryPath);
-    const registryId = eventNameToRegistryId(eventName);
-    const item = findRegistryItem(manifest, registryId);
-    if (item) {
-      console.log(`  matched registry event ${registryId}`);
-      const eventExists = await pathExists(targetPath);
-      // installByName wires barrels for every installed event file.
-      await installByName(options.cwd, registryId, options);
-      if (eventExists && !(options.force ?? false)) {
-        console.log("  · skipped existing event file");
-      }
-      if (dryRun) {
-        printDryRunFooter();
+    const dir = await resolveTelemetryDir(options.cwd);
+    const slug = item.name.replace(/^plugin-/, "");
+    const existingMetadata = await trackedPlugin(configPath, slug);
+    if (
+      options.sourceOnly &&
+      existingMetadata &&
+      existingMetadata.sourceOnly !== true
+    ) {
+      throw new Error(
+        `Plugin "${slug}" is already active and cannot downgrade to --source-only. Remove it first. No files were changed.`,
+      );
+    }
+    const pluginPath = path.join(options.cwd, dir, "plugins", `${slug}.ts`);
+    const sourceFile = item.files.find(
+      (file) =>
+        file.target?.replace(/\\/g, "/").endsWith(`/plugins/${slug}.ts`) ||
+        file.target?.replace(/\\/g, "/") === `plugins/${slug}.ts`,
+    );
+    if (!sourceFile) {
+      throw new Error(`Plugin "${id}" has no editable source file.`);
+    }
+    const pluginSource = normalizeGeneratedLocalImports(
+      await readRegistryFileContent(
+        registryPath,
+        sourceFile.path,
+        sourceFile.content,
+      ),
+      await usesExtensionlessGeneratedImports(options.cwd),
+    );
+    await assertUntrackedPluginSourceAdoptable({
+      cwd: options.cwd,
+      pluginPath,
+      pluginSource,
+      metadata: existingMetadata,
+      force: options.force,
+    });
+    if (options.sourceOnly) {
+      await assertPluginCompatibility({
+        cwd: options.cwd,
+        item,
+        allowMissing: true,
+      });
+    }
+    const wiring = options.sourceOnly
+      ? undefined
+      : await planBoundaryPluginWiring({
+          cwd: options.cwd,
+          telemetryDir: dir,
+          item,
+          allowMissingDependencies: true,
+          allowPluginOverwrite: options.force,
+          ...(options.target ? { target: options.target } : {}),
+        });
+    const plannedCompositionRoot = wiring
+      ? path.relative(options.cwd, wiring.compositionPath).replace(/\\/g, "/")
+      : undefined;
+    if (
+      wiring &&
+      existingMetadata &&
+      existingMetadata.sourceOnly !== true &&
+      existingMetadata.compositionRoot !== plannedCompositionRoot
+    ) {
+      throw new Error(
+        `Plugin "${slug}" is already active at ${existingMetadata.compositionRoot}; refusing to retarget it to ${plannedCompositionRoot}. Remove and reinstall the Plugin explicitly. No files were changed.`,
+      );
+    }
+    const compositionBefore = wiring
+      ? await fs.readFile(wiring.compositionPath, "utf8")
+      : undefined;
+    const recipeDependencies = wiring
+      ? await recipeDependencyClosure(item, options.cwd)
+      : undefined;
+    let previewFiles: string[] | undefined;
+    if (wiring) {
+      console.log(`amplio add plugin ${id}`);
+      previewFiles = (
+        await installRecipe(
+          item,
+          { ...options, dryRun: true },
+          { skipPackageDependencies: true },
+        )
+      ).files;
+      console.log(
+        wiring.ownership === "adopted"
+          ? `  ~ would adopt verified customer-owned boundary in ${path.relative(options.cwd, wiring.compositionPath)}`
+          : `  ~ would activate boundary in ${path.relative(options.cwd, wiring.compositionPath)}`,
+      );
+      console.log("  ~ would track Plugin install in amplio.json");
+      console.log(
+        wiring.ownership === "adopted"
+          ? "  ~ tracked rollback: package, lockfile, Plugin source, and install state; the customer composition seam is verified but not rewritten; node_modules, package-manager cache, and dependency lifecycle scripts are not reversible"
+          : "  ~ tracked rollback: package, lockfile, Plugin source, composition seam, and install state; node_modules, package-manager cache, and dependency lifecycle scripts are not reversible",
+      );
+    }
+    const transactionSnapshots = options.dryRun
+      ? []
+      : await snapshotPluginFiles(options.cwd, [
+          ...(previewFiles ?? (await preflightRecipeInstall(item, options))),
+          configPath,
+          path.join(options.cwd, "package.json"),
+          ...PLUGIN_LOCKFILES.map((lockfile) =>
+            path.join(options.cwd, lockfile),
+          ),
+          ...(wiring ? [wiring.compositionPath] : []),
+          path.join(
+            options.cwd,
+            ".amplio",
+            "bases",
+            `${contentHash(pluginSource)}.json`,
+          ),
+          path.join(options.cwd, ".amplio", "installs", `${slug}.json`),
+        ]);
+    let providerChange:
+      Awaited<ReturnType<typeof ensurePluginProviderDependency>> | undefined;
+    if (wiring) {
+      providerChange = await ensurePluginProviderDependency({
+        cwd: options.cwd,
+        item,
+        packageManager: await pluginPackageManager(options.cwd),
+        yes: options.yes,
+        dryRun: options.dryRun,
+        recipeDependencies,
+      });
+    }
+    if (options.dryRun && wiring) return;
+    try {
+      if (!wiring) console.log(`amplio add plugin ${id} --source-only`);
+      await installRecipe(item, options, {
+        skipPackageDependencies: wiring !== undefined,
+      });
+      if (options.dryRun) {
+        console.log("  ~ would copy inert source without boundary activation");
+        console.log("  ~ would track Plugin install in amplio.json");
         return;
       }
-      await formatTelemetry(options.cwd);
-      return;
-    }
-  } catch {
-    // fall through to template generation
-  }
-
-  const content =
-    eventName === "auth.user.signed_up"
-      ? renderAuthUserSignedUpEvent()
-      : renderEventTemplate(eventName, exportName);
-
-  console.log(`  generated starter schema (no registry template for ${eventName})`);
-
-  if (dryRun) {
-    const exists = await pathExists(targetPath);
-    const status = exists ? ((options.force ?? false) ? "updated" : "skipped") : "created";
-    console.log(
-      `  ${fileStatusLine(path.relative(options.cwd, targetPath), status, true)}`,
-    );
-    if (status !== "skipped") {
-      const domainBarrel = path.join(path.dirname(targetPath), "index.ts");
-      const rootBarrel = path.join(paths.events, "index.ts");
-      for (const barrel of [domainBarrel, rootBarrel]) {
-        console.log(`  ~ ${path.relative(options.cwd, barrel)} (would wire barrel export)`);
+      if (wiring) {
+        if (wiring.ownership !== "adopted") {
+          await fs.writeFile(
+            wiring.compositionPath,
+            wiring.compositionSource,
+            "utf8",
+          );
+        }
+        await trackBoundaryPlugin({
+          cwd: options.cwd,
+          item,
+          sourcePath: pluginPath,
+          recipePath: sourceFile.path,
+          recipeSource: pluginSource,
+          compositionRoot: plannedCompositionRoot!,
+          compositionBefore,
+          compositionInstalled: wiring.compositionSource,
+          ...(wiring.ownership ? { wiringOwnership: wiring.ownership } : {}),
+          ...(wiring.anchor ? { wiringAnchor: wiring.anchor } : {}),
+        });
+        console.log(
+          wiring.ownership === "adopted"
+            ? `  ✓ ${path.relative(options.cwd, wiring.compositionPath)} (verified customer-owned boundary adopted; source retained)`
+            : `  ✓ ${path.relative(options.cwd, wiring.compositionPath)} (boundary activated)`,
+        );
+      } else {
+        await trackBoundaryPlugin({
+          cwd: options.cwd,
+          item,
+          sourcePath: pluginPath,
+          recipePath: sourceFile.path,
+          recipeSource: pluginSource,
+          sourceOnly: true,
+        });
+        console.log(
+          "  ! source copied without activation; doctor --strict will fail until wired",
+        );
       }
-    } else {
-      console.log("  · skipped existing event file");
+      return;
+    } catch (error) {
+      try {
+        await restorePluginFiles(transactionSnapshots);
+      } finally {
+        await providerChange?.rollback();
+      }
+      throw error;
     }
-    printDryRunFooter();
-    return;
   }
 
-  const status = await writeFileOrSkip(targetPath, content, options.force ?? false);
-  console.log(
-    `  ${fileStatusLine(path.relative(options.cwd, targetPath), status, false)}`,
+  const eventId = options.event?.trim();
+  if (!eventId) throw new Error(`Plugin "${id}" requires --event <event-id>.`);
+  const sourceFile = item.files.find((file) => {
+    const target = file.target?.replace(/\\/g, "/");
+    return (
+      target === `plugins/${id}.ts` ||
+      target?.endsWith(`/plugins/${id}.ts`) === true
+    );
+  });
+  if (!sourceFile)
+    throw new Error(`Plugin "${id}" has no editable source file.`);
+  const pluginSource = normalizeGeneratedLocalImports(
+    await readRegistryFileContent(
+      registryPath,
+      sourceFile.path,
+      sourceFile.content,
+    ),
+    await usesExtensionlessGeneratedImports(options.cwd),
   );
-
-  if (status !== "skipped") {
-    await updateEventBarrels(options.cwd, telemetryDir, relativePath, exportName);
-    await formatTelemetry(options.cwd);
-  } else {
-    console.log("  · skipped existing event file");
-  }
-}
-
-export async function runAddMiddleware(id: string, options: AddOptions): Promise<void> {
-  if (!MIDDLEWARE_IDS.has(id)) {
-    throw new Error(`Unknown middleware "${id}". Choose: ${[...MIDDLEWARE_IDS].join(", ")}`);
-  }
-  const telemetryDir = await getTelemetryDir(options.cwd);
-  const paths = resolveProjectPaths(options.cwd, telemetryDir);
-  const targetPath = path.join(paths.middleware, `${id}.ts`);
-  const middlewareExists = await pathExists(targetPath);
-
-  console.log(`amplio add middleware ${id}`);
-  await installByName(options.cwd, itemId("middleware", id), options);
-
-  if (middlewareExists && !(options.force ?? false)) {
-    console.log("  · skipped existing middleware file");
-  }
-  if (options.dryRun) {
-    printDryRunFooter();
-    return;
-  }
-  await formatTelemetry(options.cwd);
-}
-
-export async function runAddSink(id: string, options: AddOptions): Promise<void> {
-  if (!SINK_IDS.has(id)) {
-    throw new Error(`Unknown sink "${id}". Choose: ${[...SINK_IDS].join(", ")}`);
-  }
-  const telemetryDir = await getTelemetryDir(options.cwd);
-  const paths = resolveProjectPaths(options.cwd, telemetryDir);
-  const targetPath = path.join(paths.sinks, `${id}.ts`);
-  const sinkExists = await pathExists(targetPath);
-
-  console.log(`amplio add sink ${id}`);
-  await installByName(options.cwd, itemId("sink", id), options);
-
-  if (sinkExists && !(options.force ?? false)) {
-    console.log("  · skipped existing sink file");
-  }
-
-  const dryRun = options.dryRun ?? false;
-  const loggerUpdate = await updateLoggerWithSink(paths.logger, id, dryRun);
-  if (loggerUpdate) {
-    const rel = path.relative(options.cwd, paths.logger);
-    console.log(`  ${dryRun ? `~ ${rel} (would auto-wire sink)` : `✓ ${rel} (auto-wired sink)`}`);
-    for (const line of loggerUpdate.insertedLines) {
-      console.log(`    ${line}`);
-    }
-  }
-
-  if (id === "json") {
-    const gitignoreResult = await appendGitignoreJsonSink(options.cwd, dryRun);
-    if (gitignoreResult !== "skipped") {
-      console.log(
-        dryRun
-          ? `  ~ .gitignore (would add amplio*.jsonl)`
-          : `  ✓ .gitignore (${gitignoreResult})`,
-      );
-    }
-    const envResult = await appendEnvExampleJsonSink(options.cwd, dryRun);
-    if (envResult === "updated") {
-      console.log(
-        dryRun ? "  ~ .env.example (would document AMPLIO_JSON_SINK_PATH)" : "  ✓ .env.example",
-      );
-    }
-  }
-  if (dryRun) {
-    printDryRunFooter();
-    return;
-  }
-  await formatTelemetry(options.cwd);
-}
-
-export async function runAddEnricher(id: string, options: AddOptions): Promise<void> {
-  const registryId = resolveEnricherId(id);
-  if (!ENRICHER_REGISTRY_IDS.has(registryId)) {
+  const dir = await resolveTelemetryDir(options.cwd);
+  const configPath = path.join(options.cwd, "amplio.json");
+  if (!(await pathExists(configPath))) {
     throw new Error(
-      `Unknown enricher "${id}". Choose: ${[...ENRICHER_REGISTRY_IDS].join(", ")}`,
+      "amplio.json is missing; run amplio init before adding a Plugin. No files were changed.",
     );
   }
-  const telemetryDir = await getTelemetryDir(options.cwd);
-  const paths = resolveProjectPaths(options.cwd, telemetryDir);
-  const targetPath = path.join(paths.enrichers, `${registryId}.ts`);
-  const enricherExists = await pathExists(targetPath);
+  const existingMetadata = await trackedPlugin(configPath, id);
+  const pluginPath = path.join(options.cwd, dir, "plugins", `${id}.ts`);
+  await assertUntrackedPluginSourceAdoptable({
+    cwd: options.cwd,
+    pluginPath,
+    pluginSource,
+    metadata: existingMetadata,
+    force: options.force,
+  });
 
-  console.log(`amplio add enricher ${id}`);
-  await installByName(options.cwd, itemId("enricher", registryId), options);
-
-  if (enricherExists && !(options.force ?? false)) {
-    console.log("  · skipped existing enricher file");
-  }
-
-  if (registryId === "request-metadata") {
-    console.log(
-      "  request-metadata is a per-request enricher factory — use it inside middleware/wrappers, not init():",
-    );
-    console.log(
-      "    const enrich = requestMetadata({ method: req.method, path: req.path });",
-    );
-    console.log("    requestLogger.set(enrich({}));");
-    return;
-  }
-
-  const dryRun = options.dryRun ?? false;
-  const loggerUpdated = await updateLoggerWithEnricher(paths.logger, registryId, dryRun);
-  if (loggerUpdated) {
-    const rel = path.relative(options.cwd, paths.logger);
-    console.log(dryRun ? `  ~ ${rel} (would auto-wire enricher)` : `  ✓ ${rel}`);
-  }
-  if (registryId === "query-allowlist") {
-    console.log(
-      '  queryAllowlist() drops http.search entirely — pass { allow: ["page", "sort"] } in logger.ts to keep specific params (others become [REDACTED])',
-    );
-  }
-  if (dryRun) {
-    printDryRunFooter();
-    return;
-  }
-  await formatTelemetry(options.cwd);
-}
-
-export async function runAddIntegration(id: string, options: AddOptions): Promise<void> {
-  if (!INTEGRATION_IDS.has(id)) {
-    throw new Error(
-      `Unknown integration "${id}". Choose: ${[...INTEGRATION_IDS].join(", ")}`,
-    );
-  }
-  const telemetryDir = await getTelemetryDir(options.cwd);
-  const paths = resolveProjectPaths(options.cwd, telemetryDir);
-  const targetPath = path.join(paths.integrations, `${id}.ts`);
-  const integrationExists = await pathExists(targetPath);
-
-  console.log(`amplio add integration ${id}`);
-  await installByName(options.cwd, itemId("integration", id), options);
-
-  if (integrationExists && !(options.force ?? false)) {
-    console.log("  · skipped existing integration file");
-  }
-  if (options.dryRun) {
-    printDryRunFooter();
-    return;
-  }
-  await formatTelemetry(options.cwd);
-
-  // The integration is open code against a third-party package — installing
-  // it into a project that doesn't have that package deserves a heads-up.
-  const rule = INTEGRATION_DEP_RULES.find((entry) => entry.integration === id);
-  if (rule && !(await findDependency(options.cwd, rule.matches))) {
-    if (INTEGRATION_SELF_CONTAINED_TYPES.has(id)) {
-      console.log(
-        `\n! ${rule.depLabel} is not in package.json — this integration targets it. The file uses local structural types (tsc stays green), but it emits nothing until ${rule.depLabel} is installed and wired.`,
-      );
-    } else {
-      console.log(
-        `\n! ${rule.depLabel} is not in package.json — the integration file imports from it, so typecheck/build will fail until it is installed.`,
+  if (options.sourceOnly) {
+    await assertPluginCompatibility({
+      cwd: options.cwd,
+      item,
+      allowMissing: true,
+    });
+    if (existingMetadata && existingMetadata.sourceOnly !== true) {
+      throw new Error(
+        `Plugin "${id}" is already active and cannot downgrade to --source-only. Remove it first. No files were changed.`,
       );
     }
+    if (
+      existingMetadata?.sourceOnly === true &&
+      (existingMetadata.event !== eventId ||
+        existingMetadata.branch !== item.placement?.branch)
+    ) {
+      throw new Error(
+        `Plugin "${id}" is already tracked as source-only for Event "${existingMetadata.event}" under "${existingMetadata.branch}". Remove it before selecting a different root Event. No files were changed.`,
+      );
+    }
+    const transactionSnapshots = options.dryRun
+      ? []
+      : await snapshotPluginFiles(options.cwd, [
+          ...(await preflightRecipeInstall(item, options)),
+          configPath,
+          path.join(options.cwd, "package.json"),
+          ...PLUGIN_LOCKFILES.map((lockfile) =>
+            path.join(options.cwd, lockfile),
+          ),
+          path.join(
+            options.cwd,
+            ".amplio",
+            "bases",
+            `${contentHash(pluginSource)}.json`,
+          ),
+          path.join(options.cwd, ".amplio", "installs", `${id}.json`),
+        ]);
+    try {
+      console.log(`amplio add plugin ${id} --event ${eventId} --source-only`);
+      await installRecipe(item, options);
+      if (!options.dryRun) {
+        await trackSourceOnlyContributor({
+          cwd: options.cwd,
+          item,
+          eventId,
+          sourcePath: pluginPath,
+          recipePath: sourceFile.path,
+          recipeSource: pluginSource,
+        });
+      } else {
+        console.log("  ~ would track inert Plugin source in amplio.json");
+      }
+    } catch (error) {
+      await restorePluginFiles(transactionSnapshots);
+      throw error;
+    }
+    console.log(
+      "  ! source copied without composition or provider wiring; doctor --strict will fail until wired",
+    );
+    return;
   }
 
-  const wiring = INTEGRATION_WIRING[id];
-  if (wiring) {
-    const importBase = (await hasTelemetryPathAlias(options.cwd, telemetryDir))
-      ? "~telemetry"
-      : telemetryDir;
-    console.log("");
-    for (const line of wiring(importBase)) {
-      console.log(`  ${line}`);
+  const planned = await installContributorPlugin({
+    cwd: options.cwd,
+    telemetryDir: dir,
+    item,
+    eventId,
+    pluginSource,
+    recipePath: sourceFile.path,
+    dryRun: true,
+    allowMissingDependencies: true,
+    forceUntrackedSource: options.force,
+    ...(options.target ? { target: options.target } : {}),
+  });
+  console.log(`amplio add plugin ${id} --event ${eventId}`);
+  const recipeDependencies = await recipeDependencyClosure(item, options.cwd);
+  const supportPaths = await installContributorRecipeSupport(
+    item,
+    options,
+    true,
+  );
+  console.log(
+    `  ~ would create or retain ${path.relative(options.cwd, planned.pluginPath)}`,
+  );
+  console.log(
+    `  ~ would mount under ${item.placement?.branch} in ${path.relative(options.cwd, planned.eventPath)}`,
+  );
+  console.log(
+    `  ~ would wire ${path.relative(options.cwd, planned.compositionPath)}`,
+  );
+  console.log("  ~ would track Plugin install in amplio.json");
+  console.log(
+    "  ~ tracked rollback: package, lockfile, Plugin source, root Event, provider seam, and install state; node_modules, package-manager cache, and dependency lifecycle scripts are not reversible",
+  );
+  const transactionSnapshots = options.dryRun
+    ? []
+    : await snapshotPluginFiles(options.cwd, [
+        ...supportPaths,
+        planned.pluginPath,
+        planned.eventPath,
+        planned.compositionPath,
+        configPath,
+        path.join(options.cwd, "package.json"),
+        ...PLUGIN_LOCKFILES.map((lockfile) => path.join(options.cwd, lockfile)),
+        path.join(
+          options.cwd,
+          ".amplio",
+          "bases",
+          `${contentHash(pluginSource)}.json`,
+        ),
+        path.join(options.cwd, ".amplio", "installs", `${id}.json`),
+      ]);
+  const providerChange = await ensurePluginProviderDependency({
+    cwd: options.cwd,
+    item,
+    packageManager: await pluginPackageManager(options.cwd),
+    yes: options.yes,
+    dryRun: options.dryRun,
+    recipeDependencies,
+  });
+  if (options.dryRun) return;
+  try {
+    await installContributorRecipeSupport(item, options, false);
+    const result = await installContributorPlugin({
+      cwd: options.cwd,
+      telemetryDir: dir,
+      item,
+      eventId,
+      pluginSource,
+      recipePath: sourceFile.path,
+      forceUntrackedSource: options.force,
+      ...(options.target ? { target: options.target } : {}),
+    });
+    const marker = result.changed ? "✓" : "·";
+    console.log(`  ${marker} ${path.relative(options.cwd, result.pluginPath)}`);
+    console.log(
+      `  ${marker} ${path.relative(options.cwd, result.eventPath)} (mounted under ${item.placement?.branch})`,
+    );
+    console.log(
+      `  ${marker} ${path.relative(options.cwd, result.compositionPath)} (selected composition root)`,
+    );
+  } catch (error) {
+    try {
+      await restorePluginFiles(transactionSnapshots);
+    } finally {
+      await providerChange.rollback();
     }
+    throw error;
   }
 }

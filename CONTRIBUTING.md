@@ -25,10 +25,11 @@ pnpm size
 1. Work in the smallest package that owns the change.
 2. Add or update tests in the same package.
 3. Run `pnpm run ci` before opening a PR — not bare `pnpm ci` (pnpm's install-from-lockfile builtin).
-4. For registry items, run `pnpm registry:build` and commit generated `public/r/` output.
+4. For registry items, run `pnpm sync-registry` and commit both generated registry mirrors.
 5. If you touch examples or middleware, run `pnpm smoke` (headless example checks).
 
-`amplio init` supports `--service`, `--package-manager`, and `--no-typescript` (see README Quick start).
+Generated telemetry is TypeScript-only. `amplio init` supports `--service` and `--package-manager`
+(see README Quick start).
 
 ## Try in another project
 
@@ -41,8 +42,9 @@ To use a local build outside this monorepo, pack core + CLI tarballs and install
 | `pnpm build` | Build `@useamplio/amplio` + `@useamplio/cli` |
 | `pnpm test` | Unit tests |
 | `pnpm typecheck` | TypeScript check across packages (CI) |
-| `pnpm size` | `@useamplio/amplio` gzip budget (< 8 KB) |
-| `pnpm registry:build` | Regenerate `public/r/` |
+| `pnpm size` | `@useamplio/amplio` gzip budget (< 9 KiB) |
+| `pnpm registry:build` | Regenerate the root `public/r/` registry |
+| `pnpm sync-registry` | Regenerate and mirror the registry into `apps/www/public/r/` |
 | `pnpm registry:serve` | Local HTTP server for `public/r/` JSON |
 | `pnpm format:check:events` | Generated events match Prettier defaults; root `.prettierrc` pins the config |
 | `pnpm smoke` | Example smoke scripts (basic/express/fastify/standalone/next) |
@@ -56,7 +58,8 @@ CI (`.github/workflows/ci.yml`) runs build, test, typecheck, size, registry buil
 ## Conventions
 
 - Event names: `domain.entity.action` (or shorter forms like `email.sent`).
-- Relative imports under `telemetry/` are **extensionless** (Next-safe): `./sinks/json` not `./sinks/json.js`.
+- Generic NodeNext telemetry uses explicit `.js` relative specifiers. Generated Next.js telemetry is
+  normalized to extensionless imports because the Next bundler resolves the `.ts` source graph.
 - Generated telemetry code lives in user repos under `telemetry/` — keep it readable and diff-friendly.
 - Do not expand the public `@useamplio/amplio` API beyond the frozen surface in `AGENTS.md`.
 

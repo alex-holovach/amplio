@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createLogger, init, resetConfigForTests } from "../src/index.js";
-import type { LogRecord, Sink } from "../src/index.js";
+import { createLogger, init, resetConfigForTests } from "../src/legacy.js";
+import type { LogRecord, Sink } from "../src/legacy.js";
 
 const capture = (): { records: LogRecord[]; sink: Sink } => {
   const records: LogRecord[] = [];

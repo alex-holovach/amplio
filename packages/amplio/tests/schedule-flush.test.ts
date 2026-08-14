@@ -5,7 +5,7 @@ import {
   resetConfigForTests,
   resetScheduleFlushWarningForTests,
   scheduleFlush,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 const CUTOFF_WARNING =
   "[amplio] async sinks may be cut off without waitUntil/after; pass waitUntil to scheduleFlush or call flush()";

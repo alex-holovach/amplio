@@ -1,11 +1,23 @@
-import type { JsonValue, KeepRule, LogRecord, SamplingConfig } from "./types.js";
+import type {
+  JsonValue,
+  KeepRule,
+  LogRecord,
+  SamplingConfig,
+} from "./types.js";
 
 const getPath = (record: LogRecord, path: string): JsonValue | undefined => {
+  if (path === "event" && record.event === undefined) {
+    return record["@event"];
+  }
   const parts = path.split(".");
   let current: JsonValue | undefined = record as JsonValue;
 
   for (const part of parts) {
-    if (current === null || typeof current !== "object" || Array.isArray(current)) {
+    if (
+      current === null ||
+      typeof current !== "object" ||
+      Array.isArray(current)
+    ) {
       return undefined;
     }
     current = (current as Record<string, JsonValue>)[part];
@@ -25,7 +37,11 @@ const matchesKeepRule = (record: LogRecord, rule: KeepRule): boolean => {
   }
 
   if (rule.matches !== undefined && typeof value === "string") {
-    return rule.matches.test(value);
+    // RegExp#test mutates lastIndex for global/sticky patterns. String#search
+    // evaluates from zero and restores caller-owned RegExp state. Sampling must
+    // be a pure decision: identical records cannot alternate between kept and
+    // dropped.
+    return value.search(rule.matches) !== -1;
   }
 
   const hasGte = rule.gte !== undefined;
@@ -38,7 +54,10 @@ const matchesKeepRule = (record: LogRecord, rule: KeepRule): boolean => {
   return false;
 };
 
-export function shouldSample(record: LogRecord, config?: SamplingConfig): boolean {
+export function shouldSample(
+  record: LogRecord,
+  config?: SamplingConfig,
+): boolean {
   if (!config) {
     return true;
   }
@@ -65,7 +84,7 @@ export function shouldSample(record: LogRecord, config?: SamplingConfig): boolea
 }
 
 const hashRecord = (record: LogRecord): number => {
-  const key = `${record.event ?? ""}:${record.request_id ?? ""}:${record.timestamp ?? ""}`;
+  const key = `${record.event ?? record["@event"] ?? ""}:${record.request_id ?? ""}:${record.timestamp ?? ""}`;
   let hash = 2166136261;
   for (let i = 0; i < key.length; i++) {
     hash ^= key.charCodeAt(i);

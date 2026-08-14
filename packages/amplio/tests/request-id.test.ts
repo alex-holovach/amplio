@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createRequestLogger, init, resetConfigForTests, type LogRecord, type Sink } from "../src/index.js";
+import { createRequestLogger, init, resetConfigForTests, type LogRecord, type Sink } from "../src/legacy.js";
 
 beforeEach(() => {
   resetConfigForTests();

@@ -1,26 +1,185 @@
 ---
 title: CLI
-description: init, paths, add, list, doctor, smoke, amplio.json, and the shadcn registry.
+description: Scaffold, install, validate, and verify open-code Events and Plugins.
 ---
 
 ```bash
 npx @useamplio/cli@alpha <command>
 ```
 
+The CLI writes ordinary TypeScript into your repository. Generated Event definitions, Plugins,
+sinks, and runtime configuration remain yours to review and edit.
+
 ## init
 
 ```bash
-npx @useamplio/cli@alpha init --service my-app --yes
-npx @useamplio/cli@alpha init --service my-app --middleware hono --event auth.user.signed_up --yes
-npx @useamplio/cli@alpha init --paths   # adds ~telemetry/* tsconfig alias
-npx @useamplio/cli@alpha init --skip-install
+npx @useamplio/cli@alpha init --service my-api
+npx @useamplio/cli@alpha add plugin hono
 ```
 
-Creates `telemetry/`, `amplio.json`, `components.json`, installs `@useamplio/amplio` + `zod`. Detects Next.js / Hono / Express / Fastify from `package.json` and scaffolds middleware plus a starter event when possible.
+Given one installed Hono dependency and one unambiguous `new Hono()` composition root, those two
+commands produce and activate:
 
-Under `--yes` (or `--wire`) in a create-t3-app layout, `init` also auto-wires the app: `route.ts` → `withAmplio`, `trpc.ts` → `amplioTrpcMiddleware`, and the NextAuth route when present. The `~telemetry/*` tsconfig alias is applied by default when a tsconfig exists (`--no-paths` opts out).
+```text
+telemetry/
+  events/
+    http-request.ts
+  plugins/
+    hono.ts
+  sinks/
+    console.ts
+  runtime.ts
+amplio.json
+```
 
-Other flags: `--package-manager <pnpm|npm|yarn|bun>`, `--no-typescript`, `--cwd <path>`, `--verbose` (stream the raw install log). Re-running `init` is idempotent — existing files are left unchanged.
+`runtime.ts` calls `init(...)` and exports no logger. `events/http-request.ts` declares the root
+Event. `add plugin hono` copies `plugins/hono.ts`, inserts `app.use("*", HonoPlugin())` before the
+routes, and records that composition root in `amplio.json`. Runtime code never reads the manifest.
+
+Supported options:
+
+- `--service <name>` sets the generated service name.
+- `--package-manager <pnpm|npm|yarn|bun>` overrides detection.
+- `--yes` activates and tracks a detected Hono boundary when exactly one supported `new Hono()`
+  composition root exists. Ambiguous or unsupported roots abort before generated source writes.
+- `--skip-install` writes source without installing dependencies.
+- `--paths` or `--no-paths` controls the `~telemetry/*` TypeScript alias.
+- `--verbose` streams package-manager output.
+
+Generated source is TypeScript-only.
+
+## Add an Event
+
+```bash
+npx @useamplio/cli@alpha add event billing.reconciliation
+```
+
+Event IDs are lowercase dot-separated semantics. The command creates
+`telemetry/events/billing-reconciliation.ts` with `event({ id, version, schema })`.
+
+Use `--dry-run` to preview and `--force` only when an existing generated file should be replaced.
+
+## Add a Plugin
+
+Install a boundary Plugin without a root selection:
+
+```bash
+npx @useamplio/cli@alpha add plugin hono
+```
+
+Install a contributor Plugin into a declared root Event:
+
+```bash
+npx @useamplio/cli@alpha add plugin resend --event http.request
+```
+
+The host must contain one unambiguous `new Resend(...)` construction. If Resend or another Plugin
+recipe dependency is missing, the CLI shows the complete runtime/development dependency plan and
+package-manager command, then requires interactive approval or `--yes`. A compatible existing
+provider version is left untouched; an incompatible version fails closed. Before approval it also
+states that Amplio can restore package manifests, lockfiles, source, and lifecycle state, but cannot
+undo package-manager caches, `node_modules`, or dependency lifecycle-script side effects. The active
+install then:
+
+1. preflight the host's Resend version and one unambiguous client construction seam;
+2. copy `telemetry/plugins/resend.ts`;
+3. mount `ResendPlugin.events` beneath the selected root tree;
+4. wrap the existing `new Resend(...)` expression once;
+5. record the source, root Event, branch, and seam in `amplio.json`.
+
+If the client seam is absent or ambiguous, preflight refuses before copying or composing the
+Plugin. The installed Plugin is normal application source and can be forked. This alpha does not
+run a host formatter over managed Plugin or wiring bytes, so a fresh install remains an exact,
+removable recipe base. Use `--dry-run` to perform compatibility, Event-tree, and native-seam
+preflight without writing or installing anything.
+
+Use `--target <relative-source-file>` to narrow discovery when a project has multiple candidate
+files:
+
+```bash
+npx @useamplio/cli@alpha add plugin resend --event http.request --target src/email.ts
+```
+
+The target must be an existing, contained source file. Absolute paths, `..`, missing or non-source
+files, and symlinks escaping the project fail before writes. Selection does not weaken provider
+binding checks or choose between multiple supported seams inside the same file. Once active, a
+Plugin cannot be retargeted implicitly; remove and reinstall it explicitly.
+
+Hono, Fastify, constructor, Better Auth, and tRPC recipes can be wired into a selected file. Next.js
+and Express use verified manual adoption: copy the recipe with `--source-only`, attach its documented
+route wrapper, then rerun `add plugin` with `--target`. The CLI verifies the exact native route and
+records the customer-owned seam without rewriting it. `doctor --strict` re-verifies adopted wiring.
+Removal never rewrites it and refuses to delete Plugin source until its live import or reference is
+detached.
+
+```bash
+npx @useamplio/cli@alpha add plugin next --source-only
+# attach withAmplio("/stable/route", handler)
+npx @useamplio/cli@alpha add plugin next --target app/api/health/route.ts
+
+npx @useamplio/cli@alpha add plugin express --source-only
+# spread ...withAmplioRoute("/stable/route", ...handlers) into that same Express route
+npx @useamplio/cli@alpha add plugin express --target src/app.ts
+```
+
+## Diff, update, or remove a Plugin
+
+```bash
+npx @useamplio/cli@alpha diff plugin resend
+npx @useamplio/cli@alpha update plugin resend
+npx @useamplio/cli@alpha remove plugin resend
+```
+
+An install records the recipe SemVer, SHA-256 digest, nested Event versions, privacy and native
+wiring contracts, copied file hashes, and wiring anchors in `amplio.json`. The exact recipe base is
+cached at `.amplio/bases/sha256-….json`; reversible pre-install wiring bytes are kept at
+`.amplio/installs/resend.json`.
+
+Commit `telemetry/`, `amplio.json`, and `.amplio/` together. The cache contains source snapshots,
+not runtime Event data, and is required for reproducible update and removal on another machine.
+
+`diff` reports whether local source or the registry changed. `update` performs a three-way merge
+from the cached base, preserving non-overlapping customer edits. It fails without writes for merge
+conflicts or changes to Event identity/version, privacy, tree placement, provider instrumenter, or
+native wiring. `remove` reverses managed wiring and deletes only unmodified Plugin source. It
+always retains provider dependencies because the host application owns them.
+
+## Add delivery configuration
+
+```bash
+npx @useamplio/cli@alpha add sink console
+npx @useamplio/cli@alpha add sink json
+npx @useamplio/cli@alpha add sink otlp
+npx @useamplio/cli@alpha add enricher service-metadata
+```
+
+Sink and enricher commands preflight `telemetry/runtime.ts` before copying source. If the runtime is
+missing or its expected `init(...)` array cannot be recognized, the command aborts without an inert
+recipe. A successful command means the operational recipe is already present or was wired into the
+runtime configuration.
+
+## list
+
+```bash
+npx @useamplio/cli@alpha list
+npx @useamplio/cli@alpha list plugin
+npx @useamplio/cli@alpha list event --json
+```
+
+Kinds are `event`, `plugin`, `sink`, and `enricher`. `--json` produces stable machine-readable
+output.
+
+## doctor
+
+```bash
+npx @useamplio/cli@alpha doctor --strict
+```
+
+Doctor checks `amplio.json`, runtime initialization, Event files and literal IDs, retired alpha
+source, tracked Plugin files, composition-root file existence, boundary registration, contributor
+Event-tree placement, and the contributor's selected native seam. It does not replace a real
+framework request or provider lifecycle test. `--strict` turns warnings such as `--source-only`
+Plugins or a missing active boundary into a non-zero exit.
 
 ## paths
 
@@ -28,87 +187,26 @@ Other flags: `--package-manager <pnpm|npm|yarn|bun>`, `--no-typescript`, `--cwd 
 npx @useamplio/cli@alpha paths
 ```
 
-Writes the `~telemetry/*` tsconfig path alias (JSONC-comment-safe) and nothing else.
-
-## add
-
-```bash
-npx @useamplio/cli@alpha add event post.created
-npx @useamplio/cli@alpha add middleware hono
-npx @useamplio/cli@alpha add sink json
-npx @useamplio/cli@alpha add enricher query-allowlist
-npx @useamplio/cli@alpha add integration next-auth
-npx @useamplio/cli@alpha add sink otlp --dry-run
-```
-
-Valid kinds: `event`, `middleware`, `sink`, `enricher`, `integration`.
-
-- Event names need two+ lowercase dot-separated segments (`post.created`, `auth.user.signed_up`). `add event` prints whether it `matched registry event` (the registry ships `auth.user.signed_up`, `auth.user.signed_in`, `email.sent`, `page.viewed`, `payment.order.paid`, `payment.refunded`, `job.completed`, `webhook.received`) or `generated starter schema` for any other valid name. Hyphenated registry ids from `list` (`auth-user-signed-in`) are accepted and mapped to the dot name.
-- `add` never overwrites an existing file under `telemetry/` — re-run with `--force` to overwrite with the current registry template.
-- `--dry-run` previews files, wiring, and dependencies without writing anything.
-- `add integration <id>` (next-auth, better-auth, clerk, resend, polar) prints the manual wiring steps after installing, and warns when the integration's target package is missing from `package.json`.
-
-`amplio add` wires barrels, `logger.ts`, `.gitignore`, and `.env.example` in one command.
-
-## list
-
-```bash
-npx @useamplio/cli@alpha list
-npx @useamplio/cli@alpha list middleware --json
-```
-
-Works without prior `init` — it reads the bundled registry. Filter by kind; each line includes the human title (e.g. Console Sink). `--json` prints a machine-readable listing (events by dot name).
-
-## doctor
-
-```bash
-npx @useamplio/cli@alpha doctor
-npx @useamplio/cli@alpha doctor --fix
-npx @useamplio/cli@alpha doctor --strict   # CI gate
-```
-
-Checks middleware exports, event barrels (in both directions — missing exports *and* stale ones), Turbopack `../logger` imports, the `NEXT_RUNTIME` instrumentation guard, and T3 wiring (`route.ts` still wraps with `withAmplio`, `trpc.ts` still uses `amplioTrpcMiddleware`, the NextAuth route is still wrapped) — the app-side edits most likely to be lost in a merge or T3 upgrade.
-
-`--fix` regenerates missing event barrel exports and prunes stale ones. `--strict` exits non-zero on warnings for CI; without it, doctor prints an explicit `(exit 0 with warnings …)` note. `--verbose` always prints the end-to-end verification epilogue (otherwise it appears only after `--fix` or when something needs attention).
+Writes the `~telemetry/*` TypeScript path alias and changes nothing else. Relative imports generated
+for generic NodeNext projects use `.js`; Next bundler projects use extensionless specifiers.
 
 ## smoke
 
 ```bash
-npx @useamplio/cli@alpha smoke http://localhost:3000/api/health
+npx @useamplio/cli@alpha add sink json
+npx @useamplio/cli@alpha smoke http://localhost:3000/health
 ```
 
-End-to-end verification: requests the URL, watches `amplio*.jsonl` for a newly emitted row, and reports PASS/FAIL with a diagnosis (wrong port / unwired route / init never ran). Requires the JSON sink (`amplio add sink json`); `--timeout <seconds>` adjusts the wait (default 10).
+`smoke` sends a request and watches the JSON file sink for a new Event. It reports failure when the
+HTTP response arrives but no Event does, turning a missing boundary or wrong port into a visible
+diagnostic.
 
-## amplio.json
+## Safety
 
-`init` writes `amplio.json` at the project root — plain JSON, safe to hand-edit, read only by the CLI (the runtime never loads it):
-
-| Field | Default | Purpose |
-|---|---|---|
-| `telemetryDir` | `"telemetry"` | Directory the CLI scaffolds into and `doctor` validates |
-| `packageManager` | detected | Used for install commands and printed tips (`pnpm`, `npm`, `yarn`, `bun`) |
-| `typescript` | `true` | TypeScript defaults for generated files |
-| `registry` | *(unset)* | Path to a local registry checkout — overrides the CLI's bundled registry |
-
-## shadcn registry
-
-Hosted at `/r/{name}.json` on this site. `init` writes:
-
-```json
-{
-  "registries": {
-    "@useamplio": "https://amplio-ruddy.vercel.app/r/{name}.json"
-  }
-}
-```
-
-```bash
-npx shadcn@latest add @useamplio/sink-json
-npx shadcn@latest add @useamplio/middleware-hono
-```
-
-Files land under `telemetry/` at the repo root (targets are root-anchored, even with a `src/` layout). Browse hosted items at [/r/registry.json](/r/registry.json).
-
-shadcn drops files but does not wire them — run `amplio doctor --fix` to wire event barrels; for sinks, re-run `amplio add sink <name>` (or add the import and `sinks: [...]` entry yourself). Each item prints its wiring step as a `docs` note at the end of the shadcn install.
-
-**"Item not found":** only registry items are hosted. Events generated by `amplio add event your.name` are starter schemas created directly in your repo — `npx shadcn add @useamplio/event-your-name` 404s by design.
+- Existing open-code files are preserved unless `--force` is explicit.
+- Active Plugin installs preflight before tracked writes.
+- Ambiguous native seams abort rather than guessing.
+- Contributor construction seams must already exist in the host application. Missing Plugin recipe
+  dependencies are installed only after the complete plan and rollback boundary are shown and the
+  user approves or passes `--yes`.
+- Typecheck the generated graph and exercise a real request; `doctor` is not an end-to-end proof.

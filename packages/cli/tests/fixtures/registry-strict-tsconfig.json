@@ -15,14 +15,15 @@
     "baseUrl": "../..",
     "paths": {
       "@useamplio/amplio": ["../amplio/dist/index.d.ts"],
+      "@useamplio/amplio/plugin": ["../amplio/dist/plugin.d.ts"],
       "hono": ["node_modules/hono"],
       "fastify": ["node_modules/fastify"],
-      "fastify-plugin": ["node_modules/fastify-plugin"],
       "next/server": ["node_modules/next/server.d.ts"],
       "next/*": ["node_modules/next/*"],
       "@trpc/server": ["node_modules/@trpc/server"],
       "@trpc/server/*": ["node_modules/@trpc/server/*"],
       "better-auth": ["node_modules/better-auth"],
+      "better-auth/api": ["node_modules/better-auth/dist/api/index.d.mts"],
       "better-auth/*": ["node_modules/better-auth/*"],
       "@clerk/backend/*": ["node_modules/@clerk/backend/*"],
       "resend": ["node_modules/resend"],
@@ -32,11 +33,17 @@
   },
   "include": [
     "../../../../registry/sinks/**/*.ts",
-    "../../../../registry/middleware/**/*.ts",
     "../../../../registry/enrichers/**/*.ts",
     "../../../../registry/events/**/*.ts",
-    "../../../../registry/logger.ts",
-    "trpc-middleware-types.ts",
-    "ambient-express.d.ts"
+    "../../../../registry/plugins/hono.ts",
+    "../../../../registry/plugins/express.ts",
+    "../../../../registry/plugins/fastify.ts",
+    "../../../../registry/plugins/next.ts",
+    "../../../../registry/plugins/trpc.ts",
+    "../../../../registry/plugins/better-auth.ts",
+    "../../../../registry/plugins/resend.ts",
+    "../../../../registry/runtime.ts",
+    "ambient-express.d.ts",
+    "next-explicit-route.ts"
   ]
 }

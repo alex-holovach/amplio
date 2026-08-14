@@ -19,7 +19,9 @@ type VercelConfig = {
 
 describe("vercel headers", () => {
   it("sets Access-Control-Allow-Origin on /r/(.*)", async () => {
-    const vercelJsonPath = path.join(repoRoot, "vercel.json");
+    // Production deploys from the Next.js site root; the repository-level
+    // vercel.json is documentation only.
+    const vercelJsonPath = path.join(repoRoot, "apps/www/vercel.json");
     const parsed = JSON.parse(await readFile(vercelJsonPath, "utf8")) as VercelConfig;
 
     const registryRule = parsed.headers?.find((rule) => rule.source === "/r/(.*)");

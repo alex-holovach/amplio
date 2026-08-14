@@ -1,0 +1,78 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "plugin-express",
+  "title": "Express Plugin",
+  "description": "Express boundary Plugin spanning callbacks through the final response.",
+  "type": "registry:lib",
+  "dependencies": [
+    "express@^4.21.2",
+    "@useamplio/amplio@^0.1.0-alpha.16"
+  ],
+  "devDependencies": [
+    "@types/express@^5.0.0"
+  ],
+  "registryDependencies": [
+    "@useamplio/event-http-request",
+    "@useamplio/runtime"
+  ],
+  "meta": {
+    "amplio": {
+      "kind": "plugin",
+      "role": "boundary",
+      "recipeVersion": "1.0.0",
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": {
+        "express": ">=4 <6"
+      },
+      "testedProviderVersions": {
+        "express": {
+          "minimum": "4.0.0",
+          "latest": "5.2.1"
+        }
+      },
+      "events": [
+        {
+          "id": "http.request",
+          "version": 1,
+          "semanticDigest": "sha256-0907ef8a9cc8957a6e1b7fc6038d832319dc7a0c2f2b32764d6e2e9fb4f474ce"
+        }
+      ],
+      "semanticDigest": "sha256-166a77128834d0958ea50d1aa95bd768dda65c16e43d55076383bcd5ea4994c8",
+      "nativeTransform": {
+        "version": 1,
+        "digest": "sha256-0cb2e85dd906bcba34bc6bc7b24023d437ec5842eb443d157db6774c6969bf0d"
+      },
+      "wiringActions": [
+        {
+          "type": "register-boundary",
+          "export": "withAmplioRoute",
+          "description": "Spread the returned route layers before ordinary Express handlers."
+        }
+      ],
+      "privacy": {
+        "includes": [
+          "request_id",
+          "http.method",
+          "http.route",
+          "http.status"
+        ],
+        "excludes": [
+          "url",
+          "path",
+          "query",
+          "headers",
+          "cookies",
+          "body"
+        ]
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "registry/plugins/express.ts",
+      "target": "~/telemetry/plugins/express.ts",
+      "type": "registry:lib",
+      "content": "import \"../runtime.js\";\n\nimport { openEvent, type EventScope } from \"@useamplio/amplio/plugin\";\nimport type { ErrorRequestHandler, RequestHandler } from \"express\";\nimport { HttpRequest, resolveRequestId } from \"../events/http-request.js\";\n\ninterface PendingRequest {\n  readonly scope: EventScope<typeof HttpRequest>;\n  error?: unknown;\n  settled: boolean;\n}\n\n/**\n * Put the boundary first by spreading every returned route layer.\n * All supplied middleware and the final response lifecycle stay in one Event.\n */\nexport function withAmplioRoute(\n  route: string,\n  ...handlers: RequestHandler[]\n): Array<RequestHandler | ErrorRequestHandler> {\n  const pending = new WeakMap<object, PendingRequest>();\n\n  const boundary: RequestHandler = (request, response, next) => {\n    const scope = openEvent(HttpRequest, {\n      request_id: resolveRequestId(request.get(\"x-request-id\")),\n      http: { method: request.method, route },\n    });\n    const state: PendingRequest = { scope, settled: false };\n    pending.set(request, state);\n\n    const settle = (closedEarly: boolean) => {\n      if (state.settled) return;\n      state.settled = true;\n      response.off(\"finish\", onFinish);\n      response.off(\"close\", onClose);\n      pending.delete(request);\n      const output = {\n        http: { route, status: response.statusCode },\n      };\n      if (state.error !== undefined) {\n        scope.fail(state.error, output);\n      } else if (closedEarly && !response.writableFinished) {\n        scope.update(output);\n        scope.cancel(\"response_closed\");\n      } else {\n        scope.finish(output, { success: response.statusCode < 400 });\n      }\n    };\n    const onFinish = scope.bind(() => settle(false));\n    const onClose = scope.bind(() => settle(true));\n    response.once(\"finish\", onFinish);\n    response.once(\"close\", onClose);\n\n    scope.run(() => {\n      try {\n        next();\n      } catch (error) {\n        state.error = error;\n        next(error);\n      }\n    });\n    if (response.writableFinished || response.destroyed) {\n      settle(response.destroyed && !response.writableFinished);\n    }\n  };\n\n  const captureError: ErrorRequestHandler = (\n    error,\n    request,\n    _response,\n    next,\n  ) => {\n    const state = pending.get(request);\n    if (state && error !== \"route\" && error !== \"router\") {\n      state.error = error;\n    }\n    next(error);\n  };\n\n  return [boundary, ...handlers, captureError];\n}\n"
+    }
+  ]
+}

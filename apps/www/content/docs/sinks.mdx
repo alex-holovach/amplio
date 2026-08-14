@@ -1,7 +1,28 @@
 ---
 title: Sinks & enrichers
-description: Console, JSON file, and OTLP sinks; enrichers, redaction, and sampling.
+description: Deliver, enrich, redact, sample, and flush completed Events.
 ---
+
+After a root Event closes, Amplio validates and sanitizes its detached record, adds resource
+attributes, applies redaction, makes a sampling decision, and invokes configured sinks. Delivery
+failures never replace application results or thrown values.
+
+## Configure runtime once
+
+```ts
+// telemetry/runtime.ts
+import { init } from "@useamplio/amplio";
+import { consoleSink } from "./sinks/console.js";
+
+init({
+  service: "orders-api",
+  env: process.env.NODE_ENV ?? "development",
+  sinks: [consoleSink],
+});
+```
+
+`init()` returns `void` and exports no logger. Load this file once from server startup or framework
+instrumentation.
 
 ## Add a sink
 
@@ -11,93 +32,160 @@ npx @useamplio/cli@alpha add sink json
 npx @useamplio/cli@alpha add sink otlp
 ```
 
-Each command edits `telemetry/logger.ts` — import + append to `init({ sinks: [...] })`.
+- `console` writes one JSON object per kept root Event.
+- `json` appends JSON lines for local inspection and `amplio smoke`.
+- `otlp` exports log records to an OpenTelemetry collector.
 
-A sink installed through shadcn (`npx shadcn add @useamplio/sink-otlp`) is dropped but **not** wired — re-run `amplio add sink otlp`, or add the import and sinks-array entry yourself. `doctor` warns when a sink file exists but is not referenced in `logger.ts`.
+Sink source is copied under `telemetry/sinks/` and remains editable.
 
-## Console
+The OTLP sink promotes the current HTTP fields (`http.method`, `http.route`, and `http.status`) and
+the bounded repeated `rpc.procedures` branch by default. Procedure arrays use OTLP `arrayValue`
+entries containing key-value lists. Operational values under `record.resource` become typed OTLP
+resource attributes, and batched records with different resource values stay in separate
+`resourceLogs` groups.
 
-```typescript
-import { consoleSink } from "./sinks/console";
+Default export-failure warnings expose only `network_error` or the collector's HTTP status, never a
+caught error message. `throwOnError: true` is the explicit opt-in that rethrows the original network
+error to application code.
 
-init({ sinks: [consoleSink] });
+## Sink contract
+
+```ts
+import type { Sink } from "@useamplio/amplio";
+
+export const customSink: Sink = (record) => {
+  queue.push(record);
+};
+
+customSink.flush = async () => {
+  await queue.drain();
+};
 ```
 
-Emits one JSON line per record to stdout.
+A sink synchronously accepts or enqueues the record before returning. An optional returned thenable
+tracks completion of already accepted work. Throws and rejections are isolated; later sinks still
+run.
 
-## JSON file
+Each sink receives its own immutable value. Mutation attempts cannot affect another sink or later
+Events.
 
-Default path includes env: `amplio.development.jsonl` / `amplio.production.jsonl` — dev traffic and build/production rows never interleave in one file. Override with `AMPLIO_JSON_SINK_PATH` or `jsonFileSink({ path })` (`path` wins); missing parent directories are created.
+## Backpressure
 
-```bash
-# .gitignore
-amplio*.jsonl
-```
-
-## OTLP
-
-Endpoint resolution (OTel spec order):
-
-1. `otlpSink({ endpoint })`
-2. `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` (full URL, used verbatim)
-3. `OTEL_EXPORTER_OTLP_ENDPOINT` (base URL, `/v1/logs` appended)
-
-With none set, the sink warns once and disables export.
-
-```typescript
-otlpSink({ batch: true }) // 100 records / 1s — or { maxSize, maxWaitMs }
-await flush();            // don't lose the last batch on serverless
-```
-
-Defaults: `throwOnError: false` (export failures log a one-time dev warning and are swallowed), one POST per emit (fine for dev — pass `batch` for production rates). `service` / `env` map to OTLP resource `service.name` / `deployment.environment`; `service`, `event`, `status`, `duration_ms`, `request_id`, and other key fields become typed OTLP attributes (override with `otlpSink({ attributes: […] })`); the full record always ships in the log body.
-
-A dev-only `async sinks may be cut off without waitUntil/after` warning means an async delivery (OTLP) was still pending when a request finished — pass `waitUntil` where your platform provides it, or `await flush()` before returning. It never fires with only synchronous sinks (console + JSONL).
-
-## Enrichers
-
-Run in order at emit time; each sees fields from previous enrichers. The return value **replaces** the payload (not deep-merge) — return `{ ...record, … }` to keep prior fields. A throwing enricher is skipped (dev warn); later enrichers and sinks still run.
-
-```typescript
+```ts
 init({
+  service: "orders-api",
+  env: "production",
+  sinks: [otlpSink, consoleSink],
+  delivery: {
+    maxPendingPerSink: 1_024,
+    flushTimeoutMs: 5_000,
+  },
+});
+```
+
+When one sink reaches its pending bound, Amplio skips only that sink for the new Event, reports
+`sink_backpressure_drop`, and continues healthy sinks. Sink adapters must also bound their own
+internal queues.
+
+## Flush
+
+```ts
+import { flush } from "@useamplio/amplio";
+
+const result = await flush({ timeoutMs: 5_000 });
+
+if (result.pending > 0 || result.failures > 0) {
+  console.error("Amplio delivery did not fully drain", result);
+}
+```
+
+Flush invokes every retained sink hook synchronously, then waits for accepted delivery at its
+start-time watermark. New delivery belongs to a later call. The finite result is
+`{ completed, pending, failures }`; flush does not reject because a sink failed.
+
+Call it after the application work you intend to drain has finished. Open root Events that have not
+reached delivery are outside the watermark.
+
+## Resource enrichers
+
+Enrichers receive resource attributes only:
+
+```ts
+init({
+  service: "orders-api",
+  env: "production",
+  sinks: [otlpSink],
   enrichers: [
-    (record) => ({ ...record, region: process.env.AMPLIO_REGION }),
+    (resource) => ({
+      ...resource,
+      region: process.env.AWS_REGION ?? "unknown",
+      release: process.env.RELEASE_SHA ?? "unknown",
+    }),
   ],
 });
 ```
 
-The registry ships two ready-made enrichers — scaffold with `amplio add enricher request-metadata` / `service-metadata`: `requestMetadata` (route, IP, user agent, request id — empty strings are treated as unset, and an empty `requestId` never overwrites an existing `request_id`) and `serviceMetadata` (reads `AMPLIO_SERVICE` / `AMPLIO_SERVICE_VERSION` / `AMPLIO_REGION`; name falls back to `record.service`).
+They cannot read or rewrite semantic Event fields. Failures are diagnosed and later enrichers still
+run.
 
 ## Redaction
 
-Runs on every emit by default (`redact: false` in `init()` disables it). It is **value-level**, not just field-name matching: emails, JWTs, bearer tokens, and card numbers are masked inside free-text strings too — `"email me at a@b.co"` emits as `"email me at [REDACTED]"`. URL-decoded copies of percent-encoded strings are scanned as well.
+Use a whole-record redactor for policy that depends on semantic placement:
 
-One gap: request middleware records `http.search` verbatim, and redaction does not parse query strings — tokens or PII in `?…` params can leak. Scaffold the fix:
-
-```bash
-npx @useamplio/cli@alpha add enricher query-allowlist
+```ts
+init({
+  service: "orders-api",
+  env: "production",
+  sinks: [otlpSink],
+  redactor(record) {
+    return removePrivateFields(record);
+  },
+});
 ```
 
-It drops `http.search` by default, or keeps only allowlisted params (`queryAllowlist({ allow: ["page"] })`).
+Redaction runs before sampling and sinks. If the redactor throws or returns an invalid record, the
+Event is dropped fail-closed. Application behavior is unchanged.
+
+The declarative `redact` option remains useful for path and pattern rules:
+
+```ts
+init({
+  service: "orders-api",
+  env: "production",
+  sinks: [otlpSink],
+  redact: {
+    fields: ["authorization", "cookie", "token"],
+    patterns: [/Bearer\s+\S+/gi],
+  },
+});
+```
+
+Default framework Plugins omit query strings, bodies, headers, and raw URLs. Project only stable,
+allowlisted values into Event fields.
 
 ## Sampling
 
-Keep every interesting event, sample the noise:
-
-```typescript
+```ts
 init({
+  service: "orders-api",
+  env: "production",
+  sinks: [otlpSink],
   sampling: {
-    rate: 0.1, // 10% of ordinary traffic
+    rate: 0.1,
     keep: [
-      { field: "trpc.type", equals: "mutation" },  // every mutation
-      { field: "status", gte: 400 },               // every error
-      { field: "@event", equals: "post.created" }, // every row of one domain event
+      { field: "success", equals: false },
+      { field: "@event", equals: "billing.reconciliation" },
+      { field: "http.status", gte: 500 },
     ],
   },
 });
 ```
 
-`keep` rules are OR'd — any match always delivers. `field` supports dotted paths (`user.plan`) with `equals`, `matches` (string regex), `gte`, or `lte`; `gte` + `lte` on one rule form an inclusive range. `rate: 0` drops everything that matches no rule; `rate: 1` always keeps.
+Sampling sees the complete redacted root record. Nested Events are never sampled independently. A
+custom `sampler(record)` may replace the declarative decision when policy needs code.
 
-To keep **all** domain events wholesale, match names that are not a transport spine: `{ field: "@event", matches: "^(?!http\\.request$|trpc\\.request$)" }`.
+## Runtime replacement
 
-`.emit()` returns **`null`** when sampling skips delivery (enrichers and redaction still run; only sinks are skipped) — don't gate retries or metrics on a non-null return in sampled paths.
+Each open root keeps the configuration generation it started with. A later `init()` affects new
+roots only. Retired generations remain flushable while they own open roots or accepted delivery,
+within finite count and TTL bounds. Replacement is atomic and never appends duplicate sinks.

@@ -1,7 +1,7 @@
 {
   "name": "@useamplio/cli",
-  "version": "0.1.0-alpha.15",
-  "description": "Init and add commands for amplio telemetry scaffolding",
+  "version": "0.1.0-alpha.16",
+  "description": "Scaffold open-code Event and Plugin telemetry",
   "type": "module",
   "license": "MIT",
   "publishConfig": {
@@ -34,29 +34,29 @@
     "registry",
     "README.md",
     "LICENSE",
-    "ALPHA.md",
     "docs"
   ],
   "scripts": {
     "build": "tsup && node scripts/copy-registry.mjs && node ../../scripts/copy-docs.mjs .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "pretest": "node scripts/copy-registry.mjs && node ../../scripts/copy-docs.mjs ."
+    "pretest": "pnpm run build"
   },
   "engines": {
     "node": ">=20"
   },
+  "dependencies": {
+    "semver": "^7.7.2"
+  },
   "devDependencies": {
-    "@clerk/backend": "^1.25.0",
-    "@polar-sh/sdk": "^0.32.0",
-    "@trpc/server": "^11.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.10",
+    "@types/semver": "^7.7.1",
+    "@trpc/server": "^11.0.0",
     "@useamplio/amplio": "workspace:*",
     "better-auth": "^1.2.0",
     "express": "^4.21.2",
     "fastify": "^5.2.1",
-    "fastify-plugin": "^5.0.1",
     "hono": "^4.7.4",
     "next": "^15.2.4",
     "prettier": "3",

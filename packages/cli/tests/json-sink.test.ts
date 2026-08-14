@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { LogRecord } from "@useamplio/amplio";
+import type { SinkRecord } from "@useamplio/amplio";
 import { afterEach, describe, expect, it } from "vitest";
 import { jsonFileSink } from "../../../registry/sinks/json.ts";
 
@@ -26,7 +26,10 @@ describe("jsonFileSink", () => {
     root = mkdtempSync(path.join(tmpdir(), "amplio-json-sink-"));
     const filePath = path.join(root, "subdir", "nested", "out.jsonl");
     const sink = jsonFileSink({ path: filePath });
-    const record: LogRecord = { event: "test.nested", service: "json-sink" };
+    const record = {
+      "@event": "test.nested",
+      service: "json-sink",
+    } as SinkRecord;
 
     sink(record);
 
@@ -37,8 +40,14 @@ describe("jsonFileSink", () => {
     root = mkdtempSync(path.join(tmpdir(), "amplio-json-sink-"));
     const filePath = path.join(root, "append.jsonl");
     const sink = jsonFileSink({ path: filePath });
-    const first: LogRecord = { event: "test.append.first", service: "json-sink" };
-    const second: LogRecord = { event: "test.append.second", service: "json-sink" };
+    const first = {
+      "@event": "test.append.first",
+      service: "json-sink",
+    } as SinkRecord;
+    const second = {
+      "@event": "test.append.second",
+      service: "json-sink",
+    } as SinkRecord;
 
     sink(first);
     sink(second);
@@ -55,11 +64,16 @@ describe("jsonFileSink", () => {
     try {
       process.env.AMPLIO_JSON_SINK_PATH = filePath;
       const sink = jsonFileSink();
-      const record: LogRecord = { event: "test.env", service: "json-sink" };
+      const record = {
+        "@event": "test.env",
+        service: "json-sink",
+      } as SinkRecord;
 
       sink(record);
 
-      expect(readFileSync(filePath, "utf8")).toBe(`${JSON.stringify(record)}\n`);
+      expect(readFileSync(filePath, "utf8")).toBe(
+        `${JSON.stringify(record)}\n`,
+      );
     } finally {
       if (prevEnv === undefined) {
         delete process.env.AMPLIO_JSON_SINK_PATH;
@@ -74,11 +88,16 @@ describe("jsonFileSink", () => {
     const envPath = path.join(root, "env", "from-env.jsonl");
     process.env.AMPLIO_JSON_SINK_PATH = envPath;
     const sink = jsonFileSink({ path: optionsPath });
-    const record: LogRecord = { event: "test.precedence", service: "json-sink" };
+    const record = {
+      "@event": "test.precedence",
+      service: "json-sink",
+    } as SinkRecord;
 
     sink(record);
 
-    expect(readFileSync(optionsPath, "utf8")).toBe(`${JSON.stringify(record)}\n`);
+    expect(readFileSync(optionsPath, "utf8")).toBe(
+      `${JSON.stringify(record)}\n`,
+    );
     expect(existsSync(envPath)).toBe(false);
   });
 
@@ -87,11 +106,11 @@ describe("jsonFileSink", () => {
     delete process.env.AMPLIO_JSON_SINK_PATH;
     process.chdir(root);
     const sink = jsonFileSink();
-    const record: LogRecord = {
-      event: "test.cwd-default",
+    const record = {
+      "@event": "test.cwd-default",
       service: "json-sink",
       env: "development",
-    };
+    } as SinkRecord;
 
     sink(record);
 
@@ -103,25 +122,36 @@ describe("jsonFileSink", () => {
     delete process.env.AMPLIO_JSON_SINK_PATH;
     process.chdir(root);
     const sink = jsonFileSink();
-    const dev: LogRecord = { event: "test.dev", service: "json-sink", env: "development" };
-    const prod: LogRecord = { event: "test.prod", service: "json-sink", env: "production" };
+    const dev = {
+      "@event": "test.dev",
+      service: "json-sink",
+      env: "development",
+    } as SinkRecord;
+    const prod = {
+      "@event": "test.prod",
+      service: "json-sink",
+      env: "production",
+    } as SinkRecord;
 
     sink(dev);
     sink(prod);
 
-    expect(readFileSync(path.join(root, "amplio.development.jsonl"), "utf8")).toBe(
-      `${JSON.stringify(dev)}\n`,
-    );
-    expect(readFileSync(path.join(root, "amplio.production.jsonl"), "utf8")).toBe(
-      `${JSON.stringify(prod)}\n`,
-    );
+    expect(
+      readFileSync(path.join(root, "amplio.development.jsonl"), "utf8"),
+    ).toBe(`${JSON.stringify(dev)}\n`);
+    expect(
+      readFileSync(path.join(root, "amplio.production.jsonl"), "utf8"),
+    ).toBe(`${JSON.stringify(prod)}\n`);
   });
   it("falls back to amplio.dev.jsonl when the record has no env", () => {
     root = mkdtempSync(path.join(tmpdir(), "amplio-json-sink-"));
     process.env.AMPLIO_JSON_SINK_PATH = "";
     process.chdir(root);
     const sink = jsonFileSink();
-    const record: LogRecord = { event: "test.cwd-empty-env", service: "json-sink" };
+    const record = {
+      "@event": "test.cwd-empty-env",
+      service: "json-sink",
+    } as SinkRecord;
 
     sink(record);
 
@@ -133,16 +163,15 @@ describe("jsonFileSink", () => {
     process.env.AMPLIO_JSON_SINK_PATH = "   ";
     process.chdir(root);
     const sink = jsonFileSink();
-    const record: LogRecord = {
-      event: "test.cwd-whitespace-env",
+    const record = {
+      "@event": "test.cwd-whitespace-env",
       service: "json-sink",
       env: "test",
-    };
+    } as SinkRecord;
 
     sink(record);
 
     const filePath = path.join(root, "amplio.test.jsonl");
     expect(readFileSync(filePath, "utf8")).toBe(`${JSON.stringify(record)}\n`);
   });
-
 });

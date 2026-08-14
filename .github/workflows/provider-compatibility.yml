@@ -1,0 +1,117 @@
+name: provider compatibility
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - ".github/workflows/provider-compatibility.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "packages/amplio/**"
+      - "packages/cli/package.json"
+      - "packages/cli/scripts/provider-compatibility.mjs"
+      - "packages/cli/scripts/provider-compatibility/**"
+      - "packages/cli/src/registry/types.ts"
+      - "packages/cli/src/utils/dependency-compatibility.ts"
+      - "packages/cli/src/utils/provider-dependency.ts"
+      - "packages/cli/tests/provider-boundary-preflight.test.ts"
+      - "packages/cli/tests/provider-compatibility-metadata.test.ts"
+      - "registry/events/**"
+      - "registry/plugins/**"
+      - "registry/registry.manifest.json"
+      - "scripts/build-registry.mjs"
+  pull_request:
+    paths:
+      - ".github/workflows/provider-compatibility.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "packages/amplio/**"
+      - "packages/cli/package.json"
+      - "packages/cli/scripts/provider-compatibility.mjs"
+      - "packages/cli/scripts/provider-compatibility/**"
+      - "packages/cli/src/registry/types.ts"
+      - "packages/cli/src/utils/dependency-compatibility.ts"
+      - "packages/cli/src/utils/provider-dependency.ts"
+      - "packages/cli/tests/provider-boundary-preflight.test.ts"
+      - "packages/cli/tests/provider-compatibility-metadata.test.ts"
+      - "registry/events/**"
+      - "registry/plugins/**"
+      - "registry/registry.manifest.json"
+      - "scripts/build-registry.mjs"
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: provider-compatibility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build generated registry metadata
+        run: pnpm registry:build
+
+      - name: Verify manifest metadata and rejected boundaries
+        run: >-
+          pnpm --filter @useamplio/cli exec vitest run
+          tests/provider-compatibility-metadata.test.ts
+          tests/provider-boundary-preflight.test.ts
+
+      - name: Derive matrix from registry manifest
+        id: matrix
+        shell: bash
+        run: echo "matrix=$(pnpm --silent compat:providers:matrix)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify recorded latest versions are current
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: pnpm compat:providers:latest
+
+  native-lifecycle:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.metadata.outputs.matrix) }}
+    name: ${{ matrix.plugin }} (${{ matrix.slot }} ${{ matrix.provider }}@${{ matrix.version }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Amplio core
+        run: pnpm --filter @useamplio/amplio build
+
+      - name: Typecheck and run native provider lifecycle
+        run: >-
+          node packages/cli/scripts/provider-compatibility.mjs
+          run ${{ matrix.plugin }} ${{ matrix.slot }}

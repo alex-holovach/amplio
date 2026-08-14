@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { useRequestLogger, withAmplio } from "../../../telemetry/middleware/next";
-import "../../../telemetry/logger";
+import { withAmplio } from "../../../telemetry/plugins/next";
 
-export const GET = withAmplio(async () => {
-  useRequestLogger().set({ route: { name: "health" } });
+export const GET = withAmplio("/api/health", async () => {
   return NextResponse.json({ ok: true });
 });

@@ -4,148 +4,82 @@
   "homepage": "https://github.com/alex-holovach/amplio",
   "items": [
     {
-      "name": "event-auth-user-signed-up",
+      "name": "event-http-request",
       "type": "registry:lib",
-      "title": "Auth User Signed Up",
-      "description": "Wide event when a user completes sign-up."
+      "title": "HTTP Request Event",
+      "description": "Root HTTP request Event for framework boundary Plugins."
     },
     {
-      "name": "event-auth-user-signed-in",
+      "name": "plugin-hono",
       "type": "registry:lib",
-      "title": "Auth User Signed In",
-      "description": "Wide event when a user signs in."
+      "title": "Hono Plugin",
+      "description": "Hono boundary Plugin that closes one HTTP Event per request."
     },
     {
-      "name": "event-email-sent",
+      "name": "plugin-express",
       "type": "registry:lib",
-      "title": "Email Sent",
-      "description": "Wide event when an email is sent."
+      "title": "Express Plugin",
+      "description": "Express boundary Plugin spanning callbacks through the final response."
     },
     {
-      "name": "event-payment-order-paid",
+      "name": "plugin-fastify",
       "type": "registry:lib",
-      "title": "Payment Order Paid",
-      "description": "Wide event when a payment order is paid."
+      "title": "Fastify Plugin",
+      "description": "Fastify boundary Plugin spanning request hooks through final onResponse status."
     },
     {
-      "name": "event-page-viewed",
+      "name": "plugin-next",
       "type": "registry:lib",
-      "title": "Page Viewed",
-      "description": "Wide event when a page is viewed (path only — query strings stay out)."
+      "title": "Next.js Plugin",
+      "description": "Next.js route-handler boundary Plugin preserving Response identity."
     },
     {
-      "name": "event-job-completed",
+      "name": "plugin-trpc",
       "type": "registry:lib",
-      "title": "Job Completed",
-      "description": "Wide event when a background job finishes (success, failed, or cancelled)."
+      "title": "tRPC Plugin",
+      "description": "tRPC contributor Plugin recording nested query and mutation duration Events while leaving subscriptions unchanged."
     },
     {
-      "name": "event-webhook-received",
+      "name": "plugin-better-auth",
       "type": "registry:lib",
-      "title": "Webhook Received",
-      "description": "Wide event when an inbound webhook arrives (provider, event type, signature validity)."
+      "title": "Better Auth Plugin",
+      "description": "Better Auth contributor Plugin using native after hooks for privacy-safe sign-in and sign-up semantics."
     },
     {
-      "name": "event-payment-refunded",
+      "name": "plugin-resend",
       "type": "registry:lib",
-      "title": "Payment Refunded",
-      "description": "Wide event when a payment is refunded (full or partial)."
+      "title": "Resend Plugin",
+      "description": "Resend contributor Plugin with privacy-safe email send observations."
     },
     {
-      "name": "middleware-hono",
+      "name": "runtime",
       "type": "registry:lib",
-      "title": "Hono Middleware",
-      "description": "Hono middleware that attaches request-scoped amplio context."
-    },
-    {
-      "name": "middleware-express",
-      "type": "registry:lib",
-      "title": "Express Middleware",
-      "description": "Express middleware that attaches request-scoped amplio context."
-    },
-    {
-      "name": "middleware-next",
-      "type": "registry:lib",
-      "title": "Next.js Route Handler Wrapper",
-      "description": "Route-handler wrapper (withAmplio) that owns the request wide event - this is not Next.js middleware.ts."
-    },
-    {
-      "name": "middleware-fastify",
-      "type": "registry:lib",
-      "title": "Fastify Middleware",
-      "description": "Fastify plugin that attaches request-scoped amplio context."
-    },
-    {
-      "name": "middleware-trpc",
-      "type": "registry:lib",
-      "title": "tRPC Middleware",
-      "description": "tRPC middleware that annotates the ambient request wide event with trpc fields (pair with the Next.js route-handler wrapper)."
+      "title": "Runtime",
+      "description": "Init-only Amplio runtime configuration."
     },
     {
       "name": "sink-console",
       "type": "registry:lib",
       "title": "Console Sink",
-      "description": "Console sink that prints wide events as JSON."
+      "description": "Console sink that prints Event records as JSON."
     },
     {
       "name": "sink-json",
       "type": "registry:lib",
       "title": "JSON Sink",
-      "description": "JSON sink that serializes wide events for streaming or files."
+      "description": "JSONL sink for local Event verification."
     },
     {
       "name": "sink-otlp",
       "type": "registry:lib",
       "title": "OTLP Sink",
-      "description": "OTLP sink that exports wide events over OpenTelemetry."
+      "description": "OTLP sink that exports Event records over OpenTelemetry."
     },
     {
       "name": "enricher-service-metadata",
       "type": "registry:lib",
       "title": "Service Metadata Enricher",
-      "description": "Enricher that adds service name / environment metadata."
-    },
-    {
-      "name": "enricher-query-allowlist",
-      "type": "registry:lib",
-      "title": "Query Allowlist Enricher",
-      "description": "Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks."
-    },
-    {
-      "name": "enricher-request-metadata",
-      "type": "registry:lib",
-      "title": "Request Metadata Enricher",
-      "description": "Enricher that adds request id / HTTP metadata."
-    },
-    {
-      "name": "integration-next-auth",
-      "type": "registry:lib",
-      "title": "NextAuth (Auth.js) Integration",
-      "description": "NextAuth v5 events hook that emits amplio auth events (uses local message types — no next-auth type imports needed)."
-    },
-    {
-      "name": "integration-better-auth",
-      "type": "registry:lib",
-      "title": "Better Auth Integration",
-      "description": "Better Auth helpers that emit amplio auth events."
-    },
-    {
-      "name": "integration-clerk",
-      "type": "registry:lib",
-      "title": "Clerk Integration",
-      "description": "Clerk helpers that emit amplio auth events."
-    },
-    {
-      "name": "integration-resend",
-      "type": "registry:lib",
-      "title": "Resend Integration",
-      "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed)."
-    },
-    {
-      "name": "integration-polar",
-      "type": "registry:lib",
-      "title": "Polar Integration",
-      "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed)."
+      "description": "Resource enricher for bounded deployment name, version, and region attributes."
     }
   ]
 }

@@ -1,14 +1,20 @@
-import express from "express";
-import { amplioMiddleware, useRequestLogger } from "../telemetry/middleware/express";
-import "../telemetry/logger.js";
+import type { RequestHandler } from "express";
+import { createApp, delayedFailure, delegatedFailure, health } from "./app.js";
+import { authenticate } from "../telemetry/plugins/auth.js";
+import { withAmplioRoute } from "../telemetry/plugins/express.js";
 
-const app = express();
+const requireAuth: RequestHandler = (_request, _response, next) => {
+  void authenticate().then(() => next(), next);
+};
 
-app.use(amplioMiddleware());
-
-app.get("/health", (req, res) => {
-  useRequestLogger(req).set({ route: { name: "health" } });
-  res.json({ ok: true });
+const app = createApp({
+  health: withAmplioRoute("/health", requireAuth, health),
+  delayedFailure: withAmplioRoute("/failure", requireAuth, delayedFailure),
+  delegatedFailure: withAmplioRoute(
+    "/delegated-failure",
+    requireAuth,
+    delegatedFailure,
+  ),
 });
 
 const port = Number(process.env.PORT ?? 3001);

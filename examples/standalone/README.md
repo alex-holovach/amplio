@@ -1,6 +1,7 @@
 # standalone
 
-Reference for scripts and workers: `logger.create()` + schema-bound `logger.event()` — no HTTP middleware.
+Reference for scripts and workers: one root Event owned by a worker Plugin, with ordinary
+application calls.
 
 ## Run
 
@@ -16,4 +17,4 @@ pnpm --filter @useamplio/example-standalone dev
 pnpm --filter @useamplio/example-standalone smoke
 ```
 
-Asserts one `logger.create()` wide event and one `job.completed` schema event.
+Asserts one `worker.billing.reconcile` Event containing stable worker, job, and result fields.

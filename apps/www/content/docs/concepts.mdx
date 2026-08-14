@@ -1,90 +1,133 @@
 ---
 title: Core concepts
-description: Wide events, schemas, open code, and the request spine model.
+description: Events, Plugins, declared trees, observations, and delivery.
 ---
 
-## Wide events
+Amplio has two semantic concepts: **Event** and **Plugin**.
 
-One record per unit of work. Accumulate context with `.set()`, finalize with `.emit()`. After emit, the instance is **sealed** — further `.set()` / `.error()` are no-ops (with a dev warning) and repeat `.emit()` returns `null`.
+## Event
 
-## Schema-first
+An Event is a versioned, schema-validated semantic record with runtime identity.
 
-Every important event is declared with `defineEvent` before use:
-
-```typescript
-import { defineEvent } from "@useamplio/amplio";
-import { z } from "zod";
-
-export const PostCreated = defineEvent(
-  "post.created",
-  z.object({
-    post: z.object({ id: z.string(), title: z.string() }),
+```ts
+const HttpRequest = event({
+  id: "http.request",
+  version: 1,
+  schema: z.object({
+    request_id: z.string(),
+    http: z.object({
+      method: z.string(),
+      route: z.string(),
+      status: z.number().int().optional(),
+    }),
   }),
-);
+});
 ```
 
-Validation runs at emit time. Outside `NODE_ENV=test`, failures soft-tag the record with `validation.issues` and set `success: false` unless `init({ strict: true })`.
+The same `event()` primitive defines roots and nested occurrences:
 
-## Open code in telemetry/
-
-Events, middleware, sinks, enrichers, and integrations live in `telemetry/` — owned by your app, not hidden in `node_modules`. The CLI scaffolds; you edit.
-
-```
-telemetry/
-├── events/       # one file per schema
-├── middleware/   # hono, next, trpc, …
-├── sinks/        # console, json, otlp, …
-├── enrichers/
-├── integrations/
-└── logger.ts     # init() + exported logger
+```ts
+const ProviderCall = event({
+  id: "provider.call",
+  version: 1,
+  schema: z.object({ provider: z.string() }),
+  timing: "duration",
+  cardinality: { many: { max: 16 } },
+});
 ```
 
-## Request spine + domain events
+- `timing: "instant"` records semantic state at one point.
+- `timing: "duration"` adds `duration_ms`, `success`, and structured failure state.
+- A single Event reserves at most one occurrence.
+- `{ many: { max } }` produces a bounded invocation-ordered array.
 
-HTTP middleware emits one **spine** row (`http.request` or `trpc.request`). Domain events are separate rows correlated by `request_id`:
+Nested Events are optional in traffic. Declaring a Plugin branch means the branch is allowed to
+contribute; it does not force every request to use that provider.
 
-```typescript
-import { getLogger } from "@useamplio/amplio";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
+## Plugin
 
-// inside request scope:
-getLogger()
-  .child(AuthUserSignedUp)
-  .set({ user: { id: "u_123" }, signup: { method: "email" } })
-  .emit();
-// → spine row + domain row, same request_id
+A Plugin attaches Events to one native seam and owns the projection from native data into safe,
+stable semantics.
+
+```ts
+const ProviderPlugin = plugin({
+  id: "provider",
+  events: { calls: ProviderCall },
+  instrument({ events, observe }) {
+    return function instrumentProvider(send) {
+      return observe(events.calls, send, {
+        input: ({ args: [input] }) => ({ provider: input.provider }),
+      });
+    };
+  },
+});
 ```
 
-What lands in the sink — two rows, one `request_id` (abridged):
+`ProviderPlugin` is callable at its native seam and exposes its exact Event definitions on
+`ProviderPlugin.events`.
 
-```json
-{ "@event": "http.request", "request_id": "req_m1x_a4f", "http": { "method": "POST", "path": "/signup", "status": 200 }, "status": 200, "success": true, "duration_ms": 38 }
-{ "@event": "auth.user.signed_up", "request_id": "req_m1x_a4f", "user": { "id": "u_123" }, "signup": { "method": "email" }, "duration_ms": 0 }
+A Plugin has one of two roles:
+
+- A contributor Plugin observes a provider or local function and is mounted in a root Event tree.
+- A boundary Plugin owns a framework or worker lifecycle and opens a root Event.
+
+Those are roles of the same concept, not separate public APIs.
+
+## Declared tree
+
+A root Event declares every possible branch before application code runs:
+
+```ts
+export const HttpRequest = event({
+  id: "http.request",
+  version: 1,
+  schema: HttpRequestFields,
+  tree: {
+    auth: BetterAuthPlugin.events,
+    email: ResendPlugin.events,
+    database: DrizzlePlugin.events,
+  },
+});
 ```
 
-The domain row copies `request_id` only — no `http.*` duplication, and no `success` key
-(it has no `status`), which is why domain events are filtered with `success != false`,
-never `success = true`.
+Plain objects create structure. Every leaf is an exact Event definition exported by a Plugin. Tree
+keys choose record placement; semantic IDs do not.
 
-| API | Use when |
-|---|---|
-| `.child(EventDef)` | **Canonical.** Fresh seal and start time; copies `request_id` only (no `http.*` duplication). Emitting the child does not seal the spine |
-| `getLogger().set({ … })` | Annotate the spine row (middleware emits it) |
-| `logger.event(Def).emit()` | Standalone row outside a request; inside request scope it also copies `request_id` (since alpha.8) |
+Definition identity matters. Recreating another Event with the same `id` does not grant it access
+to a declared slot. This prevents unrelated code from writing into a branch by string coincidence.
 
-Since alpha.13, `getLogger().event(Def)` on an already-named spine behaves as `.child(Def)` — a separate correlated row, spine preserved — with a dev notice suggesting the explicit spelling. `.child()` remains the canonical API.
+## Observation
 
-## Public runtime surface
+An observation is one runtime occurrence of a mounted nested Event. Plugin tools create
+observations:
 
-The frozen public surface from `@useamplio/amplio`:
+- `record(...)` for instant Events;
+- `observe(...)` for ordinary function calls;
+- `begin(...)` for callback and hook lifecycles.
 
-- `defineEvent`, `init`, `logger.event`, `logger.create`, `getLogger`
-- `.set()`, `.child()`, `.time()`, `.error()`, `.emit()`, `flush()`
+These tools exist only inside `plugin({ instrument })`. Application code cannot retrieve an active
+Event or mutate it directly.
 
-`getLogger()` returns the request-scoped logger from middleware context; outside request scope it returns a **no-op logger** (it does not throw). `useLogger` is a deprecated alias — renamed to `getLogger` in alpha.10 because it is not a React hook and `use*` naming trips React lint rules.
+## Lifecycle
 
-No `log.info` / `log.warn` — use schema fields and `.error()` for structured failures.
+`RootEvent.handle(fn, projectors)` opens a root, runs `fn`, and finalizes when the returned value or
+native Promise settles. Frameworks whose true completion happens in hooks use `openEvent()` inside
+an open-code boundary Plugin.
 
-## Library-first silence
+The root closes exactly once. Pending nested observations are omitted from the immutable snapshot
+and diagnosed; later completion cannot mutate delivered data.
 
-Call `.set()` / `.emit()` before `init()` ran and `.emit()` returns `null` — no sinks run, nothing throws, and dev builds warn on every dropped emit. Call `init()` with at least one sink (from `telemetry/logger.ts`) when you want output.
+## Sink
+
+A sink is operational delivery configuration, not semantic authoring. Every kept root record is
+sent to configured sinks after sanitization, redaction, and sampling.
+
+```ts
+init({
+  service: "orders-api",
+  env: "production",
+  sinks: [consoleSink, otlpSink],
+});
+```
+
+Sink failures are isolated from application behavior and from later sinks.

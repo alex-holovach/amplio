@@ -1,5 +1,6 @@
 import { bench, describe } from "vitest";
-import { init, createLogger, defineEvent } from "../src/index.js";
+import { z } from "zod";
+import { event, init } from "../src/index.js";
 
 const noop: (record: Record<string, unknown>) => void = () => {};
 
@@ -10,19 +11,21 @@ init({
   sampling: { rate: 1 },
 });
 
-const checkout = defineEvent("checkout.completed", undefined, { skipValidation: true });
+const Checkout = event({
+  id: "checkout.completed",
+  version: 1,
+  schema: z.object({ order_id: z.string(), total: z.number() }),
+});
 
-describe("logger set+emit", () => {
-  bench("create().set().emit()", () => {
-    createLogger()
-      .set({ request_id: "req_bench", status: 200 })
-      .emit();
-  });
+const recordCheckout = Checkout.handle(
+  (order_id: string, total: number) => ({ order_id, total }),
+  {
+    input: ({ args: [order_id, total] }) => ({ order_id, total }),
+  },
+);
 
-  bench("event().set().emit()", () => {
-    createLogger()
-      .event(checkout)
-      .set({ order_id: "ord_1", total: 42 })
-      .emit();
+describe("semantic event", () => {
+  bench("handle() + project + finalize", () => {
+    recordCheckout("ord_1", 42);
   });
 });

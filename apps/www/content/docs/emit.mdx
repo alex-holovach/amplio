@@ -1,114 +1,169 @@
 ---
-title: Emit API
-description: set, error, emit, child, time, sealing, validation, and testing.
+title: Semantic API
+description: Define Events, author Plugins, and own lifecycle automatically.
 ---
 
-## Lifecycle
+## Define a root Event
 
-```typescript
-import { logger } from "./telemetry/logger";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
+```ts
+import { event } from "@useamplio/amplio";
+import { z } from "zod";
 
-const log = logger.event(AuthUserSignedUp);
-
-log.set({ user: { id: "u_1" } });
-log.set({ signup: { method: "oauth" } }); // deep-merge
-log.emit(); // validate, redact, drain sinks, seal
-```
-
-`.set()` deep-merges nested objects and mutates the logger in place (it returns the same instance, so `getLogger()` stays valid in middleware ALS). `null` overwrites; `undefined` in a patch is skipped; arrays are **replaced**, not concatenated.
-
-## Errors
-
-```typescript
-try {
-  await work();
-} catch (err) {
-  log.error(err, { status: 500 });
-}
-log.emit();
-```
-
-`.error()` records structured failure (`success: false`) but does not emit — call `.emit()` after.
-
-For `Error` instances it records `error.message`, `error.name` (the thrown class name), and `error.code` only when the thrown value carries a real string/number `code`. Structured errors from `createError({ message, why, fix, code })` are recorded field-for-field.
-
-## Return value
-
-`.emit()` returns the finalized record, or **`null`** when:
-
-- `init()` never ran (dev warns)
-- the logger was already sealed (repeat `.emit()`)
-- sampling skipped sink delivery (enrichers + redaction still run)
-
-## child() for correlated rows
-
-```typescript
-const ev = getLogger().child(PostCreated); // clock starts here
-const post = await db.insert(...);
-ev.set({ post: { id: post.id } }).emit();
-```
-
-`duration_ms` on a child measures time since `.child()` — create the child **before** work to time the operation. Or use `.time()`:
-
-```typescript
-await getLogger().time(PostCreated, async (ev) => {
-  const post = await createPost();
-  ev.set({ post: { id: post.id } });
-  return post;
+export const BillingReconciliation = event({
+  id: "billing.reconciliation",
+  version: 1,
+  schema: z.object({
+    date: z.string(),
+    accounts_checked: z.number().int().nonnegative().optional(),
+  }),
 });
 ```
 
-## create() for jobs and scripts
+Wrap the boundary function once:
 
-Outside request scope (cron jobs, scripts, CLI runs), `logger.create()` starts a standalone wide-event scope:
-
-```typescript
-logger.create({ job: "nightly-sync" })
-  .set({ records_processed: 42 })
-  .emit();
+```ts
+export const reconcileBilling = BillingReconciliation.handle(
+  reconcileBillingNative,
+  {
+    input: ({ args: [date] }) => ({ date: date.toISOString() }),
+    result: ({ result }) => ({
+      accounts_checked: result.accountsChecked,
+    }),
+  },
+);
 ```
 
-## success field
+The wrapper preserves arguments, return values, thrown values, `this`, sync behavior, and native
+Promise identity. It finalizes automatically.
 
-When neither `status` nor an explicit `success` is set, `success` is **omitted** from the record. Numeric `status` in `[200, 400)` or the exact string `"ok"` derives `success: true`. Explicit `success` always wins.
+## Observe a duration Event
 
-For domain events without `status`, filter with `success != false` rather than `success = true`.
+Duration Events describe calls that already exist:
 
-## flush()
-
-```typescript
-import { flush } from "@useamplio/amplio";
-
-await handler();
-await flush(); // await pending async sink deliveries
-```
-
-Use with serverless `waitUntil` / Next.js `after` when async sinks (OTLP batch) must complete.
-
-## Validation
-
-Schema validation runs at emit time and **soft-fails** outside `NODE_ENV=test`: a payload that violates its schema still emits, tagged with `validation.issues` and `success: false`. Pass `init({ strict: true })` to throw instead.
-
-## Testing events
-
-Under `NODE_ENV=test`, validation hard-throws `AmplioValidationError` (with `issues` naming the bad paths), and `init()` is re-runnable via `resetConfigForTests()`. Use `memorySink()` and assert on delivered records:
-
-```typescript
-import { beforeEach, expect, it } from "vitest";
-import { init, memorySink, resetConfigForTests } from "@useamplio/amplio";
-
-const sink = memorySink();
-
-beforeEach(() => {
-  resetConfigForTests();
-  init({ service: "test", env: "test", sinks: [sink] });
-  sink.clear();
+```ts
+const Charge = event({
+  id: "stripe.charge",
+  version: 1,
+  schema: z.object({
+    amount_cents: z.number().int(),
+    payment_id: z.string().optional(),
+  }),
+  timing: "duration",
+  cardinality: { many: { max: 4 } },
 });
 
-it("emits post.created", async () => {
-  await createPost({ text: "hi" });
-  const row = sink.records.find((r) => r["@event"] === "post.created");
-  expect(row).toMatchObject({ post: { text: "hi" } });
+export const StripePlugin = plugin({
+  id: "stripe",
+  events: { charges: Charge },
+  instrument({ events, observe }) {
+    return function instrumentCharge(charge) {
+      return observe(events.charges, charge, {
+        input: ({ args: [input] }) => ({
+          amount_cents: input.amountCents,
+        }),
+        result: ({ result }) => ({ payment_id: result.id }),
+      });
+    };
+  },
 });
 ```
+
+Mount the exact definitions in a root Event:
+
+```ts
+export const Checkout = event({
+  id: "checkout",
+  version: 1,
+  schema: CheckoutFields,
+  tree: {
+    payments: StripePlugin.events,
+  },
+});
+```
+
+Calls outside an active root still run normally and contribute nothing.
+
+## Record an instant Event
+
+```ts
+const SignedIn = event({
+  id: "auth.signed_in",
+  version: 1,
+  schema: z.object({ method: z.string(), user_id: z.string() }),
+  timing: "instant",
+  cardinality: { many: { max: 4 } },
+});
+
+export const AuthPlugin = plugin({
+  id: "auth",
+  events: { signed_in: SignedIn },
+  instrument({ events, record }) {
+    return (value) => record(events.signed_in, value);
+  },
+});
+```
+
+`record()` adds no timing fields. It accepts only an instant Event owned by that Plugin.
+
+## Span native hooks
+
+When no single function represents the full duration, `begin()` returns a handle:
+
+```ts
+export const PaymentPlugin = plugin({
+  id: "payment",
+  events: { attempts: PaymentAttempt },
+  instrument({ events, begin }) {
+    return (input) => begin(events.attempts, input);
+  },
+});
+
+const attempt = PaymentPlugin({ attempt: 1 });
+attempt.run(startNativeWork);
+attempt.update({ state: { phase: "confirmed" } });
+attempt.end({ provider_id: "pay_1" });
+```
+
+Use `fail(error, fields)` for failure and `cancel(reasonCode)` when native lifecycle ends without a
+semantic result. `run()` and `bind()` preserve Event context across callbacks.
+
+Boundary Plugin authors use `openEvent()` for the same reason when a framework exposes completion
+through response hooks rather than a returned Promise.
+
+## Failure and pending work
+
+- A thrown value or rejected native Promise keeps exact application behavior.
+- A duration Event receives `success: false` and bounded structured error metadata.
+- A returned HTTP status can use a `success` projector, such as `status < 400`.
+- A nested observation still pending when the root closes is omitted and diagnosed.
+- Duplicate single occurrences reserve first and drop later writes.
+- Bounded arrays drop newest overflow and report truncation metadata.
+
+Telemetry projection, schema, redaction, sampling, and sink failures never replace application
+results or errors.
+
+## Schema contract
+
+Schemas validate synchronously so wrappers do not change application timing. Zod and synchronous
+Standard Schema v1 validators are supported. Asynchronous validation is consumed safely and treated
+as unsupported rather than awaited.
+
+## Test by exact Event identity
+
+```ts
+import { init } from "@useamplio/amplio";
+import { createTestSink } from "@useamplio/amplio/testing";
+
+const events = createTestSink();
+init({ service: "orders-test", env: "test", sinks: [events] });
+
+await reconcileBilling(new Date("2026-08-14"));
+
+expect(events.single(BillingReconciliation)).toMatchObject({
+  "@event": "billing.reconciliation",
+  accounts_checked: 12,
+});
+events.assertNoDiagnostics();
+```
+
+Selection uses the exact definition value, not only its string ID.

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,10 @@ import { runInit } from "../src/commands/init.js";
 import { runAddEvent } from "../src/commands/add.js";
 import { renderEventTemplate } from "../src/templates/event.js";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
 const registryEvents = path.join(repoRoot, "registry/events");
 
 async function assertPrettier(source: string, label: string): Promise<void> {
@@ -55,10 +58,19 @@ describe("generated event prettier defaults", () => {
 
   it("amplio add event output matches Prettier defaults", async () => {
     const cwd = await mkdtemp(path.join(tmpdir(), "amplio-prettier-"));
-    await runInit({ cwd, service: "prettier-app" , skipInstall: true });
+    await writeFile(
+      path.join(cwd, "package.json"),
+      JSON.stringify({
+        dependencies: {
+          "@useamplio/amplio": "0.1.0-alpha.16",
+          zod: "^3.24.2",
+        },
+      }),
+    );
+    await runInit({ cwd, service: "prettier-app", skipInstall: true });
     await runAddEvent("ops.deploy.started", { cwd });
 
-    const eventPath = path.join(cwd, "telemetry/events/ops/deploy-started.ts");
+    const eventPath = path.join(cwd, "telemetry/events/ops-deploy-started.ts");
     const source = await readFile(eventPath, "utf8");
     await assertPrettier(source, eventPath);
   });

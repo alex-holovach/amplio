@@ -3,282 +3,343 @@
   "homepage": "https://github.com/alex-holovach/amplio",
   "items": [
     {
-      "name": "event-auth-user-signed-up",
-      "description": "Wide event when a user completes sign-up.",
-      "source": "events/auth/user-signed-up.ts",
-      "target": "telemetry/events/auth/user-signed-up.ts",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ]
+      "name": "event-http-request",
+      "title": "HTTP Request Event",
+      "kind": "event",
+      "recipeVersion": "1.0.0",
+      "description": "Root HTTP request Event for framework boundary Plugins.",
+      "source": "events/http-request.ts",
+      "target": "telemetry/events/http-request.ts",
+      "dependencies": ["zod", "@useamplio/amplio"],
+      "events": [{ "id": "http.request", "version": 1 }],
+      "privacy": {
+        "includes": ["request_id", "http.method", "http.route", "http.status"],
+        "excludes": ["url", "path", "query", "headers", "cookies", "body"]
+      }
     },
     {
-      "name": "event-auth-user-signed-in",
-      "description": "Wide event when a user signs in.",
-      "source": "events/auth/user-signed-in.ts",
-      "target": "telemetry/events/auth/user-signed-in.ts",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ]
+      "name": "plugin-hono",
+      "title": "Hono Plugin",
+      "kind": "plugin",
+      "role": "boundary",
+      "recipeVersion": "1.0.0",
+      "nativeTransform": { "version": 1 },
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": { "hono": ">=4 <5" },
+      "testedProviderVersions": {
+        "hono": { "minimum": "4.0.0", "latest": "4.13.2" }
+      },
+      "description": "Hono boundary Plugin that closes one HTTP Event per request.",
+      "source": "plugins/hono.ts",
+      "target": "telemetry/plugins/hono.ts",
+      "dependencies": ["hono@^4.7.4", "@useamplio/amplio"],
+      "registryDependencies": ["event-http-request", "runtime"],
+      "events": [{ "id": "http.request", "version": 1 }],
+      "wiringActions": [
+        {
+          "type": "register-boundary",
+          "export": "HonoPlugin",
+          "description": "Register before Hono routes with app.use."
+        }
+      ],
+      "privacy": {
+        "includes": ["request_id", "http.method", "http.route", "http.status"],
+        "excludes": ["url", "path", "query", "headers", "cookies", "body"]
+      }
     },
     {
-      "name": "event-email-sent",
-      "description": "Wide event when an email is sent.",
-      "source": "events/email/sent.ts",
-      "target": "telemetry/events/email/sent.ts",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ]
+      "name": "plugin-express",
+      "title": "Express Plugin",
+      "kind": "plugin",
+      "role": "boundary",
+      "recipeVersion": "1.0.0",
+      "nativeTransform": { "version": 1 },
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": { "express": ">=4 <6" },
+      "testedProviderVersions": {
+        "express": { "minimum": "4.0.0", "latest": "5.2.1" }
+      },
+      "description": "Express boundary Plugin spanning callbacks through the final response.",
+      "source": "plugins/express.ts",
+      "target": "telemetry/plugins/express.ts",
+      "dependencies": ["express@^4.21.2", "@useamplio/amplio"],
+      "devDependencies": ["@types/express@^5.0.0"],
+      "registryDependencies": ["event-http-request", "runtime"],
+      "events": [{ "id": "http.request", "version": 1 }],
+      "wiringActions": [
+        {
+          "type": "register-boundary",
+          "export": "withAmplioRoute",
+          "description": "Spread the returned route layers before ordinary Express handlers."
+        }
+      ],
+      "privacy": {
+        "includes": ["request_id", "http.method", "http.route", "http.status"],
+        "excludes": ["url", "path", "query", "headers", "cookies", "body"]
+      }
     },
     {
-      "name": "event-payment-order-paid",
-      "description": "Wide event when a payment order is paid.",
-      "source": "events/payment/order-paid.ts",
-      "target": "telemetry/events/payment/order-paid.ts",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ]
+      "name": "plugin-fastify",
+      "title": "Fastify Plugin",
+      "kind": "plugin",
+      "role": "boundary",
+      "recipeVersion": "1.0.0",
+      "nativeTransform": { "version": 1 },
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": { "fastify": ">=5 <6" },
+      "testedProviderVersions": {
+        "fastify": { "minimum": "5.0.0", "latest": "5.12.0" }
+      },
+      "description": "Fastify boundary Plugin spanning request hooks through final onResponse status.",
+      "source": "plugins/fastify.ts",
+      "target": "telemetry/plugins/fastify.ts",
+      "dependencies": ["fastify@^5.2.1", "@useamplio/amplio"],
+      "registryDependencies": ["event-http-request", "runtime"],
+      "events": [{ "id": "http.request", "version": 1 }],
+      "wiringActions": [
+        {
+          "type": "register-boundary",
+          "export": "FastifyPlugin",
+          "description": "Register once before ordinary Fastify routes."
+        }
+      ],
+      "privacy": {
+        "includes": ["request_id", "http.method", "http.route", "http.status"],
+        "excludes": ["url", "path", "query", "headers", "cookies", "body"]
+      }
     },
     {
-      "name": "event-page-viewed",
-      "description": "Wide event when a page is viewed (path only — query strings stay out).",
-      "source": "events/page/viewed.ts",
-      "target": "telemetry/events/page/viewed.ts",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ]
+      "name": "plugin-next",
+      "title": "Next.js Plugin",
+      "kind": "plugin",
+      "role": "boundary",
+      "recipeVersion": "1.0.0",
+      "nativeTransform": { "version": 1 },
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": { "next": ">=15 <17" },
+      "testedProviderVersions": {
+        "next": { "minimum": "15.0.0", "latest": "16.3.1" }
+      },
+      "description": "Next.js route-handler boundary Plugin preserving Response identity.",
+      "source": "plugins/next.ts",
+      "target": "telemetry/plugins/next.ts",
+      "dependencies": ["next@^15.2.4", "@useamplio/amplio"],
+      "registryDependencies": ["event-http-request", "runtime"],
+      "events": [{ "id": "http.request", "version": 1 }],
+      "wiringActions": [
+        {
+          "type": "wrap-boundary",
+          "export": "withAmplio",
+          "description": "Wrap a route handler and optionally supply a stable semantic route."
+        }
+      ],
+      "privacy": {
+        "includes": ["request_id", "http.method", "http.route", "http.status"],
+        "excludes": ["url", "path", "query", "headers", "cookies", "body"]
+      }
     },
     {
-      "name": "event-job-completed",
-      "description": "Wide event when a background job finishes (success, failed, or cancelled).",
-      "source": "events/job/completed.ts",
-      "target": "telemetry/events/job/completed.ts",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ]
+      "name": "plugin-trpc",
+      "title": "tRPC Plugin",
+      "kind": "plugin",
+      "role": "contributor",
+      "recipeVersion": "1.0.0",
+      "nativeTransform": { "version": 1 },
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": { "@trpc/server": ">=11 <12" },
+      "testedProviderVersions": {
+        "@trpc/server": { "minimum": "11.0.0", "latest": "11.18.0" }
+      },
+      "description": "tRPC contributor Plugin recording nested query and mutation duration Events while leaving subscriptions unchanged.",
+      "source": "plugins/trpc.ts",
+      "target": "telemetry/plugins/trpc.ts",
+      "dependencies": ["zod", "@useamplio/amplio", "@trpc/server@^11.0.0"],
+      "events": [{ "id": "trpc.procedure", "version": 1 }],
+      "placement": { "branch": "rpc" },
+      "provider": {
+        "package": "@trpc/server",
+        "instrumenter": "TrpcPlugin",
+        "seam": "trpc-middleware",
+        "initializer": "initTRPC"
+      },
+      "wiringActions": [
+        {
+          "type": "mount-event-subtree",
+          "description": "Mount TrpcPlugin.events under the rpc branch."
+        },
+        {
+          "type": "register-contributor",
+          "export": "TrpcPlugin",
+          "description": "Register with the application's ordinary tRPC middleware builder."
+        }
+      ],
+      "privacy": {
+        "includes": ["path", "type", "duration_ms", "success"],
+        "excludes": [
+          "input",
+          "output",
+          "context",
+          "headers",
+          "auth",
+          "session",
+          "tokens",
+          "error message",
+          "stack"
+        ]
+      }
     },
     {
-      "name": "event-webhook-received",
-      "description": "Wide event when an inbound webhook arrives (provider, event type, signature validity).",
-      "source": "events/webhook/received.ts",
-      "target": "telemetry/events/webhook/received.ts",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ]
+      "name": "plugin-better-auth",
+      "title": "Better Auth Plugin",
+      "kind": "plugin",
+      "role": "contributor",
+      "recipeVersion": "1.0.0",
+      "nativeTransform": { "version": 1 },
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": { "better-auth": ">=1.2.1 <2" },
+      "testedProviderVersions": {
+        "better-auth": { "minimum": "1.2.1", "latest": "1.6.28" }
+      },
+      "description": "Better Auth contributor Plugin using native after hooks for privacy-safe sign-in and sign-up semantics.",
+      "source": "plugins/better-auth.ts",
+      "target": "telemetry/plugins/better-auth.ts",
+      "dependencies": ["zod", "@useamplio/amplio", "better-auth@^1.2.1"],
+      "events": [
+        { "id": "auth.signed_in", "version": 1 },
+        { "id": "auth.signed_up", "version": 1 }
+      ],
+      "placement": { "branch": "auth" },
+      "provider": {
+        "package": "better-auth",
+        "instrumenter": "BetterAuthPlugin",
+        "seam": "better-auth-plugin",
+        "factory": "betterAuth"
+      },
+      "wiringActions": [
+        {
+          "type": "mount-event-subtree",
+          "description": "Mount BetterAuthPlugin.events under the auth branch."
+        },
+        {
+          "type": "register-native-plugin",
+          "export": "BetterAuthPlugin",
+          "description": "Append BetterAuthPlugin() to one unambiguous betterAuth plugins array."
+        }
+      ],
+      "privacy": {
+        "includes": ["method", "user.id", "mfa"],
+        "excludes": [
+          "email",
+          "session id",
+          "tokens",
+          "headers",
+          "body",
+          "callback url"
+        ]
+      }
     },
     {
-      "name": "event-payment-refunded",
-      "description": "Wide event when a payment is refunded (full or partial).",
-      "source": "events/payment/refunded.ts",
-      "target": "telemetry/events/payment/refunded.ts",
-      "docs": "shadcn drops the event file but does not wire barrel exports — run `npx @useamplio/cli@alpha doctor --fix` afterwards to add them.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ]
+      "name": "plugin-resend",
+      "title": "Resend Plugin",
+      "kind": "plugin",
+      "role": "contributor",
+      "recipeVersion": "1.0.0",
+      "nativeTransform": { "version": 1 },
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": { "resend": ">=4 <5" },
+      "testedProviderVersions": {
+        "resend": { "minimum": "4.0.0", "latest": "4.8.0" }
+      },
+      "description": "Resend contributor Plugin with privacy-safe email send observations.",
+      "source": "plugins/resend.ts",
+      "target": "telemetry/plugins/resend.ts",
+      "dependencies": ["zod", "@useamplio/amplio", "resend@^4.0.0"],
+      "events": [{ "id": "resend.send", "version": 1 }],
+      "placement": { "branch": "email" },
+      "provider": {
+        "package": "resend",
+        "constructor": "Resend",
+        "instrumenter": "ResendPlugin",
+        "seam": "constructor"
+      },
+      "wiringActions": [
+        {
+          "type": "wrap-constructor",
+          "description": "Wrap one unambiguous new Resend(...) composition root."
+        },
+        {
+          "type": "mount-event-subtree",
+          "description": "Mount ResendPlugin.events under the email branch."
+        }
+      ],
+      "privacy": {
+        "includes": ["provider", "template"],
+        "excludes": [
+          "to",
+          "cc",
+          "bcc",
+          "from",
+          "subject",
+          "html",
+          "text",
+          "react",
+          "key"
+        ]
+      }
     },
     {
-      "name": "middleware-hono",
-      "description": "Hono middleware that attaches request-scoped amplio context.",
-      "source": "middleware/hono.ts",
-      "target": "telemetry/middleware/hono.ts",
-      "docs": "Wire the middleware: `app.use(\"*\", amplioMiddleware())` in your Hono app. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
-    },
-    {
-      "name": "middleware-express",
-      "description": "Express middleware that attaches request-scoped amplio context.",
-      "source": "middleware/express.ts",
-      "target": "telemetry/middleware/express.ts",
-      "docs": "Wire the middleware: `app.use(amplioMiddleware())` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
-    },
-    {
-      "name": "middleware-next",
-      "title": "Next.js Route Handler Wrapper",
-      "description": "Route-handler wrapper (withAmplio) that owns the request wide event - this is not Next.js middleware.ts.",
-      "source": "middleware/next.ts",
-      "target": "telemetry/middleware/next.ts",
-      "docs": "Wrap route handlers: `export const GET = withAmplio(handler)`. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/app/api/trpc/[trpc]/route.ts for you. Also exports withAmplioRender(name, fn) to give RSC page renders an ambient page.render spine so server-caller calls and facade events correlate.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
-    },
-    {
-      "name": "middleware-fastify",
-      "description": "Fastify plugin that attaches request-scoped amplio context.",
-      "source": "middleware/fastify.ts",
-      "target": "telemetry/middleware/fastify.ts",
-      "docs": "Wire the plugin: `await app.register(amplioPlugin)` before your routes. `npx @useamplio/cli@alpha doctor` verifies it is imported.",
-      "dependencies": [
-        "@useamplio/amplio",
-        "fastify-plugin@^5.0.0"
-      ]
-    },
-    {
-      "name": "middleware-trpc",
-      "title": "tRPC Middleware",
-      "description": "tRPC middleware that annotates the ambient request wide event with trpc fields (pair with the Next.js route-handler wrapper).",
-      "source": "middleware/trpc.ts",
-      "target": "telemetry/middleware/trpc.ts",
-      "docs": "Wire into your procedure bases: `const amplioMiddleware = t.middleware(amplioTrpcMiddleware())` then `.use(amplioMiddleware)` on publicProcedure/protectedProcedure. In a create-t3-app layout, `npx @useamplio/cli@alpha init --wire` edits src/server/api/trpc.ts for you.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
+      "name": "runtime",
+      "kind": "runtime",
+      "recipeVersion": "1.0.0",
+      "description": "Init-only Amplio runtime configuration.",
+      "source": "runtime.ts",
+      "target": "telemetry/runtime.ts",
+      "dependencies": ["@useamplio/amplio"],
+      "registryDependencies": ["sink-console"]
     },
     {
       "name": "sink-console",
-      "description": "Console sink that prints wide events as JSON.",
+      "kind": "sink",
+      "recipeVersion": "1.0.0",
+      "description": "Console sink that prints Event records as JSON.",
       "source": "sinks/console.ts",
       "target": "telemetry/sinks/console.ts",
-      "docs": "Wire the sink: add `import { consoleSink } from \"./sinks/console\"` to telemetry/logger.ts and append `consoleSink` to the init() sinks array. Prefer `npx @useamplio/cli@alpha add sink console` — it wires logger.ts for you.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
+      "dependencies": ["@useamplio/amplio"]
     },
     {
       "name": "sink-json",
-      "description": "JSON sink that serializes wide events for streaming or files.",
+      "kind": "sink",
+      "recipeVersion": "1.0.0",
+      "description": "JSONL sink for local Event verification.",
       "source": "sinks/json.ts",
       "target": "telemetry/sinks/json.ts",
-      "docs": "Wire the sink: add `import { jsonFileSink } from \"./sinks/json\"` to telemetry/logger.ts and append `jsonFileSink()` to the init() sinks array; add amplio*.jsonl to .gitignore (the default file name includes the env, e.g. amplio.development.jsonl). Prefer `npx @useamplio/cli@alpha add sink json` — it wires all of this for you.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
+      "dependencies": ["@useamplio/amplio"]
     },
     {
       "name": "sink-otlp",
-      "description": "OTLP sink that exports wide events over OpenTelemetry.",
+      "kind": "sink",
+      "recipeVersion": "1.0.0",
+      "description": "OTLP sink that exports Event records over OpenTelemetry.",
       "source": "sinks/otlp.ts",
       "target": "telemetry/sinks/otlp.ts",
-      "docs": "Wire the sink: add `import { otlpSink } from \"./sinks/otlp\"` to telemetry/logger.ts and append `otlpSink()` to the init() sinks array; set OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (base URL, /v1/logs appended). Default is one POST per emit — pass otlpSink({ batch: true }) for production traffic. Prefer `npx @useamplio/cli@alpha add sink otlp` — it wires logger.ts for you.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
+      "dependencies": ["@useamplio/amplio"]
     },
     {
       "name": "enricher-service-metadata",
-      "description": "Enricher that adds service name / environment metadata.",
+      "kind": "enricher",
+      "recipeVersion": "1.0.0",
+      "description": "Resource enricher for bounded deployment name, version, and region attributes.",
       "source": "enrichers/service-metadata.ts",
       "target": "telemetry/enrichers/service-metadata.ts",
-      "docs": "Wire the enricher: add `serviceMetadata()` to the init() enrichers array in telemetry/logger.ts. Prefer `npx @useamplio/cli@alpha add enricher service-metadata` — it wires logger.ts for you.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
-    },
-    {
-      "name": "enricher-query-allowlist",
-      "title": "Query Allowlist Enricher",
-      "description": "Enricher that drops http.search by default (or keeps only allowlisted query params) so query-string PII never reaches sinks.",
-      "source": "enrichers/query-allowlist.ts",
-      "target": "telemetry/enrichers/query-allowlist.ts",
-      "docs": "Wire the enricher: add `queryAllowlist()` to the init() enrichers array in telemetry/logger.ts (pass { allow: [\"page\"] } to keep specific params). Prefer `npx @useamplio/cli@alpha add enricher query-allowlist` — it wires logger.ts for you.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
-    },
-    {
-      "name": "enricher-request-metadata",
-      "description": "Enricher that adds request id / HTTP metadata.",
-      "source": "enrichers/request-metadata.ts",
-      "target": "telemetry/enrichers/request-metadata.ts",
-      "docs": "requestMetadata is a per-request enricher factory — use it inside middleware/wrappers (requestLogger.set(enrich({}))), not in the init() enrichers array.",
-      "dependencies": [
-        "@useamplio/amplio"
-      ]
-    },
-    {
-      "name": "integration-next-auth",
-      "title": "NextAuth (Auth.js) Integration",
-      "description": "NextAuth v5 events hook that emits amplio auth events (uses local message types — no next-auth type imports needed).",
-      "source": "integrations/next-auth.ts",
-      "target": "telemetry/integrations/next-auth.ts",
-      "docs": "Wire into your NextAuth config: `events: amplioNextAuthEvents()` (create-t3-app: src/server/auth/config.ts), and wrap src/app/api/auth/[...nextauth]/route.ts with withAmplio so rows share the request spine's request_id (`amplio init --wire` does this). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ],
-      "registryDependencies": [
-        "event-auth-user-signed-up",
-        "event-auth-user-signed-in"
-      ]
-    },
-    {
-      "name": "integration-better-auth",
-      "description": "Better Auth helpers that emit amplio auth events.",
-      "source": "integrations/better-auth.ts",
-      "target": "telemetry/integrations/better-auth.ts",
-      "docs": "Wire the plugin: add `createBetterAuthAmplioPlugin()` to your betterAuth({ plugins: [...] }) config. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio",
-        "better-auth@^1.2.0"
-      ],
-      "registryDependencies": [
-        "event-auth-user-signed-up",
-        "event-auth-user-signed-in"
-      ]
-    },
-    {
-      "name": "integration-clerk",
-      "description": "Clerk helpers that emit amplio auth events.",
-      "source": "integrations/clerk.ts",
-      "target": "telemetry/integrations/clerk.ts",
-      "docs": "Call handleClerkWebhook from your Clerk webhook route (user.created / session.created). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio",
-        "@clerk/backend@^1.25.0"
-      ],
-      "registryDependencies": [
-        "event-auth-user-signed-up",
-        "event-auth-user-signed-in"
-      ]
-    },
-    {
-      "name": "integration-resend",
-      "description": "Resend email helpers that emit amplio events (uses local webhook types — no resend package needed).",
-      "source": "integrations/resend.ts",
-      "target": "telemetry/integrations/resend.ts",
-      "docs": "Call trackResendEmail after sending, or handleResendWebhook from your Resend webhook route. After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ],
-      "registryDependencies": [
-        "event-email-sent"
-      ]
-    },
-    {
-      "name": "integration-polar",
-      "description": "Polar payment helpers that emit amplio order-paid events (uses local webhook types — no @polar-sh/sdk needed).",
-      "source": "integrations/polar.ts",
-      "target": "telemetry/integrations/polar.ts",
-      "docs": "Call handlePolarWebhook (or trackPolarOrderPaid) from your Polar webhook route (order.paid). After a shadcn install, run `npx @useamplio/cli@alpha doctor --fix` to wire event barrels.",
-      "dependencies": [
-        "zod",
-        "@useamplio/amplio"
-      ],
-      "registryDependencies": [
-        "event-payment-order-paid"
-      ]
+      "dependencies": ["@useamplio/amplio"],
+      "privacy": {
+        "includes": [
+          "deployment.name",
+          "deployment.version",
+          "deployment.region"
+        ],
+        "excludes": ["event fields", "request data", "payload data"]
+      }
     }
   ]
 }

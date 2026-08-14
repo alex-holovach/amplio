@@ -42,21 +42,28 @@ const records = stdout
   })
   .filter(Boolean);
 
-const createRecord = records.find((r) => r.worker?.name === "billing-reconcile");
-const eventRecord = records.find((r) => r.event === "job.completed");
+const eventName = (record) => record["@event"];
+const eventRecord = records.find(
+  (record) => eventName(record) === "worker.billing.reconcile",
+);
 
-if (!createRecord) fail(`missing logger.create() record in:\n${stdout}`);
-if (!eventRecord) fail(`missing logger.event(JobCompleted) record in:\n${stdout}`);
-if (createRecord.service !== "example-standalone") {
-  fail(`expected service example-standalone, got ${createRecord.service}`);
+if (!eventRecord) fail(`missing billing reconciliation Event in:\n${stdout}`);
+if (records.length !== 1)
+  fail(`expected one wide event, got ${records.length}:\n${stdout}`);
+if (eventRecord.service !== "example-standalone") {
+  fail(`expected service example-standalone, got ${eventRecord.service}`);
 }
-if (typeof eventRecord.event !== "string") fail(`event must be string, got ${JSON.stringify(eventRecord.event)}`);
-if (!eventRecord.job?.id) fail("event record missing nested job.id");
+if (eventRecord.job?.id !== "job_demo_1")
+  fail("Event missing stable job identity");
+if (eventRecord.records_processed !== 1)
+  fail("Event missing reconciled record count");
 
 console.log("example-standalone ok");
 console.log(
   JSON.stringify({
-    create: { service: createRecord.service, worker: createRecord.worker },
-    event: { event: eventRecord.event ?? eventRecord.name, job: eventRecord.job },
+    event: eventName(eventRecord),
+    worker: eventRecord.worker,
+    job: eventRecord.job,
+    records_processed: eventRecord.records_processed,
   }),
 );

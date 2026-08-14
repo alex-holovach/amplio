@@ -1,6 +1,6 @@
 # fastify-smoke
 
-Minimal Fastify app using the registry `fastify` middleware pattern with `@useamplio/amplio`.
+Minimal Fastify app using an open-code lifecycle Plugin with `@useamplio/amplio`.
 
 ## Run
 
@@ -18,7 +18,7 @@ Try it:
 curl http://127.0.0.1:3002/health
 ```
 
-`GET /health` sets route context; one wide event emits when the response finishes.
+`GET /health` produces one Event when the response finishes.
 
 ## Smoke
 
@@ -26,4 +26,5 @@ curl http://127.0.0.1:3002/health
 pnpm --filter @useamplio/example-fastify-smoke smoke
 ```
 
-Starts the app, hits `GET /health`, asserts one JSON wide event with nested `http` and status 200.
+Starts the app through the lifecycle Plugin, hits `GET /health` and a route whose `onSend` hook
+changes the final status to 503, then verifies both Events use the final response status.

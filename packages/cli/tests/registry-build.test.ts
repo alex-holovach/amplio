@@ -1,108 +1,357 @@
 import { execFileSync } from "node:child_process";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { valid } from "semver";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );
 
-const REQUIRED_ITEMS = [
-  "middleware-hono",
-  "event-auth-user-signed-up",
+const REQUIRED_BASE_ITEMS = [
+  "event-http-request",
+  "plugin-hono",
+  "plugin-express",
+  "plugin-fastify",
+  "plugin-next",
+  "plugin-trpc",
+  "plugin-better-auth",
+  "plugin-resend",
+  "runtime",
+  "sink-console",
+  "sink-json",
   "sink-otlp",
-  "integration-better-auth",
+  "enricher-service-metadata",
 ] as const;
 
-describe("registry build", () => {
-  it("builds public/r/registry.json with expected items and file content", async () => {
+type RegistryManifest = {
+  items: Array<{
+    name: string;
+    kind: "event" | "plugin" | "runtime" | "sink" | "enricher";
+    recipeVersion: string;
+    privacy?: {
+      includes?: string[];
+      excludes?: string[];
+    };
+    devDependencies?: string[];
+    events?: Array<{
+      id: string;
+      version: number;
+      semanticDigest?: string;
+    }>;
+    nativeTransform?: { version?: number; digest?: string };
+  }>;
+};
+
+async function readManifest(): Promise<RegistryManifest> {
+  return JSON.parse(
+    await readFile(
+      path.join(repoRoot, "registry/registry.manifest.json"),
+      "utf8",
+    ),
+  ) as RegistryManifest;
+}
+
+async function listFiles(root: string, relative = ""): Promise<string[]> {
+  const directory = path.join(root, relative);
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const child = path.join(relative, entry.name);
+      return entry.isDirectory() ? listFiles(root, child) : [child];
+    }),
+  );
+  return files.flat().sort();
+}
+
+describe("vNext registry build", () => {
+  beforeAll(() => {
     execFileSync("node", ["scripts/build-registry.mjs"], {
       cwd: repoRoot,
       stdio: "pipe",
     });
+  });
 
+  it("publishes only Event, Plugin, runtime, sink, and enricher items", async () => {
+    const manifest = await readManifest();
+    const expectedItems = manifest.items.map((item) => item.name);
     const registryPath = path.join(repoRoot, "public/r/registry.json");
     await access(registryPath);
 
-    const registry = JSON.parse(await readFile(registryPath, "utf8"));
+    const registry = JSON.parse(await readFile(registryPath, "utf8")) as {
+      $schema: string;
+      items: Array<{
+        name: string;
+        type: string;
+        title: string;
+        description: string;
+      }>;
+    };
     expect(registry.$schema).toBe("https://ui.shadcn.com/schema/registry.json");
-    const itemNames = registry.items.map((item: { name: string }) => item.name);
+    expect(registry.items.map((item) => item.name)).toEqual(expectedItems);
+    expect(expectedItems).toEqual(
+      expect.arrayContaining([...REQUIRED_BASE_ITEMS]),
+    );
 
-    for (const name of REQUIRED_ITEMS) {
-      expect(itemNames).toContain(name);
+    for (const item of registry.items) {
+      expect(item.type).toBe("registry:lib");
+      expect(item.title.trim(), `${item.name} title`).not.toBe("");
+      expect(item.description.trim(), `${item.name} description`).not.toBe("");
     }
 
-    for (const indexItem of registry.items) {
-      expect(typeof indexItem.name).toBe("string");
-      expect(indexItem.name.length).toBeGreaterThan(0);
-      expect(typeof indexItem.type).toBe("string");
-      expect(indexItem.type.length).toBeGreaterThan(0);
-      expect(typeof indexItem.title).toBe("string");
-      expect(indexItem.title.length).toBeGreaterThan(0);
-      expect(typeof indexItem.description).toBe("string");
-      expect(indexItem.description.length).toBeGreaterThan(0);
+    for (const item of manifest.items) {
+      expect(typeof item.recipeVersion, `${item.name} recipeVersion type`).toBe(
+        "string",
+      );
+      expect(
+        valid(item.recipeVersion),
+        `${item.name} recipeVersion SemVer`,
+      ).toBe(item.recipeVersion);
+      expect(item.name, `${item.name} registry vocabulary`).toMatch(
+        /^(?:event|plugin|sink|enricher)-|^runtime$/,
+      );
+      expect(item.kind, `${item.name} manifest kind`).toMatch(
+        /^(?:event|plugin|runtime|sink|enricher)$/,
+      );
     }
 
-    const itemPath = path.join(repoRoot, "public/r/middleware-hono.json");
-    const item = JSON.parse(await readFile(itemPath, "utf8"));
-    expect(item.files?.[0]?.content?.length).toBeGreaterThan(0);
-
-    const middlewareIndex = registry.items.find(
-      (entry: { name: string }) => entry.name === "middleware-hono",
+    const jsonFiles = (await readdir(path.join(repoRoot, "public/r")))
+      .filter((name) => name.endsWith(".json"))
+      .sort();
+    expect(jsonFiles).toEqual(
+      [...expectedItems.map((name) => `${name}.json`), "registry.json"].sort(),
     );
-    expect(middlewareIndex).toBeDefined();
-    expect(middlewareIndex.title).toBe("Hono Middleware");
-    expect(middlewareIndex.description).toBe(item.description);
-
-    const sinkConsoleIndex = registry.items.find(
-      (entry: { name: string }) => entry.name === "sink-console",
-    );
-    expect(sinkConsoleIndex).toBeDefined();
-    expect(sinkConsoleIndex.title).toBe("Console Sink");
   });
 
-  it("pins @useamplio/amplio dependency to monorepo version", async () => {
-    const itemPath = path.join(repoRoot, "public/r/middleware-hono.json");
-    const item = JSON.parse(await readFile(itemPath, "utf8"));
-    const rootPkg = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
-    expect(item.dependencies).toContain(`@useamplio/amplio@^${rootPkg.version}`);
-    expect(item.files?.[0]?.target).toMatch(/^~\/telemetry\//);
+  it("embeds editable Event and Plugin source at canonical telemetry targets", async () => {
+    const rootEvent = JSON.parse(
+      await readFile(
+        path.join(repoRoot, "public/r/event-http-request.json"),
+        "utf8",
+      ),
+    );
+    expect(rootEvent.title).toBe("HTTP Request Event");
+    expect(rootEvent.files?.[0]?.target).toBe(
+      "~/telemetry/events/http-request.ts",
+    );
+    expect(rootEvent.files?.[0]?.content).toContain('id: "http.request"');
+    expect(rootEvent.files?.[0]?.content).toContain("// amplio:plugins");
+
+    const resend = JSON.parse(
+      await readFile(
+        path.join(repoRoot, "public/r/plugin-resend.json"),
+        "utf8",
+      ),
+    );
+    expect(resend.title).toBe("Resend Plugin");
+    expect(resend.files?.[0]?.target).toBe("~/telemetry/plugins/resend.ts");
+    expect(resend.files?.[0]?.content).toContain(
+      'from "@useamplio/amplio/plugin"',
+    );
+    expect(resend.files?.[0]?.content).toContain("export const ResendPlugin");
   });
 
-  it("prefixes registryDependencies with @useamplio/ in built output", async () => {
-    const itemPath = path.join(repoRoot, "public/r/integration-better-auth.json");
-    const item = JSON.parse(await readFile(itemPath, "utf8"));
-    expect(item.registryDependencies).toEqual([
-      "@useamplio/event-auth-user-signed-up",
-      "@useamplio/event-auth-user-signed-in",
+  it("publishes the hardened HTTP, Next, and OTLP contracts", async () => {
+    const readSource = async (name: string): Promise<string> => {
+      const item = JSON.parse(
+        await readFile(path.join(repoRoot, "public/r", `${name}.json`), "utf8"),
+      ) as { files?: Array<{ content?: string }> };
+      return item.files?.[0]?.content ?? "";
+    };
+
+    const http = await readSource("event-http-request");
+    expect(http).toContain("/^[A-Za-z0-9_-]{1,128}$/.test(value)");
+    expect(http).not.toContain("value.trim()");
+
+    const hono = await readSource("plugin-hono");
+    expect(hono).not.toContain("context.res?.status >= 400");
+    expect(hono).not.toContain(": 500");
+
+    const next = await readSource("plugin-next");
+    expect(next).toContain("route: string");
+    expect(next).toContain("handler: F");
+    expect(next).not.toContain("routeOrHandler");
+
+    const otlp = await readSource("sink-otlp");
+    expect(otlp).toContain('"http.status"');
+    expect(otlp).toContain('"rpc.procedures"');
+    expect(otlp).toContain("record.resource");
+    expect(otlp).toContain('warnExportFailure("network_error")');
+    expect(otlp).not.toContain("error.message");
+    expect(otlp).not.toContain("String(error)");
+    expect(otlp).not.toContain('"http.path"');
+    expect(otlp).not.toContain('"trpc.path"');
+  });
+
+  it("pins runtime dependencies and prefixes registry dependencies", async () => {
+    const rootPkg = JSON.parse(
+      await readFile(path.join(repoRoot, "package.json"), "utf8"),
+    );
+    const hono = JSON.parse(
+      await readFile(path.join(repoRoot, "public/r/plugin-hono.json"), "utf8"),
+    );
+
+    expect(hono.dependencies).toContain(
+      `@useamplio/amplio@^${rootPkg.version}`,
+    );
+    expect(hono.dependencies).toContain("hono@^4.7.4");
+    expect(hono.registryDependencies).toEqual([
+      "@useamplio/event-http-request",
+      "@useamplio/runtime",
     ]);
-    expect(item.files?.[0]?.target).toBe("~/telemetry/integrations/better-auth.ts");
+    expect(hono.devDependencies).toBeUndefined();
   });
 
-  it("middleware items omit framework devDependencies", async () => {
-    for (const name of ["middleware-hono", "middleware-express", "middleware-next", "middleware-fastify"]) {
+  it("keeps provider and type dependencies on the Plugin that imports them", async () => {
+    const rootPkg = JSON.parse(
+      await readFile(path.join(repoRoot, "package.json"), "utf8"),
+    );
+    const core = `@useamplio/amplio@^${rootPkg.version}`;
+    const httpEvent = JSON.parse(
+      await readFile(
+        path.join(repoRoot, "public/r/event-http-request.json"),
+        "utf8",
+      ),
+    );
+    const trpcPlugin = JSON.parse(
+      await readFile(path.join(repoRoot, "public/r/plugin-trpc.json"), "utf8"),
+    );
+    const expressPlugin = JSON.parse(
+      await readFile(
+        path.join(repoRoot, "public/r/plugin-express.json"),
+        "utf8",
+      ),
+    );
+
+    expect(httpEvent.dependencies).toEqual(["zod", core]);
+    expect(httpEvent.devDependencies).toBeUndefined();
+    expect(trpcPlugin.dependencies).toEqual([
+      "zod",
+      core,
+      "@trpc/server@^11.0.0",
+    ]);
+    expect(expressPlugin.devDependencies).toEqual(["@types/express@^5.0.0"]);
+  });
+
+  it("ships every Plugin as editable source at the canonical target", async () => {
+    const manifest = await readManifest();
+    for (const manifestItem of manifest.items.filter(
+      (item) => item.kind === "plugin",
+    )) {
+      const { name } = manifestItem;
       const item = JSON.parse(
         await readFile(path.join(repoRoot, "public/r", `${name}.json`), "utf8"),
       );
-      expect(item.devDependencies, `${name} devDependencies`).toBeUndefined();
+      expect(item.title, name).toMatch(/ Plugin$/);
+      expect(item.files?.[0]?.target, name).toMatch(
+        /^~\/telemetry\/plugins\/[a-z0-9-]+\.ts$/,
+      );
+      expect(item.files?.[0]?.content?.trim(), name).not.toBe("");
+      expect(item.devDependencies, name).toEqual(manifestItem.devDependencies);
     }
   });
 
-  it("includes middleware-trpc with pinned amplio dependency", async () => {
-    const registry = JSON.parse(
-      await readFile(path.join(repoRoot, "public/r/registry.json"), "utf8"),
-    );
-    const names = registry.items.map((item: { name: string }) => item.name);
-    expect(names).toContain("middleware-trpc");
+  it("documents an explicit privacy boundary for every Plugin", async () => {
+    const manifest = await readManifest();
 
-    const item = JSON.parse(
-      await readFile(path.join(repoRoot, "public/r/middleware-trpc.json"), "utf8"),
+    for (const item of manifest.items.filter(
+      (candidate) => candidate.kind === "plugin",
+    )) {
+      expect(
+        item.privacy?.includes?.length,
+        `${item.name} privacy includes`,
+      ).toBeGreaterThan(0);
+      expect(
+        item.privacy?.excludes?.length,
+        `${item.name} privacy excludes`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("publishes derived semantic and explicit native transform contracts for every Plugin", async () => {
+    const manifest = await readManifest();
+
+    for (const item of manifest.items.filter(
+      (candidate) => candidate.kind === "plugin",
+    )) {
+      expect(item.nativeTransform?.version, `${item.name} native version`).toBe(
+        1,
+      );
+      const generated = JSON.parse(
+        await readFile(
+          path.join(repoRoot, "public/r", `${item.name}.json`),
+          "utf8",
+        ),
+      ) as {
+        meta?: {
+          amplio?: {
+            semanticDigest?: string;
+            events?: Array<{ semanticDigest?: string }>;
+            nativeTransform?: { version?: number; digest?: string };
+          };
+        };
+      };
+      const metadata = generated.meta?.amplio;
+      expect(metadata?.semanticDigest, `${item.name} semantic digest`).toMatch(
+        /^sha256-[a-f0-9]{64}$/,
+      );
+      expect(metadata?.events, `${item.name} Event contracts`).toHaveLength(
+        item.events?.length,
+      );
+      for (const event of metadata?.events ?? []) {
+        expect(
+          event.semanticDigest,
+          `${item.name} Event semantic digest`,
+        ).toMatch(/^sha256-[a-f0-9]{64}$/);
+      }
+      expect(
+        metadata?.nativeTransform,
+        `${item.name} native transform`,
+      ).toEqual({
+        version: 1,
+        digest: expect.stringMatching(/^sha256-[a-f0-9]{64}$/),
+      });
+    }
+  });
+
+  it("teaches only the Event and Plugin installation model", async () => {
+    const registryIndex = await readFile(
+      path.join(repoRoot, "public/r/index.html"),
+      "utf8",
     );
-    const rootPkg = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
-    expect(item.title).toBe("tRPC Middleware");
-    expect(item.dependencies).toContain(`@useamplio/amplio@^${rootPkg.version}`);
-    expect(item.files?.[0]?.content).toContain("amplioTrpcMiddleware");
+    const rootIndex = await readFile(
+      path.join(repoRoot, "public/index.html"),
+      "utf8",
+    );
+    const notFound = await readFile(
+      path.join(repoRoot, "public/404.html"),
+      "utf8",
+    );
+    const help = `${rootIndex}\n${registryIndex}\n${notFound}`;
+
+    expect(rootIndex).toBe(registryIndex);
+    expect(help).toContain("add event &lt;event-id&gt;");
+    expect(help).toContain("add plugin &lt;name&gt; --event &lt;event-id&gt;");
+    expect(help).toContain("copies open-code source only");
+    expect(help).not.toMatch(/add component|doctor --fix/i);
+    expect(help).not.toMatch(
+      /add (?:integration|workload|middleware)|@useamplio\/(?:integration|workload|middleware)-/i,
+    );
+  });
+
+  it("keeps the website registry byte-identical to the canonical artifacts", async () => {
+    const canonicalRoot = path.join(repoRoot, "public/r");
+    const websiteRoot = path.join(repoRoot, "apps/www/public/r");
+    const canonicalFiles = await listFiles(canonicalRoot);
+    const websiteFiles = await listFiles(websiteRoot);
+
+    expect(websiteFiles).toEqual(canonicalFiles);
+    for (const relative of canonicalFiles) {
+      const canonical = await readFile(path.join(canonicalRoot, relative));
+      const website = await readFile(path.join(websiteRoot, relative));
+      expect(Buffer.compare(website, canonical), relative).toBe(0);
+    }
   });
 });

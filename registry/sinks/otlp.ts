@@ -11,10 +11,10 @@
  * and low traffic, not for production request rates. Pass `batch: true`
  * (100 records / 1 s) or `batch: { maxSize, maxWaitMs }` to coalesce records
  * into one export request. Batching makes the sink async-pending between
- * flushes: on serverless, pass `waitUntil` to your middleware or `await
- * flush()` before returning so the last batch is not cut off.
+ * flushes. Amplio's `flush()` calls the sink's active drain hook, so shutdown
+ * and short-lived/serverless paths can deliver a partial batch immediately.
  */
-import type { JsonValue, LogRecord, Sink } from "@useamplio/amplio";
+import type { JsonValue, Sink, SinkRecord } from "@useamplio/amplio";
 
 export interface OtlpSinkOptions {
   endpoint?: string;
@@ -24,7 +24,7 @@ export interface OtlpSinkOptions {
   /**
    * Record fields promoted to typed OTLP log attributes (the fields you can
    * filter on in an OTel backend without parsing the JSON body). Dot paths
-   * walk nested objects (`"trpc.path"` → record.trpc.path). Replaces the
+   * walk nested objects (`"http.status"` → record.http.status). Replaces the
    * default list; the full record always ships in the log body.
    */
   attributes?: string[];
@@ -37,15 +37,15 @@ export interface OtlpSinkOptions {
 
 const DEFAULT_ATTRIBUTE_FIELDS = [
   "service",
-  "event",
-  "status",
+  "@event",
   "duration_ms",
   "request_id",
   "success",
   // The fields people actually filter on in an OTel backend:
-  "trpc.path",
-  "http.path",
   "http.method",
+  "http.route",
+  "http.status",
+  "rpc.procedures",
 ] as const;
 
 const DEFAULT_BATCH_MAX_SIZE = 100;
@@ -54,8 +54,10 @@ const DEFAULT_BATCH_MAX_WAIT_MS = 1_000;
 type OtlpAttributeValue =
   | { stringValue: string }
   | { boolValue: boolean }
-  | { intValue: number }
-  | { doubleValue: number };
+  | { intValue: string }
+  | { doubleValue: number }
+  | { arrayValue: { values: OtlpAttributeValue[] } }
+  | { kvlistValue: { values: OtlpAttribute[] } };
 
 interface OtlpAttribute {
   key: string;
@@ -89,8 +91,14 @@ const parseOtlpHeaders = (raw: string | undefined): Record<string, string> => {
   return headers;
 };
 
-/** Flat key first (`record["trpc.path"]`), then dot-path walk (`record.trpc.path`). */
-const fieldValue = (record: LogRecord, field: string): JsonValue | undefined => {
+/** Flat key first (`record["http.status"]`), then dot-path walk (`record.http.status`). */
+const fieldValue = (
+  record: SinkRecord,
+  field: string,
+): JsonValue | undefined => {
+  if (field === "@event") {
+    return record["@event"];
+  }
   const flat = record[field];
   if (flat !== undefined || !field.includes(".")) {
     return flat;
@@ -109,27 +117,47 @@ const fieldValue = (record: LogRecord, field: string): JsonValue | undefined => 
   return current;
 };
 
-const toOtlpAttribute = (key: string, value: JsonValue | undefined): OtlpAttribute | undefined => {
+const toOtlpValue = (
+  value: JsonValue | undefined,
+): OtlpAttributeValue | undefined => {
   if (value === null || value === undefined) {
     return undefined;
   }
 
   if (typeof value === "string") {
-    return { key, value: { stringValue: value } };
+    return { stringValue: value };
   }
 
   if (typeof value === "boolean") {
-    return { key, value: { boolValue: value } };
+    return { boolValue: value };
   }
 
   if (typeof value === "number") {
     if (Number.isInteger(value)) {
-      return { key, value: { intValue: value } };
+      return { intValue: String(value) };
     }
-    return { key, value: { doubleValue: value } };
+    return { doubleValue: value };
   }
 
-  return undefined;
+  if (Array.isArray(value)) {
+    const values = value
+      .map((item) => toOtlpValue(item))
+      .filter((item): item is OtlpAttributeValue => item !== undefined);
+    return { arrayValue: { values } };
+  }
+
+  const values = Object.entries(value)
+    .map(([key, item]) => toOtlpAttribute(key, item))
+    .filter((item): item is OtlpAttribute => item !== undefined);
+  return { kvlistValue: { values } };
+};
+
+const toOtlpAttribute = (
+  key: string,
+  value: JsonValue | undefined,
+): OtlpAttribute | undefined => {
+  const converted = toOtlpValue(value);
+  return converted ? { key, value: converted } : undefined;
 };
 
 const toTimeUnixNano = (timestamp: JsonValue | undefined): string => {
@@ -169,14 +197,44 @@ const resolveUrl = (options: OtlpSinkOptions): string | undefined => {
   return undefined;
 };
 
-const resourceKeyOf = (record: LogRecord): string => {
-  const service =
-    typeof record.service === "string" && record.service.length > 0
-      ? record.service
-      : "";
-  const env =
-    typeof record.env === "string" && record.env.length > 0 ? record.env : "";
-  return `${service}\u0000${env}`;
+const resourceKeyOf = (record: SinkRecord): string => {
+  const attributes = buildResourceAttributes(record).sort((left, right) =>
+    left.key.localeCompare(right.key),
+  );
+  return JSON.stringify(attributes);
+};
+
+const buildResourceAttributes = (record: SinkRecord): OtlpAttribute[] => {
+  const attributes: OtlpAttribute[] = [];
+  const keys = new Set<string>();
+  const add = (attribute: OtlpAttribute | undefined): void => {
+    if (!attribute || keys.has(attribute.key)) return;
+    keys.add(attribute.key);
+    attributes.push(attribute);
+  };
+
+  if (typeof record.service === "string" && record.service.length > 0) {
+    add({ key: "service.name", value: { stringValue: record.service } });
+  }
+  if (typeof record.env === "string" && record.env.length > 0) {
+    add({
+      key: "deployment.environment",
+      value: { stringValue: record.env },
+    });
+  }
+
+  const resource = record.resource;
+  if (
+    resource !== null &&
+    typeof resource === "object" &&
+    !Array.isArray(resource)
+  ) {
+    for (const [key, value] of Object.entries(resource)) {
+      add(toOtlpAttribute(key, value));
+    }
+  }
+
+  return attributes;
 };
 
 export function otlpSink(options: OtlpSinkOptions = {}): Sink {
@@ -213,10 +271,13 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
     );
   };
 
-  const buildAttributes = (record: LogRecord): OtlpAttribute[] => {
+  const buildAttributes = (record: SinkRecord): OtlpAttribute[] => {
     const attributes: OtlpAttribute[] = [];
     for (const field of attributeFields) {
-      const attr = toOtlpAttribute(field, fieldValue(record, field));
+      // Keep the conventional OTLP attribute key `event` while sourcing the
+      // canonical semantic `@event` field by default.
+      const key = field === "@event" ? "event" : field;
+      const attr = toOtlpAttribute(key, fieldValue(record, field));
       if (attr) {
         attributes.push(attr);
       }
@@ -224,7 +285,7 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
     return attributes;
   };
 
-  const toLogRecord = (record: LogRecord) => {
+  const toLogRecord = (record: SinkRecord) => {
     const attributes = buildAttributes(record);
     return {
       timeUnixNano: toTimeUnixNano(record.timestamp),
@@ -233,10 +294,10 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
     };
   };
 
-  // One resourceLogs entry per distinct (service, env) pair — records in a
-  // batch almost always share one, but never stamp record A with B's resource.
-  const buildPayload = (records: LogRecord[]) => {
-    const groups = new Map<string, LogRecord[]>();
+  // One resourceLogs entry per distinct OTLP resource — records in a batch
+  // usually share one, but never stamp record A with B's resource attributes.
+  const buildPayload = (records: SinkRecord[]) => {
+    const groups = new Map<string, SinkRecord[]>();
     for (const record of records) {
       const key = resourceKeyOf(record);
       const group = groups.get(key);
@@ -249,19 +310,7 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
 
     const resourceLogs = [...groups.values()].map((group) => {
       const first = group[0]!;
-      const resourceAttributes: OtlpAttribute[] = [];
-      if (typeof first.service === "string" && first.service.length > 0) {
-        resourceAttributes.push({
-          key: "service.name",
-          value: { stringValue: first.service },
-        });
-      }
-      if (typeof first.env === "string" && first.env.length > 0) {
-        resourceAttributes.push({
-          key: "deployment.environment",
-          value: { stringValue: first.env },
-        });
-      }
+      const resourceAttributes = buildResourceAttributes(first);
       return {
         ...(resourceAttributes.length > 0
           ? { resource: { attributes: resourceAttributes } }
@@ -273,7 +322,7 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
     return { resourceLogs };
   };
 
-  const exportRecords = async (records: LogRecord[]): Promise<void> => {
+  const exportRecords = async (records: SinkRecord[]): Promise<void> => {
     let response: Response;
     try {
       response = await fetch(url, {
@@ -285,7 +334,7 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
       if (throwOnError) {
         throw error;
       }
-      warnExportFailure(error instanceof Error ? error.message : String(error));
+      warnExportFailure("network_error");
       return;
     }
 
@@ -299,19 +348,22 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
   };
 
   if (!options.batch) {
-    return (record: LogRecord) => exportRecords([record]);
+    return (record: SinkRecord) => exportRecords([record]);
   }
 
   const batchConfig = options.batch === true ? {} : options.batch;
   const maxSize = batchConfig.maxSize ?? DEFAULT_BATCH_MAX_SIZE;
   const maxWaitMs = batchConfig.maxWaitMs ?? DEFAULT_BATCH_MAX_WAIT_MS;
 
-  let buffer: LogRecord[] = [];
+  let buffer: SinkRecord[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let pending: { promise: Promise<void>; resolve: () => void; reject: (e: unknown) => void } | null =
-    null;
+  let pending: {
+    promise: Promise<void>;
+    resolve: () => void;
+    reject: (e: unknown) => void;
+  } | null = null;
 
-  const flushBatch = (): void => {
+  const flushBatch = (): Promise<void> => {
     if (timer !== null) {
       clearTimeout(timer);
       timer = null;
@@ -322,9 +374,9 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
     pending = null;
     if (records.length === 0) {
       settled?.resolve();
-      return;
+      return Promise.resolve();
     }
-    exportRecords(records).then(
+    const delivery = exportRecords(records).then(
       () => settled?.resolve(),
       (error) => {
         // Every emit in the batch awaited this promise — reject them all so
@@ -334,9 +386,10 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
         }
       },
     );
+    return delivery;
   };
 
-  return (record: LogRecord): Promise<void> => {
+  const sink: Sink = (record: SinkRecord): Promise<void> => {
     buffer.push(record);
     if (pending === null) {
       let resolve!: () => void;
@@ -349,7 +402,7 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
     }
     const result = pending.promise;
     if (buffer.length >= maxSize) {
-      flushBatch();
+      void flushBatch();
     } else if (timer === null) {
       timer = setTimeout(flushBatch, maxWaitMs);
       // Don't keep a Node process alive just for a pending batch window.
@@ -357,4 +410,6 @@ export function otlpSink(options: OtlpSinkOptions = {}): Sink {
     }
     return result;
   };
+  sink.flush = flushBatch;
+  return sink;
 }

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "runtime",
+  "title": "Runtime",
+  "description": "Init-only Amplio runtime configuration.",
+  "type": "registry:lib",
+  "dependencies": [
+    "@useamplio/amplio@^0.1.0-alpha.16"
+  ],
+  "registryDependencies": [
+    "@useamplio/sink-console"
+  ],
+  "files": [
+    {
+      "path": "registry/runtime.ts",
+      "target": "~/telemetry/runtime.ts",
+      "type": "registry:lib",
+      "content": "import { init } from \"@useamplio/amplio\";\nimport { consoleSink } from \"./sinks/console.js\";\n\ninit({\n  service: process.env.SERVICE_NAME ?? \"my-app\",\n  env: process.env.NODE_ENV ?? \"development\",\n  enrichers: [],\n  // sampling: { rate: 0.1, keep: [{ field: \"success\", equals: false }] },\n  // see @useamplio/amplio README ## Sampling\n  sinks: [consoleSink],\n});\n"
+    }
+  ]
+}

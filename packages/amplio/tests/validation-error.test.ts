@@ -8,7 +8,7 @@ import {
   resetConfigForTests,
   type LogRecord,
   type Sink,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 const capture = (): { records: LogRecord[]; sink: Sink } => {
   const records: LogRecord[] = [];
@@ -37,16 +37,19 @@ describe("AmplioValidationError", () => {
     );
 
     try {
-      logger.event(def).set({ user: { id: 1 } } as { user: { id: string } }).emit();
+      logger
+        .event(def)
+        .set({ user: { id: 1 } } as { user: { id: string } })
+        .emit();
       expect.unreachable("emit should throw");
     } catch (error) {
       expect(error).toBeInstanceOf(AmplioValidationError);
       const validation = error as AmplioValidationError;
       expect(validation.message).toMatch(/Event validation failed/);
       expect(validation.message).toMatch(/user\.id/);
-      expect(validation.issues.some((issue) => issue.path.join(".") === "user.id")).toBe(
-        true,
-      );
+      expect(
+        validation.issues.some((issue) => issue.path.join(".") === "user.id"),
+      ).toBe(true);
     }
 
     expect(records).toHaveLength(0);
@@ -74,8 +77,41 @@ describe("AmplioValidationError", () => {
 
     const def = defineEvent("standard.check", shape);
 
-    expect(() => logger.event(def).set({ code: 1 } as { code: string }).emit()).toThrow(
-      AmplioValidationError,
-    );
+    expect(() =>
+      logger
+        .event(def)
+        .set({ code: 1 } as { code: string })
+        .emit(),
+    ).toThrow(AmplioValidationError);
+  });
+
+  it("normalizes Standard Schema path segments that use key objects", () => {
+    const { sink } = capture();
+    init({ service: "api", env: "test", sinks: [sink] });
+    const shape = {
+      "~standard": {
+        version: 1 as const,
+        vendor: "test",
+        validate: () => ({
+          issues: [
+            {
+              message: "Expected string",
+              path: [{ key: "user" }, { key: "id" }],
+            },
+          ],
+        }),
+      },
+    };
+
+    try {
+      logger.event(defineEvent("standard.path", shape)).emit();
+      expect.unreachable("emit should throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AmplioValidationError);
+      expect((error as AmplioValidationError).issues[0]?.path).toEqual([
+        "user",
+        "id",
+      ]);
+    }
   });
 });

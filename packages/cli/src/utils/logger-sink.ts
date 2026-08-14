@@ -11,17 +11,17 @@ const SINK_META: Record<string, SinkMeta> = {
   console: {
     exportName: "consoleSink",
     sinkExpression: "consoleSink",
-    importPath: "./sinks/console",
+    importPath: "./sinks/console.js",
   },
   otlp: {
     exportName: "otlpSink",
     sinkExpression: "otlpSink()",
-    importPath: "./sinks/otlp",
+    importPath: "./sinks/otlp.js",
   },
   json: {
     exportName: "jsonFileSink",
     sinkExpression: "jsonFileSink()",
-    importPath: "./sinks/json",
+    importPath: "./sinks/json.js",
   },
 };
 
@@ -47,10 +47,8 @@ function sinkAlreadyInSinksArray(source: string, meta: SinkMeta): boolean {
 function extractSinksArrayContent(
   source: string,
 ): { items: string[]; arrayStart: number; arrayEnd: number } | null {
-  const composeMatch = source.match(/sinks:\s*composeSinks\([^,]+,\s*\[/);
   const plainMatch = source.match(/sinks:\s*\[/);
-
-  const match = composeMatch ?? plainMatch;
+  const match = plainMatch;
   if (!match || match.index === undefined) {
     return null;
   }
@@ -86,8 +84,9 @@ function extractSinksArrayContent(
 }
 
 function hasSinkImport(source: string, meta: SinkMeta): boolean {
+  const importBase = meta.importPath.replace(/\.js$/, "");
   const importPattern = new RegExp(
-    `import\\s*\\{[^}]*\\b${meta.exportName}\\b[^}]*\\}\\s*from\\s*["']${escapeRegExp(meta.importPath)}["']`,
+    `import\\s*\\{[^}]*\\b${meta.exportName}\\b[^}]*\\}\\s*from\\s*["']${escapeRegExp(importBase)}(?:\\.js)?["']`,
   );
   return importPattern.test(source);
 }
@@ -134,26 +133,39 @@ function appendSinkToArray(source: string, meta: SinkMeta): string {
   return `${source.slice(0, arrayStart)}${nextArrayBody}${source.slice(arrayEnd)}`;
 }
 
-export interface LoggerSinkUpdate {
-  /** Diff-style description of what was inserted into logger.ts. */
+export interface RuntimeSinkUpdate {
+  /** Diff-style description of what was inserted into runtime.ts. */
   insertedLines: string[];
 }
 
-export async function updateLoggerWithSink(
-  loggerPath: string,
+/** True only when the requested sink is already present in init({ sinks }). */
+export async function isSinkWired(
+  runtimePath: string,
+  sinkId: string,
+): Promise<boolean> {
+  const meta = SINK_META[sinkId];
+  if (!meta || !(await pathExists(runtimePath))) {
+    return false;
+  }
+  const source = await fs.readFile(runtimePath, "utf8");
+  return hasInitAndSinks(source) && sinkAlreadyInSinksArray(source, meta);
+}
+
+export async function updateRuntimeWithSink(
+  runtimePath: string,
   sinkId: string,
   dryRun = false,
-): Promise<LoggerSinkUpdate | null> {
+): Promise<RuntimeSinkUpdate | null> {
   const meta = SINK_META[sinkId];
   if (!meta) {
     return null;
   }
 
-  if (!(await pathExists(loggerPath))) {
+  if (!(await pathExists(runtimePath))) {
     return null;
   }
 
-  const source = await fs.readFile(loggerPath, "utf8");
+  const source = await fs.readFile(runtimePath, "utf8");
 
   if (!hasInitAndSinks(source)) {
     return null;
@@ -166,7 +178,9 @@ export async function updateLoggerWithSink(
   const insertedLines: string[] = [];
   const withImport = insertImport(source, meta);
   if (withImport !== source) {
-    insertedLines.push(`+ import { ${meta.exportName} } from "${meta.importPath}";`);
+    insertedLines.push(
+      `+ import { ${meta.exportName} } from "${meta.importPath}";`,
+    );
   }
   const updated = appendSinkToArray(withImport, meta);
 
@@ -175,11 +189,13 @@ export async function updateLoggerWithSink(
   }
 
   if (updated !== withImport) {
-    insertedLines.push(`+ ${meta.sinkExpression} appended to init() sinks array`);
+    insertedLines.push(
+      `+ ${meta.sinkExpression} appended to init() sinks array`,
+    );
   }
 
   if (!dryRun) {
-    await fs.writeFile(loggerPath, updated, "utf8");
+    await fs.writeFile(runtimePath, updated, "utf8");
   }
   return { insertedLines };
 }

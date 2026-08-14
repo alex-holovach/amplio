@@ -6,7 +6,7 @@ import {
   init,
   memorySink,
   resetConfigForTests,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 const PostCreated = defineEvent(
   "post.created",

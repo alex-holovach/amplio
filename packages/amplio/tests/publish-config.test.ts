@@ -9,8 +9,8 @@ type PackageJson = {
   name: string;
   publishConfig?: { access?: string };
   engines?: { node?: string };
-  peerDependencies?: { zod?: string };
-  peerDependenciesMeta?: { zod?: { optional?: boolean } };
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
 };
 
 function readPackageJson(relativePath: string): PackageJson {
@@ -40,15 +40,10 @@ describe("publish config", () => {
     expect(cli.engines?.node).toBe(">=20");
   });
 
-  it('@useamplio/amplio peerDependencies.zod === "^3.0.0 || ^4.0.0"', () => {
+  it("keeps schema and provider dependencies out of the core runtime", () => {
     const pkg = readPackageJson("packages/amplio/package.json");
     expect(pkg.name).toBe("@useamplio/amplio");
-    expect(pkg.peerDependencies?.zod).toBe("^3.0.0 || ^4.0.0");
-  });
-
-  it("@useamplio/amplio peerDependenciesMeta.zod.optional === true", () => {
-    const pkg = readPackageJson("packages/amplio/package.json");
-    expect(pkg.name).toBe("@useamplio/amplio");
-    expect(pkg.peerDependenciesMeta?.zod?.optional).toBe(true);
+    expect(pkg.dependencies ?? {}).toEqual({});
+    expect(pkg.peerDependencies ?? {}).toEqual({});
   });
 });

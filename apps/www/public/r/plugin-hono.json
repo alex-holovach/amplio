@@ -1,0 +1,75 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "plugin-hono",
+  "title": "Hono Plugin",
+  "description": "Hono boundary Plugin that closes one HTTP Event per request.",
+  "type": "registry:lib",
+  "dependencies": [
+    "hono@^4.7.4",
+    "@useamplio/amplio@^0.1.0-alpha.16"
+  ],
+  "registryDependencies": [
+    "@useamplio/event-http-request",
+    "@useamplio/runtime"
+  ],
+  "meta": {
+    "amplio": {
+      "kind": "plugin",
+      "role": "boundary",
+      "recipeVersion": "1.0.0",
+      "coreRange": ">=0.1.0-alpha.16 <1",
+      "providerRanges": {
+        "hono": ">=4 <5"
+      },
+      "testedProviderVersions": {
+        "hono": {
+          "minimum": "4.0.0",
+          "latest": "4.13.2"
+        }
+      },
+      "events": [
+        {
+          "id": "http.request",
+          "version": 1,
+          "semanticDigest": "sha256-0907ef8a9cc8957a6e1b7fc6038d832319dc7a0c2f2b32764d6e2e9fb4f474ce"
+        }
+      ],
+      "semanticDigest": "sha256-166a77128834d0958ea50d1aa95bd768dda65c16e43d55076383bcd5ea4994c8",
+      "nativeTransform": {
+        "version": 1,
+        "digest": "sha256-36c04f03711637ebaa16746836cbff4fec1e28660f65c30f6deafd81ef689b51"
+      },
+      "wiringActions": [
+        {
+          "type": "register-boundary",
+          "export": "HonoPlugin",
+          "description": "Register before Hono routes with app.use."
+        }
+      ],
+      "privacy": {
+        "includes": [
+          "request_id",
+          "http.method",
+          "http.route",
+          "http.status"
+        ],
+        "excludes": [
+          "url",
+          "path",
+          "query",
+          "headers",
+          "cookies",
+          "body"
+        ]
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "registry/plugins/hono.ts",
+      "target": "~/telemetry/plugins/hono.ts",
+      "type": "registry:lib",
+      "content": "import \"../runtime.js\";\n\nimport type { Context, MiddlewareHandler, Next } from \"hono\";\nimport { HttpRequest, resolveRequestId } from \"../events/http-request.js\";\n\nconst handleRequest = HttpRequest.handle(\n  async (context: Context, next: Next) => {\n    await next();\n  },\n  {\n    input: ({ args: [context] }) => ({\n      request_id: resolveRequestId(context.req.header(\"x-request-id\")),\n      http: { method: context.req.method },\n    }),\n    result: ({ args: [context] }) => ({\n      http: {\n        route: context.req.routePath || undefined,\n        status: context.res.status,\n      },\n    }),\n    success: ({ args: [context] }) => context.res.status < 400,\n    error: ({ args: [context] }) => ({\n      http: {\n        route: context.req.routePath || undefined,\n      },\n    }),\n  },\n);\n\n/** Hono boundary Plugin: application handlers remain ordinary Hono handlers. */\nexport function HonoPlugin(): MiddlewareHandler {\n  return handleRequest;\n}\n"
+    }
+  ]
+}

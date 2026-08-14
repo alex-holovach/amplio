@@ -1,105 +1,153 @@
 ---
 title: Frameworks
-description: Hono, Next.js, Express, and Fastify middleware wiring.
+description: Framework Plugins own truthful request lifecycle without polluting handlers.
 ---
+
+A framework Plugin opens one root Event around the framework's real lifecycle. Application handlers
+remain ordinary framework handlers and never receive mutable telemetry state.
+
+Amplio vNext requires Node.js 20 or newer and `node:async_hooks`. Hono on worker runtimes, Next Edge
+routes, browsers, Deno, and Cloudflare Workers are not supported in this release. Use the Next
+Node.js runtime and load `telemetry/runtime.ts` behind the `NEXT_RUNTIME === "nodejs"` guard.
 
 ## Hono
 
-```bash
-npx @useamplio/cli@alpha init --service my-app --middleware hono --event auth.user.signed_up --yes
+Hono's outer chain has one natural async seam: `await next()`.
+
+```ts
+// telemetry/plugins/hono.ts
+const handleRequest = HttpRequest.handle(
+  async (context, next) => {
+    await next();
+  },
+  {
+    input: ({ args: [context] }) => ({
+      request_id: resolveRequestId(context.req.header("x-request-id")),
+      http: { method: context.req.method },
+    }),
+    result: ({ args: [context] }) => ({
+      http: {
+        route: context.req.routePath || undefined,
+        status: context.res.status,
+      },
+    }),
+    success: ({ args: [context] }) => context.res.status < 400,
+  },
+);
+
+export function HonoPlugin(): MiddlewareHandler {
+  return handleRequest;
+}
 ```
 
-```typescript
-import { Hono } from "hono";
-import { amplioMiddleware } from "./telemetry/middleware/hono";
-
+```ts
 const app = new Hono();
-app.use("*", amplioMiddleware());
+app.use("*", HonoPlugin());
 ```
 
-```typescript
-import { getRequestLogger } from "./telemetry/middleware/hono";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
-
-app.post("/signup", async (c) => {
-  getRequestLogger(c)
-    .child(AuthUserSignedUp)
-    .set({ user: { id: "u_123" }, signup: { method: "email" } })
-    .emit();
-  // two rows: http.request spine (middleware) + auth.user.signed_up, same request_id
-  return c.json({ ok: true });
-});
-```
-
-To add fields to the request row itself (no separate row): `getRequestLogger(c).set({ user: { id } })` — the middleware emits the `http.request` spine when the response finishes.
+The Event sees the matched route and final response, including responses produced by Hono error
+hooks. If the middleware chain rejects before Hono exposes a final response, the Event omits
+`http.status` instead of inventing one. Incoming request IDs are accepted only when the complete
+value matches `[A-Za-z0-9_-]{1,128}`; every other value is replaced before projection.
 
 ## Next.js App Router
 
-```bash
-npx @useamplio/cli@alpha init --service my-app --middleware next --event auth.user.signed_up --yes
+Next route handlers return the final `Response`, so a function wrapper is truthful:
+
+```ts
+// telemetry/plugins/next.ts
+export function withAmplio(route, handler) {
+  return HttpRequest.handle(handler, {
+    input: ({ args: [request] }) => ({
+      request_id: resolveRequestId(request.headers.get("x-request-id")),
+      http: { method: request.method, route },
+    }),
+    result: ({ result }) => ({ http: { status: result.status } }),
+    success: ({ result }) => result.status < 400,
+  });
+}
 ```
 
-```typescript
-import { withAmplio } from "@/telemetry/middleware/next";
-import { getLogger } from "@useamplio/amplio";
-import { AuthUserSignedUp } from "@/telemetry/events/auth/user-signed-up";
-import { NextResponse } from "next/server";
+```ts
+async function ordersRoute(request: NextRequest) {
+  return Response.json(await placeOrder(await request.json()), {
+    status: 201,
+  });
+}
 
-export const GET = withAmplio(async () => {
-  getLogger()
-    .child(AuthUserSignedUp)
-    .set({ user: { id: "u_123" }, signup: { method: "email" } })
-    .emit();
-  return NextResponse.json({ ok: true });
-});
+export const POST = withAmplio("/api/orders", ordersRoute);
 ```
 
-The runtime imports `node:async_hooks` at module top level — never import `telemetry/logger` or call `getLogger()` from a `"use client"` component. Event definitions from `@useamplio/amplio/events` are client-safe.
+Both arguments are required: `withAmplio(handler)` is a type error. The explicit route must be a
+stable template, never a raw path containing customer identifiers or query values.
 
 ## Express
 
-```bash
-npx @useamplio/cli@alpha add middleware express
-npx @useamplio/cli@alpha add event auth.user.signed_up
+Express completion belongs to the response, not the handler return value. The Plugin returns the
+complete route layer list and must be spread first:
+
+```ts
+app.get(
+  "/orders/:id",
+  ...withAmplioRoute("/orders/:id", requireAuth, validate, showOrder),
+);
 ```
 
-```typescript
-import { amplioMiddleware, getRequestLogger } from "./telemetry/middleware/express";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
+The first layer opens `HttpRequest` with `openEvent()`. Bound `finish` and `close` listeners settle
+it after the response. The final error layer captures delegated errors while allowing the
+application's normal error handler to produce the real status.
 
-app.use(amplioMiddleware());
-
-app.post("/signup", (req, res) => {
-  getRequestLogger(req) // or req.amplio
-    .child(AuthUserSignedUp)
-    .set({ user: { id: "u_123" }, signup: { method: "email" } })
-    .emit();
-  res.json({ ok: true });
-});
-```
+Every supplied route handler, including auth and validation, runs inside the Event.
 
 ## Fastify
 
-```bash
-npx @useamplio/cli@alpha add middleware fastify
-npx @useamplio/cli@alpha add event auth.user.signed_up
+Fastify exposes the complete lifecycle as hooks:
+
+```ts
+const app = Fastify();
+await app.register(FastifyPlugin);
 ```
 
-```typescript
-import { amplioPlugin, getRequestLogger } from "./telemetry/middleware/fastify";
-import { AuthUserSignedUp } from "./telemetry/events/auth/user-signed-up";
+The Plugin opens in `onRequest`, remembers native error state in `onError`, and settles in
+`onResponse`. That includes status changes made by `onSend`. `onRequestAbort` cancels the Event and
+releases retained state.
 
-await app.register(amplioPlugin);
+## tRPC
 
-app.post("/signup", async (request) => {
-  getRequestLogger(request) // or request.amplio
-    .child(AuthUserSignedUp)
-    .set({ user: { id: "u_123" }, signup: { method: "email" } })
-    .emit();
-  return { ok: true };
+The tRPC Plugin owns a repeated duration Event for query and mutation execution:
+
+```ts
+export const HttpRequest = event({
+  id: "http.request",
+  version: 1,
+  schema: HttpRequestFields,
+  tree: {
+    rpc: TrpcPlugin.events,
+  },
 });
 ```
 
-## tRPC v11
+Use the Plugin at procedure construction:
 
-When `@trpc/server` is detected alongside Next.js, `init` scaffolds `telemetry/middleware/trpc.ts`. See [create-t3-app](/docs/next-t3).
+```ts
+export const publicProcedure = t.procedure.use(TrpcPlugin());
+export const protectedProcedure = t.procedure.use(TrpcPlugin());
+```
+
+tRPC v11 resolves downstream failures as `{ ok: false, error }`. The open-code Plugin detects that
+native result, marks the nested Event failed, and returns the original resolved value unchanged.
+Batched requests preserve procedure invocation order inside the enclosing HTTP Event.
+Subscriptions pass through unchanged because this middleware seam cannot observe stream completion.
+
+## Lifecycle truth table
+
+| Framework | Open                  | Close                            | Stable route source        |
+| --------- | --------------------- | -------------------------------- | -------------------------- |
+| Hono      | outer `app.use` chain | after `await next()`             | `context.req.routePath`    |
+| Next      | route wrapper entry   | returned `Response` or rejection | explicit wrapper argument  |
+| Express   | first route layer     | response `finish` or `close`     | explicit wrapper argument  |
+| Fastify   | `onRequest`           | `onResponse` or abort            | `request.routeOptions.url` |
+| tRPC      | query/mutation entry  | native result or rejection       | `options.path`             |
+
+If a framework cannot expose truthful completion through a returned function, its Plugin must use
+native hooks and `openEvent()` rather than pretending a handler return owns the lifecycle.

@@ -5,7 +5,9 @@ import { dirname, join } from "node:path";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const bundlePath = join(root, "../dist/index.js");
-const targetBytes = 8 * 1024;
+// Full bounded delivery and privacy isolation are the vNext baseline.
+// Keep the complete main runtime below 10 KiB gzip without deleting safeguards.
+const targetBytes = 10 * 1024;
 
 const source = readFileSync(bundlePath);
 const gzipped = gzipSync(source);

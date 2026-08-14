@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineEvent, init, logger, resetConfigForTests } from "../src/index.js";
+import { defineEvent, init, logger, resetConfigForTests } from "../src/legacy.js";
 
 beforeEach(() => {
   resetConfigForTests();

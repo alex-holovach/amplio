@@ -32,11 +32,10 @@ export function resolveProjectPaths(cwd: string, telemetryDir = "telemetry") {
     root,
     telemetry,
     events: path.join(telemetry, "events"),
-    middleware: path.join(telemetry, "middleware"),
+    plugins: path.join(telemetry, "plugins"),
     sinks: path.join(telemetry, "sinks"),
     enrichers: path.join(telemetry, "enrichers"),
-    integrations: path.join(telemetry, "integrations"),
-    logger: path.join(telemetry, "logger.ts"),
+    runtime: path.join(telemetry, "runtime.ts"),
     config: path.join(root, "amplio.json"),
   };
 }

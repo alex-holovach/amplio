@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { trpcErrorHttpStatus } from "../src/index.js";
+import { trpcErrorHttpStatus } from "../src/legacy.js";
 
 describe("trpcErrorHttpStatus", () => {
   it("maps known tRPC error codes to HTTP status", () => {

@@ -5,7 +5,7 @@ import {
   resetConfigForTests,
   type LogRecord,
   type Sink,
-} from "../src/index.js";
+} from "../src/legacy.js";
 
 const capture = (): { records: LogRecord[]; sink: Sink } => {
   const records: LogRecord[] = [];

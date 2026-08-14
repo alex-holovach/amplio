@@ -1,208 +1,300 @@
-# REQUIREMENTS.md — amplio
+# Product requirements — amplio
 
-Product requirements for **amplio**: schema-first wide-event telemetry with shadcn-style open code.
+Amplio provides open-code semantic Events assembled automatically by Plugins at native application
+and provider seams.
+
+This Event/Plugin model supersedes the alpha Logger, fact, operation, component, workload,
+integration, and middleware model.
 
 ## Problem
 
-Teams want **structured, queryable observability** without:
+Most observability libraries make application authors repeatedly choose both meaning and mechanics:
 
-- Scattered `console.log` / `logger.info` lines that agents and humans must grep
-- Black-box logging libraries whose behavior cannot be reviewed in PRs
-- Untyped payloads that drift (`userId` vs `user_id` vs `account.id`)
-- Heavy platforms that own the schema away from the application repo
+```ts
+getLogger()
+  .set({ user: { id: user.id } })
+  .emit();
+```
 
-**evlog** popularized wide events (one rich event per unit of work) but keeps schemas optional via module augmentation and ships primarily as an npm runtime.
+The call site still invents field names, privacy policy, merge behavior, lifecycle, outcome, and
+signal selection. Every call site creates another dialect and business code becomes coupled to
+telemetry mechanics.
 
-**amplio** targets teams that want **evlog's mental model** with **shadcn's ownership model**: typed event definitions live in the repo, install as files, and diff like normal code.
+Amplio moves those decisions into editable Plugin code and a declared Event tree. Applications
+select an instrumented provider at construction and a root Event at a framework or worker boundary.
+Ordinary calls then contribute automatically.
+
+## Product thesis
+
+- An **Event** is a typed semantic node. A root Event represents one complete unit of work and owns
+  the complete declared output tree.
+- A **Plugin** is editable open code that connects a native framework, library, SDK, or local seam to
+  exact Event definitions.
+- One boundary invocation produces at most one immutable Event record before sampling.
+- Business code does not retrieve, receive, mutate, or finalize a logger or Event.
+
+Boundary, seam, tree, observation, and sink describe roles or configuration. They are not additional
+customer-facing semantic primitives.
 
 ## Goals
 
-1. **Schema-first events** — important domain events are declared before use.
-2. **Wide events** — accumulate context, emit once per request/job/run.
-3. **Open code** — `telemetry/` is part of the application, not hidden in `node_modules`.
-4. **Tiny runtime** — `@useamplio/amplio` stays small, dependency-light, and immutable in API shape.
-5. **shadcn-native DX** — `npx @useamplio/cli@alpha add …` and `npx shadcn add @useamplio/…` scaffold registry items.
-6. **Agent-friendly output** — nested JSON, stable field names, self-describing event names.
+1. **Ordinary business code** — application/domain code contains no telemetry mechanics.
+2. **Two-concept model** — Event and Plugin are the only public semantic concepts.
+3. **Declared document ownership** — one root Event reveals every nested placement.
+4. **Native instrumentation** — Plugins attach through documented construction, hook, middleware,
+   interceptor, or callback seams.
+5. **Open-code ownership** — schemas, projections, provider hooks, privacy rules, sinks, and Event
+   composition live in the customer's repository.
+6. **Behavioral transparency** — instrumentation cannot change application-visible behavior.
+7. **Bounded determinism** — cardinality, memory, size, deadlines, diagnostics, delivery, and updates
+   have explicit finite behavior.
+8. **Privacy by construction** — Plugins select safe fields explicitly and delivery fails closed.
+9. **Transactional installation** — CLI operations never claim success for an inert, partial, or
+   ambiguously wired Plugin.
 
-## Non-goals (v0)
+The deletion test is mandatory: removing Amplio wrappers must change observability only.
 
-- Log aggregation hosting or a SaaS control plane
-- Replacing metrics/tracing vendors (integrate via sinks)
-- Free-form printf logging as a first-class feature
-- Visual dashboard or query UI
-- Supporting every framework in v0 (examples cover Hono, Express, Fastify, Next.js, standalone; expand further via registry)
+## Non-goals
 
-## Users
-
-| Persona | Need |
-|---|---|
-| Application developer | Add typed events and middleware without learning a large API |
-| Platform / infra engineer | Audit sinks, redaction, and enrichers in repo |
-| AI coding agent | Parse one wide JSON event per unit of work with stable schemas |
-| OSS contributor | Extend registry items (events, integrations) with clear conventions |
-
-## Core concepts
-
-### Wide event
-
-A single JSON object representing one unit of work (HTTP request, background job, CLI invocation). Context is merged over time via `.set()` and finalized with `.emit()`.
-
-### Event schema
-
-A named, typed definition (`domain.entity.action`) created with `defineEvent`. Schemas validate at emit time (and optionally on set, per spec).
-
-### Logger scope
-
-- **Request-scoped** — middleware creates the logger; handlers call `useLogger()`.
-- **Standalone** — caller uses `logger.create()` for scripts and workers.
-
-### Registry item
-
-A shadcn-compatible installable unit that copies or merges files into `telemetry/`.
+- A hosted observability backend, query UI, or control plane
+- Free-form `info`, `warn`, or `debug` logging as the primary model
+- A mutable request context exposed to application code
+- One record per nested Event occurrence
+- Replacing every metric or distributed trace use case
+- Treating the Event tree as a causal or distributed trace DAG
+- Automatic inference of domain meaning
+- Automatic wrapping of unknown SDK methods or arbitrary imports
+- Magical mutation of existing provider imports
+- Implicit capture of detached or fire-and-forget work
+- Browser, edge, Deno, or worker support while v1 relies on Node async context
 
 ## Functional requirements
 
-### FR-1 Init
+### FR-1 Public surface
 
-`npx @useamplio/cli@alpha init` scaffolds:
+The main package MUST export `event`, `init`, `flush`, and the Event/schema/record/sink/configuration
+types required to use them.
 
+Advanced open-code Plugins import `plugin`, `openEvent`, and authoring types from
+`@useamplio/amplio/plugin`. Definition-aware assertions and test sinks may live under
+`@useamplio/amplio/testing`.
+
+The main entrypoint MUST NOT export logger accessors/builders, `defineFact`, `defineOperation`,
+`defineComponent`, `defineWorkload`, placement wrappers, vendor types, or global observation tools.
+
+`init()` MUST return `void`. `runtime.ts` exports no logger, client, mutable Event, or accessor.
+
+### FR-2 Event definitions
+
+`event()` MUST define:
+
+- a stable lowercase dot-separated semantic `id`;
+- a positive integer wire `version`;
+- a host-owned Standard Schema-compatible object schema;
+- timing, defaulting to `"duration"`;
+- cardinality, defaulting to `"single"`, or finite `{ many: { max } }`;
+- an optional declared child tree; and
+- an optional finite duration override.
+
+Every Event has opaque process-local identity. Exact identity, never an ID string, structural match,
+generic assertion, or registry lookup, determines attachment.
+
+A duration Event exposes `handle()` and preserves the exact public function type. An instant Event
+is nested-only. Projectors are synchronous, accept typed schema input patches, and cannot overwrite
+runtime or tree-owned fields.
+
+Schema input and output are JSON objects. `EventRecord<E>` MUST infer schema output, nested Event
+placement, duration metadata, cardinality arrays, and optional branches without degrading to `any`.
+
+### FR-3 Event tree
+
+- Plain object keys determine record placement; IDs identify schemas and diagnostics only.
+- Tree values are branded Event definitions or plain nested objects.
+- Construction safely rejects arrays, accessors, symbols, proxies that fail traversal, cycles,
+  unsafe prototype keys, reserved runtime keys, and duplicate mounts of one Event identity.
+- Definitions and trees are snapshotted and deeply frozen.
+- All mounted nested Events are optional in traffic. Empty branches are pruned and absent repeated
+  Events are omitted rather than serialized as `[]`.
+- Only duration Events may declare child trees. Each accepted duration occurrence owns an isolated
+  child frame.
+
+### FR-4 Plugins
+
+A contributor Plugin MUST:
+
+- expose a native instrumenter and a frozen `.events` subtree containing the exact definitions used
+  by that instrumenter;
+- attach only through `record()` for instant Events and `observe()` or `begin()` for duration Events
+  belonging to its own subtree;
+- preserve the provider's supported public shape, behavior, callbacks, and errors;
+- remain inert and behaviorally safe without an active root that mounts it;
+- keep mutable hook state instance-local; and
+- use documented provider hooks or methods covered by compatibility tests.
+
+A boundary Plugin owns a root lifecycle and is not mounted in the tree. Frameworks with split native
+hooks use `openEvent()` plus request-local state, not URL/user/method correlation.
+
+Plugins MUST NOT scan code, patch arbitrary imports, reflectively wrap future methods, create hidden
+roots, expose tracking helpers to business code, or spread provider objects into records.
+
+### FR-5 Behavioral transparency
+
+Removing a wrapper MUST preserve:
+
+- `this`, argument types/order/identity, overloads, and invocation count;
+- synchronous versus asynchronous behavior;
+- exact return values and thrown values;
+- native Promise identity, fulfillment values, and rejection reasons;
+- callback count, ordering, and provider hook ordering.
+
+Genuine native and cross-realm Promises may be observed without reading a user-controlled `.then`.
+Arbitrary thenables MUST remain untouched and are unsupported by `handle()`/`observe()` seams.
+
+Telemetry failure MUST NOT replace an application result or error. VNext has no production runtime
+strict mode that throws validation failures through successful work.
+
+### FR-6 Lifecycle, cardinality, and concurrency
+
+- One boundary invocation opens and closes at most one root Event.
+- Input projection runs before work; result/success or error projection runs at the boundary's true
+  completion signal.
+- A normal return defaults to `success: true`; returned failure values require an explicit
+  classifier. A throw/rejection records failure and rethrows the exact original value.
+- Duplicate singles are first-reservation-wins and diagnosed once.
+- Repeated observations reserve order before invocation, keep the first `max`, and drop newest on
+  overflow without failing provider work.
+- Rejected duplicate/overflow duration calls enter inert shadow frames so descendants cannot leak.
+- Pending observations at close are omitted and diagnosed incomplete. Late work cannot mutate a
+  closed record or attach to a later root.
+- Different nested root definitions isolate and restore context. Re-entering the same root skips
+  inner projectors and does not double-deliver.
+- Every duration Event has a finite deadline. Timeout never invents business success or failure.
+- Interleaved roots and provider instances MUST not cross-contaminate.
+
+### FR-7 Record, schema, and privacy
+
+Every delivered root MUST include:
+
+```text
+@event
+@event_version
+service
+env
+timestamp
+duration_ms
+success
 ```
-telemetry/
-  events/
-  sinks/
-  enrichers/
-  integrations/
-  logger.ts
-```
 
-- Creates config (`components.json` or amplio-specific manifest) pointing registry namespace `@useamplio`.
-- Writes a minimal `telemetry/logger.ts` that calls `init()` with default console sink.
-- Does not create `middleware/` until an middleware item is added.
+Duration nested Events additionally own `duration_ms`, `success`, and optional safe structured
+`error`. Operational health belongs under bounded `@amplio` diagnostics, never business `success`.
 
-### FR-2 Define events
+Validation uses Standard Schema-compatible structural types without a core dependency on Zod or
+another schema library. Async validation is unsupported in v1: the affected nested Event or root is
+dropped and diagnosed without changing application behavior.
 
-- Developers (or CLI) define events with `defineEvent({ name, schema })`.
-- Event names MUST match `domain.entity.action` (lowercase segments, underscores allowed in action segment).
-- Each event gets a kebab-case file under `telemetry/events/`.
-- Exported PascalCase type for payload shape.
+The runtime MUST sanitize hostile or non-JSON values safely, enforce depth/key/string/array/record
+limits, protect prototype and runtime keys, and produce a logical immutable snapshot.
 
-### FR-3 CLI add
+Generated Plugins MUST exclude passwords, secrets, tokens, cookies, authorization headers, raw
+bodies, raw URLs, query strings, and raw provider objects by default. Redaction runs before sampling
+and sinks. Redactor, sampler, or post-redaction validation failure drops the Event fail-closed.
+
+### FR-8 Runtime configuration and delivery
+
+- Each root snapshots one immutable runtime configuration generation at open.
+- Reconfiguration atomically replaces the active generation and retains only bounded retiring
+  generations.
+- Enrichers operate only on bounded operational `resource` attributes, not semantic Event fields.
+- Sampling operates on the complete redacted root; nested Events are never sampled independently.
+- Sink failures are isolated and later sinks still run.
+- Pending delivery is bounded per sink; overflow is observable and non-blocking.
+- `flush()` uses a finite timeout and start-time watermark, invokes sink flush hooks, and returns
+  completed/pending/failure counts without throwing through shutdown code.
+- Missing initialization results in no delivery and a rate-limited development diagnostic.
+- Diagnostic callbacks are bounded, isolated, non-recursive, and run outside active Event context.
+
+### FR-9 Framework truth
+
+Boundary Plugins MUST span the strongest lifecycle their framework exposes and document their exact
+completion signal.
+
+- Next.js and Hono classify the returned `Response` or thrown/rejected value.
+- Express spans the middleware chain and closes on response `finish` or `close` while preserving
+  `next(error)`.
+- Fastify spans `onRequest` through serialization, `onSend`/`onError`, and `onResponse`.
+- Queue boundaries close only after ack/nack outcome is known.
+- Streaming completion is claimed only when native completion/abort hooks are owned without wrapping
+  or replacing application results.
+- Stable route templates are recorded; raw paths and query strings are not route names.
+
+### FR-10 Open-code registry and CLI
+
+`amplio init` MUST create `telemetry/runtime.ts`, a first root Event, the detected boundary Plugin,
+and a development sink. VNext generated source uses `telemetry/events/` and `telemetry/plugins/`.
+
+Canonical grammar distinguishes Event IDs from Plugin slugs:
 
 ```bash
-npx @useamplio/cli@alpha add event auth.user.signed_up
-npx @useamplio/cli@alpha add middleware hono
-npx @useamplio/cli@alpha add sink axiom
-npx @useamplio/cli@alpha add enricher request-metadata
-npx @useamplio/cli@alpha add integration better-auth
+amplio add event billing.reconciliation
+amplio add plugin resend --event billing.reconciliation
+amplio diff plugin resend
+amplio update plugin resend
+amplio remove plugin resend
+amplio doctor --strict
 ```
 
-- Resolves registry item, writes files, installs declared peer dependencies.
-- Prints next steps (import paths, middleware wiring).
-- Safe to re-run (no clobbering user edits without confirmation).
+Registry metadata MUST declare Plugin role, recipe version, core/provider compatibility, Event IDs
+and wire versions, files, wiring actions, and privacy fields.
 
-### FR-4 shadcn registry
+Core MUST have no vendor imports or vendor peer dependencies. Provider/schema dependencies are
+owned by the host application. The CLI verifies compatible existing versions and never silently
+upgrades or downgrades them.
 
-- Registry builds from `registry/` via `pnpm registry:build`.
-- Items addressable as `@useamplio/event-auth-user-signed-up`, `@useamplio/middleware-hono`, etc.
-- Compatible with `npx shadcn@latest add @useamplio/…`.
+Default installation MUST preflight and transactionally compose source, Event tree, manifest,
+dependency state, and supported provider wiring. Ambiguous roots or seams require explicit user
+selection. `--target <relative-source-file>` MUST select only one existing contained source file,
+MUST NOT weaken native provider/import authentication, and MUST reject absolute, traversing,
+missing, non-source, or escaping targets before writes. It MUST NOT silently retarget an active
+Plugin. Repeated installation is idempotent. Updates preserve local edits through recoverable
+three-way merge. Removal does not remove the provider package.
 
-### FR-5 Wide-event lifecycle
+When a supported Next.js or Express boundary is attached manually, active installation MAY adopt it
+only after verifying its exact documented native shape. Adopted wiring remains customer-owned: add
+and remove MUST NOT rewrite it, strict doctor MUST re-verify it, and removal MUST preserve Plugin
+source while any live import or reference remains.
 
-- `.set(partial)` deep-merges nested objects (see SPEC for merge rules).
-- `.emit()` validates against schema when bound to `defineEvent`, drains to configured sinks, seals instance.
-- Post-emit mutations are ignored with a dev-only warning.
+### FR-11 Compatibility and migration
 
-### FR-6 Framework middleware
+Alpha mutable builders MAY remain temporarily under `@useamplio/amplio/legacy`. They MUST NOT be
+re-exported from main, used by generated code, or taught in current docs, and MUST be removed before
+stable v1.
 
-- Middleware creates request-scoped logger and auto-emits on response finish (or error).
-- `useLogger()` returns the same instance within the request async context.
-
-### FR-7 Sinks
-
-- Sinks are plain functions/modules in `telemetry/sinks/` registered through `init()`.
-- At least one reference sink: structured JSON to stdout.
-
-### FR-8 Enrichers
-
-- Enrichers derive context (service name, env, trace ids) and run before drain.
-- Live in `telemetry/enrichers/`; registered in `init()`.
-
-### FR-9 Integrations
-
-- Integrations connect third-party libraries (e.g. Better Auth) by calling `.set()` with documented nested shapes.
-- Ship as registry items under `telemetry/integrations/`.
-
-## Public API requirements
-
-The **only** exported runtime API from `@useamplio/amplio`:
-
-- `defineEvent`
-- `init`
-- `logger.event`
-- `logger.create`
-- `useLogger`
-- `.set()`
-- `.emit()`
-
-No `info` / `warn` / `debug` methods on the public logger.
+Migration maps workloads to root Events, facts/operations/components to nested Plugin Events,
+integrations/middleware to Plugins, and component trees to Event trees. The CLI must show the exact
+composition root that selects a newly instrumented export; creating an unused re-export is not a
+successful migration.
 
 ## Quality requirements
 
-### QR-1 Bundle size
+- The main declaration graph contains no legacy logger or vendor types.
+- Strict consumers infer schema input/output transforms, wrapper signatures, nested placement, and
+  repeated arrays through built declarations.
+- Runtime tests cover function fidelity, identity, tree safety, occurrence frames, concurrency,
+  bounds, deadlines, hostile values, validation, privacy, and delivery.
+- Registry Plugins test minimum/latest supported and excluded provider versions plus real native
+  lifecycles where available.
+- Application/domain fixtures contain no Amplio import or instrumentation vocabulary.
+- CLI operations are tested in temporary clean projects, including rollback and update conflicts.
+- Framework and standalone examples run end to end.
+- Packed cold consumers install and typecheck outside the monorepo.
+- Main runtime remains within the repository's enforced gzip budget without weakening correctness.
 
-`@useamplio/amplio` gzipped size budget: **≤ 8 KB** (benchmark enforced in CI).
+## Success criteria
 
-### QR-2 Performance
-
-Hot path (`set` + `emit` without validation) should stay suitable for per-request use; benchmarks live in `benchmarks/`.
-
-### QR-3 Type safety
-
-Inferred payload types from `defineEvent` flow through `.set()` and `.emit()`.
-
-### QR-4 Generated code quality
-
-- Prettier-compatible formatting
-- Explicit imports, no barrel re-export magic in generated files
-- Comments only where wiring is non-obvious
-
-### QR-5 Anti-slop
-
-- Primary observability path is schema-bound wide events, not string logs.
-- Encourage nested objects in schemas and CLI prompts.
-- Event names are stable identifiers suitable for dashboards and agent tools.
-
-## Differentiation from evlog
-
-| Dimension | evlog | amplio |
-|---|---|---|
-| Code location | npm package runtime | `telemetry/` open code in user repo |
-| Typing | Optional module augmentation | Schema-first `defineEvent` in repo |
-| Install model | dependency + docs | CLI + shadcn registry scaffolds |
-| Customization | hooks/adapters | edit sinks, enrichers, events directly |
-| API surface | wider (levels, helpers) | minimal: set/emit + schemas |
-
-amplio may interoperate with evlog-shaped **ideas** (wide events, structured errors) but must not copy evlog's API verbatim.
-
-## Documentation requirements
-
-- Root `README.md` — quickstart (exists).
-- `AGENTS.md` — contributor/agent instructions.
-- `REQUIREMENTS.md` — this file.
-- `SPEC.md` — technical specification + acceptance criteria.
-- Each example app README with run instructions.
-
-## Success metrics
-
-1. `npx @useamplio/cli@alpha init && npx @useamplio/cli@alpha add event …` produces a compiling TypeScript tree in under 30 seconds.
-2. A new contributor can add an event schema and see it in emitted JSON without reading core source.
-3. `@useamplio/amplio` passes size and bench gates.
-4. One example emits exactly one wide event per HTTP request in middleware mode.
-
-## Open questions
-
-- Standard Schema only vs hard Zod dependency in generated events (spec recommends Standard Schema with Zod in templates).
-- Whether `.set()` validates incrementally or only at `.emit()` (spec: emit-time required, incremental optional).
-- Head sampling in v0 vs v1.
-
-Resolve open questions in `SPEC.md` before implementation diverges.
+1. One root Event file reveals the complete semantic output placement.
+2. A provider is instrumented once at its native construction seam; downstream calls remain native.
+3. One request/job/message produces at most one immutable, type-valid root record.
+4. Two interleaved roots and identical provider requests remain isolated and deterministic.
+5. Missing, failing, or removed telemetry never changes application behavior.
+6. Plugin installation is complete, idempotent, reviewable, and recoverable.
+7. A packed strict consumer uses main, `/plugin`, and `/testing` without legacy or vendor leakage.

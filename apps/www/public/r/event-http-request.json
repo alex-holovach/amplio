@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "event-http-request",
+  "title": "HTTP Request Event",
+  "description": "Root HTTP request Event for framework boundary Plugins.",
+  "type": "registry:lib",
+  "dependencies": [
+    "zod",
+    "@useamplio/amplio@^0.1.0-alpha.16"
+  ],
+  "files": [
+    {
+      "path": "registry/events/http-request.ts",
+      "target": "~/telemetry/events/http-request.ts",
+      "type": "registry:lib",
+      "content": "import { event } from \"@useamplio/amplio\";\nimport { z } from \"zod\";\n// amplio:plugin-imports\n\nexport const HttpRequest = event({\n  id: \"http.request\",\n  version: 1,\n  schema: z.object({\n    request_id: z.string(),\n    http: z.object({\n      method: z.string(),\n      route: z.string().optional(),\n      status: z.number().int().optional(),\n    }),\n  }),\n  tree: {\n    // amplio:plugins\n  },\n});\n\nexport function resolveRequestId(value: unknown): string {\n  if (typeof value === \"string\" && /^[A-Za-z0-9_-]{1,128}$/.test(value)) {\n    return value;\n  }\n  return crypto.randomUUID();\n}\n"
+    }
+  ]
+}

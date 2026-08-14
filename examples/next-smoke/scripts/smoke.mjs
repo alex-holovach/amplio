@@ -90,7 +90,12 @@ process.on("SIGTERM", () => {
 
 async function waitReady(timeoutMs = 60000) {
   const start = Date.now();
-  const readyHints = ["Ready in", "started server on", "Local:", `localhost:${port}`];
+  const readyHints = [
+    "Ready in",
+    "started server on",
+    "Local:",
+    `localhost:${port}`,
+  ];
   while (Date.now() - start < timeoutMs) {
     const combined = `${stdout}\n${stderr}`;
     if (readyHints.some((h) => combined.includes(h))) return;
@@ -106,11 +111,14 @@ try {
   await waitReady();
 
   // First compile can lag after "Ready"
+  const hostileRequestId = "tenant/../../orders?token=private";
   let res;
   let lastErr;
   for (let i = 0; i < 30; i++) {
     try {
-      res = await fetch(`http://127.0.0.1:${port}/api/health`);
+      res = await fetch(`http://127.0.0.1:${port}/api/health?token=secret`, {
+        headers: { "x-request-id": hostileRequestId },
+      });
       if (res.ok) break;
     } catch (error) {
       lastErr = error;
@@ -125,7 +133,12 @@ try {
   }
 
   const body = await res.json();
-  if (body?.ok !== true) fail(`unexpected health body: ${JSON.stringify(body)}`);
+  if (body?.ok !== true)
+    fail(`unexpected health body: ${JSON.stringify(body)}`);
+
+  const failureRes = await fetch(`http://127.0.0.1:${port}/api/failure`);
+  if (failureRes.status !== 503)
+    fail(`GET /api/failure returned ${failureRes.status}`);
 
   // allow emit + next log flush
   await new Promise((r) => setTimeout(r, 300));
@@ -137,17 +150,17 @@ try {
     .filter((l) => l.startsWith("{") && l.endsWith("}"));
 
   let record;
+  let failureRecord;
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line);
       if (
-        parsed?.http?.path === "/api/health" ||
-        parsed?.route?.name === "health" ||
+        parsed?.http?.route === "/api/health" ||
         parsed?.service === "next-smoke"
       ) {
-        record = parsed;
-        break;
+        if (parsed?.http?.route === "/api/health") record = parsed;
       }
+      if (parsed?.http?.route === "/api/failure") failureRecord = parsed;
     } catch {
       // ignore
     }
@@ -156,22 +169,55 @@ try {
   if (!record) {
     fail(`no JSON wide-event for /api/health in output:\n${combined}`);
   }
+  if (!failureRecord || failureRecord.http?.status !== 503) {
+    fail(`no status-503 wide event for /api/failure in output:\n${combined}`);
+  }
+  if (failureRecord.success !== false) {
+    fail(`expected /api/failure success false, got ${failureRecord.success}`);
+  }
 
   if (record.http?.status !== 200 && record.status !== 200) {
-    fail(`expected status 200, got ${JSON.stringify({ http: record.http, status: record.status })}`);
+    fail(
+      `expected status 200, got ${JSON.stringify({ http: record.http, status: record.status })}`,
+    );
   }
 
   if (!record.http || typeof record.http !== "object") {
     fail("emitted record missing nested http object");
+  }
+  if ("search" in record.http || JSON.stringify(record).includes("secret")) {
+    fail(`query string leaked into wide event: ${JSON.stringify(record.http)}`);
+  }
+  if (record.http?.route !== "/api/health") {
+    fail(
+      `expected stable route /api/health, got ${JSON.stringify(record.http)}`,
+    );
+  }
+  if (failureRecord.http?.route !== "/api/failure") {
+    fail(
+      `expected stable route /api/failure, got ${JSON.stringify(failureRecord.http)}`,
+    );
+  }
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(record.request_id)) {
+    fail(
+      `expected generated request_id, got ${JSON.stringify(record.request_id)}`,
+    );
+  }
+  if (
+    record.request_id === hostileRequestId ||
+    JSON.stringify(record).includes(hostileRequestId)
+  ) {
+    fail(
+      `hostile request ID leaked into wide event: ${JSON.stringify(record)}`,
+    );
   }
 
   console.log("next-smoke ok");
   console.log(
     JSON.stringify({
       service: record.service,
+      event: record["@event"],
       http: record.http,
-      route: record.route,
-      status: record.status,
     }),
   );
   cleanup();

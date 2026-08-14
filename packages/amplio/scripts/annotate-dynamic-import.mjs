@@ -6,11 +6,14 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
+const distDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../dist",
+);
 const MAGIC = "/* webpackIgnore: true */ /* @vite-ignore */";
 
 let annotated = 0;
-for (const file of ["index.js", "events.js"]) {
+for (const file of ["index.js", "legacy.js"]) {
   const filePath = path.join(distDir, file);
   let source;
   try {
@@ -46,4 +49,6 @@ if (annotated === 0) {
   );
   process.exit(1);
 }
-console.log(`annotate-dynamic-import: annotated ${annotated} dynamic import(s) with webpackIgnore`);
+console.log(
+  `annotate-dynamic-import: annotated ${annotated} dynamic import(s) with webpackIgnore`,
+);

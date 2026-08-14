@@ -1,66 +1,109 @@
 # @useamplio/cli
 
-CLI for scaffolding amplio telemetry in your repo (`init`, `add`, `list`, `doctor`).
+Scaffold editable Event definitions, framework and contributor Plugins, sinks,
+and resource enrichers under `telemetry/`.
 
-## Binary
+## Start
+
+This walkthrough assumes the host application contains one `new Hono()` composition root and one
+unambiguous `new Resend(...)` construction. Missing Plugin dependencies are shown as one exact,
+range-checked runtime/development install plan and require approval (or `--yes`); Amplio never
+brings providers into core or invents provider clients. Before running the package manager, the CLI
+states which tracked files it can restore and that caches, `node_modules`, and dependency
+lifecycle-script side effects are not reversible.
 
 ```bash
-npx @useamplio/cli@alpha init
-npx @useamplio/cli@alpha add event post.created
-npx @useamplio/cli@alpha add event auth.user.signed_up
+npx @useamplio/cli@alpha init --service my-app
+npx @useamplio/cli@alpha add plugin hono
+npx @useamplio/cli@alpha add event order.placed
+npx @useamplio/cli@alpha add plugin resend --event http.request
+npx @useamplio/cli@alpha doctor --strict
 ```
 
-The published package exposes the `amplio` bin (`dist/cli.js`). Run `amplio <command> --help` for per-command flags (e.g. `amplio init --help`, `amplio doctor --help`).
+`init` creates `telemetry/runtime.ts`, `telemetry/events/http-request.ts`, and a console sink. The
+explicit `add plugin hono` step installs and attaches the framework Plugin at one unambiguous
+`new Hono()` seam. Runtime configuration exports no logger; application code keeps its native
+types, return values, and errors.
 
 ## Commands
 
-| Command | Purpose |
-|---|---|
-| `amplio init` | Scaffold `telemetry/`, `amplio.json`, `components.json`; auto-detect framework |
-| `amplio add <kind> <id>` | Install registry item (event, middleware, sink, enricher, integration) |
-| `amplio list [kind]` | List registry items (human-readable; `--json` for machine output) |
-| `amplio doctor` | Validate wiring; `--fix` regenerates missing event barrel exports and prunes stale ones (targets that no longer resolve); `--strict` exits non-zero on warnings (CI gate); `--verbose` always prints the verification epilogue |
+| Command                                       | Purpose                                         |
+| --------------------------------------------- | ----------------------------------------------- |
+| `amplio init`                                 | Create the Event + Plugin telemetry root        |
+| `amplio add event <id>`                       | Create an editable duration-root Event          |
+| `amplio add plugin <id>`                      | Install an editable boundary Plugin             |
+| `amplio add plugin <id> --event <id>`         | Mount a contributor Plugin under one root Event |
+| `amplio add plugin <id> --target <file>`      | Select one contained native composition file    |
+| `amplio diff plugin <id>`                     | Compare local, installed, and registry source   |
+| `amplio update plugin <id>`                   | Three-way merge a compatible recipe update      |
+| `amplio remove plugin <id>`                   | Remove safe source/wiring; retain provider deps |
+| `amplio add sink <id>`                        | Install and wire an operational sink            |
+| `amplio add enricher <id>`                    | Install and wire a resource enricher            |
+| `amplio list [event\|plugin\|sink\|enricher]` | List available items; add `--json` for machines |
+| `amplio doctor [--strict]`                    | Validate runtime, Event, and Plugin wiring      |
+| `amplio paths`                                | Add the `~telemetry/*` TypeScript path alias    |
+| `amplio smoke <url>`                          | Verify request-in/Event-out with the JSON sink  |
 
-### `init` highlights
+Run `amplio <command> --help` for current flags.
 
-- **`--yes`** — non-interactive: auto-scaffold detected middleware + starter event
-- **`--event <name\|none>`** — starter event name; defaults to `auth.user.signed_up` only when auto-scaffolding **and** an auth dependency (better-auth, Clerk, etc.) is detected — otherwise no event is scaffolded
-- **`--paths`** — writes `~telemetry/*` tsconfig path alias (JSONC-safe)
-- **`--skip-install`** — skip installing `@useamplio/amplio` and `zod`
+Event ids need at least two lowercase dot-separated segments, such as
+`http.request` or `order.placed`. Existing open-code files are skipped unless
+`--force` is provided.
 
-### `add event` output
+Plugin adds accept `--dry-run` and perform the same compatibility, Event-tree, and native-seam
+preflight without writing files. Successful installs cache the exact recipe source under
+`.amplio/bases/sha256-….json` and reversible wiring state under `.amplio/installs/<id>.json`.
+`amplio update plugin` preserves non-overlapping edits with a three-way merge and refuses native,
+semantic, privacy, or overlapping-source migrations. `amplio remove plugin` never deletes edited
+Plugin source and never removes the host-owned provider dependency.
 
-When adding an event, the CLI prints either **`matched registry event`** (installed from bundled registry) or **`generated starter schema`** (synthetic Zod stub for names not in the registry).
+`--target <relative-source-file>` narrows native seam discovery to one existing, contained source
+file. Absolute, traversing, missing, non-source, and symlink-escaping targets fail before writes.
+The selected file must still contain exactly one authenticated supported seam; `--target` does not
+guess between multiple seams in the same file or weaken provider binding checks. An active Plugin
+cannot be silently retargeted—remove and reinstall it explicitly.
 
-Event names need **two or more** dot-separated segments (`post.created`, `auth.user.signed_up`, `email.sent`).
+Hono, Fastify, constructor, Better Auth, and tRPC recipes can be wired into the selected file.
+Next.js and Express remain explicit: first copy with `--source-only`, attach the documented wrapper
+by hand, then rerun active installation with `--target`. Amplio verifies that exact native route and
+records its wiring as customer-owned without rewriting it. `doctor --strict` re-verifies adopted
+wiring. Removal never rewrites customer-owned code and refuses to delete Plugin source while a live
+import or reference remains; detach it, then retry removal.
 
-### `add` and `--force`
+Commit `telemetry/`, `amplio.json`, and `.amplio/` together. The lifecycle cache contains source
+snapshots, never runtime Event data, and is required for reproducible update and removal on another
+machine.
 
-For `event`, `middleware`, `sink`, `enricher`, and `integration`, `amplio add` skips files that already exist under `telemetry/` and prints `skipped existing … file`. Pass `--force` to overwrite those paths with the registry template instead.
+## Generated layout
 
-## Registry resolution
+```text
+telemetry/
+├── events/http-request.ts
+├── plugins/hono.ts
+├── sinks/console.ts
+├── enrichers/
+└── runtime.ts
+```
 
-The CLI **bundles** a copy of `registry/` (copied at build time into `packages/cli/registry`). Build-time `copy-registry.mjs` uses a lock file so concurrent `pnpm` builds don't race on `packages/cli/registry/`. Resolution order:
-
-1. **`amplio.json`** — if the project has a `registry` field, that path is used (absolute or relative to the project root). Useful for pinning a fork or local registry checkout.
-2. **Bundled package registry** — `registry/registry.json` next to the installed package (`dist/`).
-3. **Monorepo checkout fallback** — repo-root `registry/` when developing from source.
-
-Example `amplio.json` override:
+`amplio.json` is CLI-only configuration:
 
 ```json
 {
   "telemetryDir": "telemetry",
-  "registry": "../amplio/registry",
   "packageManager": "pnpm",
-  "typescript": true
+  "registry": "../optional-local-registry"
 }
 ```
 
-`amplio.json` is plain JSON, safe to hand-edit, and read only by the CLI (never by the runtime). Fields: `telemetryDir` (scaffold/validate target, default `telemetry`), `packageManager` (used for install commands and tips), `typescript` (generated-file defaults), `registry` (optional local registry path, see above).
+Prefer `amplio add` when an install needs semantic placement or composition
+root rewriting. Registry JSON under `public/r/` remains compatible with raw
+shadcn file installs.
 
-Run `pnpm registry:build` from the monorepo root to refresh hosted `public/r/` JSON; `pnpm --filter @useamplio/cli build` refreshes the CLI bundle.
+## Development
 
-## Bundled docs
-
-The published tarball includes [ALPHA.md](./ALPHA.md) and [docs/](./docs/) copied from the monorepo at build time — same content as the GitHub repo root.
+```bash
+pnpm --filter @useamplio/cli build
+pnpm --filter @useamplio/cli test
+pnpm --filter @useamplio/cli typecheck
+pnpm registry:build
+```
