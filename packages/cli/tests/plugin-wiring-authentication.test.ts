@@ -34,7 +34,7 @@ async function makeProject(
         private: true,
         type: "module",
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
           ...dependencies,
         },

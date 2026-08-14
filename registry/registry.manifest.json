@@ -24,7 +24,7 @@
       "role": "boundary",
       "recipeVersion": "1.0.0",
       "nativeTransform": { "version": 1 },
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": { "hono": ">=4 <5" },
       "testedProviderVersions": {
         "hono": { "minimum": "4.0.0", "latest": "4.13.2" }
@@ -54,7 +54,7 @@
       "role": "boundary",
       "recipeVersion": "1.0.0",
       "nativeTransform": { "version": 1 },
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": { "express": ">=4 <6" },
       "testedProviderVersions": {
         "express": { "minimum": "4.0.0", "latest": "5.2.1" }
@@ -85,7 +85,7 @@
       "role": "boundary",
       "recipeVersion": "1.0.0",
       "nativeTransform": { "version": 1 },
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": { "fastify": ">=5 <6" },
       "testedProviderVersions": {
         "fastify": { "minimum": "5.0.0", "latest": "5.12.0" }
@@ -115,7 +115,7 @@
       "role": "boundary",
       "recipeVersion": "1.0.0",
       "nativeTransform": { "version": 1 },
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": { "next": ">=15 <17" },
       "testedProviderVersions": {
         "next": { "minimum": "15.0.0", "latest": "16.3.1" }
@@ -145,7 +145,7 @@
       "role": "contributor",
       "recipeVersion": "1.0.0",
       "nativeTransform": { "version": 1 },
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": { "@trpc/server": ">=11 <12" },
       "testedProviderVersions": {
         "@trpc/server": { "minimum": "11.0.0", "latest": "11.18.0" }
@@ -195,10 +195,10 @@
       "role": "contributor",
       "recipeVersion": "1.0.0",
       "nativeTransform": { "version": 1 },
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": { "better-auth": ">=1.2.1 <2" },
       "testedProviderVersions": {
-        "better-auth": { "minimum": "1.2.1", "latest": "1.6.28" }
+        "better-auth": { "minimum": "1.2.1", "latest": "1.6.29" }
       },
       "description": "Better Auth contributor Plugin using native after hooks for privacy-safe sign-in and sign-up semantics.",
       "source": "plugins/better-auth.ts",
@@ -239,13 +239,87 @@
       }
     },
     {
+      "name": "plugin-ai-sdk",
+      "title": "AI SDK Plugin",
+      "kind": "plugin",
+      "role": "contributor",
+      "recipeVersion": "1.1.0",
+      "nativeTransform": { "version": 2 },
+      "coreRange": ">=0.1.0-alpha.17 <1",
+      "providerRanges": { "ai": ">=7 <8" },
+      "testedProviderVersions": {
+        "ai": { "minimum": "7.0.0", "latest": "7.0.65" }
+      },
+      "description": "AI SDK contributor Plugin using native telemetry for promise operations and an exact-result streamText wrapper for streamed completion.",
+      "source": "plugins/ai-sdk.ts",
+      "target": "telemetry/plugins/ai-sdk.ts",
+      "dependencies": ["zod", "@useamplio/amplio", "ai@^7.0.0"],
+      "events": [{ "id": "ai.operation", "version": 2 }],
+      "placement": { "branch": "ai" },
+      "provider": {
+        "package": "ai",
+        "instrumenter": "AiSdkPlugin",
+        "seam": "telemetry-registration",
+        "registrar": "registerTelemetry"
+      },
+      "wiringActions": [
+        {
+          "type": "mount-event-subtree",
+          "description": "Mount AiSdkPlugin.events under the ai branch."
+        },
+        {
+          "type": "register-telemetry",
+          "export": "AiSdkPlugin",
+          "description": "Register AiSdkPlugin() once through AI SDK's native registerTelemetry startup seam."
+        }
+      ],
+      "privacy": {
+        "includes": [
+          "operation",
+          "normalized provider category",
+          "normalized model family",
+          "bounded generation settings",
+          "finish_reason",
+          "token counts",
+          "aggregate item, step, tool, and result counts",
+          "bounded timeout and performance durations",
+          "duration_ms",
+          "success"
+        ],
+        "excludes": [
+          "call ids",
+          "function ids",
+          "raw provider ids",
+          "raw model ids",
+          "raw seeds",
+          "prompts",
+          "system prompts",
+          "messages",
+          "generated content",
+          "reasoning text",
+          "tool names",
+          "tool arguments",
+          "tool results",
+          "embedding values",
+          "documents",
+          "queries",
+          "headers",
+          "provider options",
+          "provider metadata",
+          "request bodies",
+          "response bodies",
+          "raw errors"
+        ]
+      }
+    },
+    {
       "name": "plugin-resend",
       "title": "Resend Plugin",
       "kind": "plugin",
       "role": "contributor",
       "recipeVersion": "1.0.0",
       "nativeTransform": { "version": 1 },
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": { "resend": ">=4 <5" },
       "testedProviderVersions": {
         "resend": { "minimum": "4.0.0", "latest": "4.8.0" }

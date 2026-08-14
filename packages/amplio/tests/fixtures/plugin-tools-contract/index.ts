@@ -81,6 +81,12 @@ const ContractPlugin = plugin({
       operation: "begin",
       detail: { attempt: 1 },
     });
+    const retained = begin(
+      events.duration,
+      { operation: "retained", detail: { attempt: 1 } },
+      { retainParent: true },
+    );
+    retained.end();
     handle.update({ detail: { attempt: 2 } });
     handle.end({ operation: "ended" }, { success: true });
     handle.fail(new Error("failed"), { operation: "failed" });
@@ -109,6 +115,8 @@ const ContractPlugin = plugin({
     begin(UnownedDuration);
     // @ts-expect-error begin() retains the owned Event input schema.
     begin(events.duration, { detail: { attempt: "invalid" } });
+    // @ts-expect-error retainParent is a boolean opt-in.
+    begin(events.duration, undefined, { retainParent: "yes" });
     // @ts-expect-error Handle updates retain the owned Event input schema.
     handle.update({ detail: { attempt: "invalid" } });
 

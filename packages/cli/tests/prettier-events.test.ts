@@ -62,7 +62,7 @@ describe("generated event prettier defaults", () => {
       path.join(cwd, "package.json"),
       JSON.stringify({
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
         },
       }),

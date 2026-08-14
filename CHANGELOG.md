@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.17] - 2026-08-14
+
 ### Breaking: Event and Plugin vNext
 
 - The public semantic model is now two concepts: an `Event` declares a versioned schema and nested
@@ -33,9 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `amplio init --yes` creates `telemetry/runtime.ts`, `telemetry/events/http-request.ts`, a console
   sink, and the supported detected boundary Plugin. `amplio add event` creates project-owned Events;
   `amplio add plugin <name> --event <id>` copies and composes editable Plugin source.
-- Registry Plugins cover Hono, Express, Fastify, Next.js route handlers, tRPC, Better Auth, and
-  Resend. Framework boundaries own the root Event lifecycle; contributor Plugins mount under an
-  explicit branch and use native hooks, middleware, constructors, or clients.
+- Registry Plugins cover Hono, Express, Fastify, Next.js route handlers, tRPC, Better Auth, Resend,
+  and AI SDK 7. Framework boundaries own the root Event lifecycle; contributor Plugins mount under
+  an explicit branch and use native hooks, middleware, constructors, clients, or the AI SDK's
+  registered telemetry lifecycle plus its exact-result `streamText` wrapper.
 - Provider packages are not dependencies of the core library. Registry manifests declare compatible
   host-owned provider ranges, Plugin wiring actions, Event placement, and minimum/current tested
   versions. The CLI shows the complete dependency and wiring plan, requires approval before a
@@ -48,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Registry CI executes every Plugin against the minimum and latest supported provider release and
   rejects the declared upper/prerelease boundary. The compatibility fixtures exercise native
   lifecycles, concurrency, privacy, and provider-specific TypeScript resolution.
+- AI SDK `ai.operation` v2 adds normalized provider/model categories, bounded generation settings,
+  usage, aggregate lifecycle counts, and performance timings while continuing to exclude prompts,
+  generated content, tool payloads, embeddings, raw identifiers, metadata, and raw errors.
 - Generated code and examples use only `telemetry/events`, `telemetry/plugins`,
   `telemetry/sinks`, and `telemetry/runtime.ts`; the discarded component, integration, middleware,
   workload, and logger vocabulary is not part of the vNext interface.

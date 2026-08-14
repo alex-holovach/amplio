@@ -973,6 +973,34 @@ export function hasActiveContributorProviderWiring(options: {
     }
   }
 
+  if (provider.seam === "telemetry-registration") {
+    const registrarBindings = importedProviderBindings(
+      source,
+      provider.package,
+      provider.registrar,
+    );
+    let registrations = 0;
+    for (const registrar of registrarBindings) {
+      for (const pluginBinding of pluginBindings) {
+        const pattern = new RegExp(
+          `\\b${escapeRegExp(registrar)}\\s*\\(\\s*${escapeRegExp(pluginBinding)}\\s*\\(\\s*\\)\\s*\\)`,
+          "g",
+        );
+        for (const match of mask.matchAll(pattern)) {
+          const depth = delimiterDepth(mask, match.index!);
+          if (
+            depth.braces === 0 &&
+            depth.brackets === 0 &&
+            depth.parentheses === 0
+          ) {
+            registrations += 1;
+          }
+        }
+      }
+    }
+    return registrations === 1;
+  }
+
   if (provider.seam !== "trpc-middleware") return false;
   const initializerBindings = importedProviderBindings(
     source,
@@ -1863,6 +1891,62 @@ async function planProviderWiring(
         relativeImport(composition.path, pluginPath, extensionlessImports),
       ),
     };
+  }
+  if (provider.seam === "telemetry-registration") {
+    const compositionPath = path.resolve(
+      path.dirname(pluginPath),
+      "..",
+      "runtime.ts",
+    );
+    const relativeCompositionPath = path
+      .relative(cwd, compositionPath)
+      .replace(/\\/g, "/");
+    if (target !== undefined && target !== relativeCompositionPath) {
+      throw new Error(
+        `AI SDK telemetry registration target must be ${relativeCompositionPath}. No files were changed.`,
+      );
+    }
+    if (!(await pathExists(compositionPath))) {
+      throw new Error(
+        `AI SDK telemetry registration requires ${relativeCompositionPath}. Run amplio init first. No files were changed.`,
+      );
+    }
+    const source = await fs.readFile(compositionPath, "utf8");
+    const pluginSpecifier = relativeImport(
+      compositionPath,
+      pluginPath,
+      extensionlessImports,
+    );
+    if (
+      hasActiveContributorProviderWiring({
+        source,
+        provider,
+        pluginModuleSpecifiers: [pluginSpecifier],
+      })
+    ) {
+      return { path: compositionPath, source };
+    }
+    const withProviderImport = addImport(
+      source,
+      `import { ${provider.registrar} } from "${provider.package}";`,
+    );
+    const withPluginImport = addImport(
+      withProviderImport,
+      `import { ${provider.instrumenter} } from "${pluginSpecifier}";`,
+    );
+    const wired = `${withPluginImport.trimEnd()}\n\n${provider.registrar}(${provider.instrumenter}());\n`;
+    if (
+      !hasActiveContributorProviderWiring({
+        source: wired,
+        provider,
+        pluginModuleSpecifiers: [pluginSpecifier],
+      })
+    ) {
+      throw new Error(
+        "AI SDK telemetry registration verification failed after transformation. No files were changed.",
+      );
+    }
+    return { path: compositionPath, source: wired };
   }
   throw new Error(
     `Plugin wiring seam "${provider.seam}" is not implemented; use --source-only. No files were changed.`,

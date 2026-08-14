@@ -87,7 +87,7 @@ describe("Plugin provider boundary preflight", () => {
             name: "provider-boundary-fixture",
             private: true,
             dependencies: {
-              "@useamplio/amplio": "0.1.0-alpha.16",
+              "@useamplio/amplio": "0.1.0-alpha.17",
               [provider]: spec,
               zod: "^3.24.2",
             },

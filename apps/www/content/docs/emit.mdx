@@ -127,6 +127,11 @@ attempt.end({ provider_id: "pay_1" });
 Use `fail(error, fields)` for failure and `cancel(reasonCode)` when native lifecycle ends without a
 semantic result. `run()` and `bind()` preserve Event context across callbacks.
 
+For lazy work that starts synchronously but completes after the surrounding function returns, pass
+`{ retainParent: true }` as the third argument to `begin()`. This never delays the application
+return; it delays only Event delivery until the handle settles. The Event's finite duration deadline
+still applies and records a safe timeout failure if the native lifecycle never completes.
+
 Boundary Plugin authors use `openEvent()` for the same reason when a framework exposes completion
 through response hooks rather than a returned Promise.
 
@@ -135,7 +140,8 @@ through response hooks rather than a returned Promise.
 - A thrown value or rejected native Promise keeps exact application behavior.
 - A duration Event receives `success: false` and bounded structured error metadata.
 - A returned HTTP status can use a `success` projector, such as `status < 400`.
-- A nested observation still pending when the root closes is omitted and diagnosed.
+- A normal nested observation still pending when the root closes is omitted and diagnosed; an
+  explicitly retained observation defers delivery until settlement or its finite deadline.
 - Duplicate single occurrences reserve first and drop later writes.
 - Bounded arrays drop newest overflow and report truncation metadata.
 

@@ -74,7 +74,7 @@ async function writeRegistry(
             kind: "plugin",
             role: "contributor",
             recipeVersion,
-            coreRange: ">=0.1.0-alpha.16 <1",
+            coreRange: ">=0.1.0-alpha.17 <1",
             providerRanges: { resend: ">=4 <5" },
             source: "plugins/resend.ts",
             target: "telemetry/plugins/resend.ts",
@@ -131,7 +131,7 @@ async function makeProject(): Promise<{
         private: true,
         type: "module",
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           hono: "^4.7.4",
           resend: "^4.0.0",
           zod: "^3.24.2",
@@ -473,7 +473,7 @@ describe("public Plugin lifecycle", () => {
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -646,7 +646,7 @@ describe("public Plugin lifecycle", () => {
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -694,7 +694,7 @@ describe("public Plugin lifecycle", () => {
               kind: "plugin",
               role: "boundary",
               recipeVersion: "1.0.0",
-              coreRange: ">=0.1.0-alpha.16 <1",
+              coreRange: ">=0.1.0-alpha.17 <1",
               providerRanges: { hono: ">=4 <5" },
               source: "plugins/hono.ts",
               target: "telemetry/plugins/hono.ts",
@@ -920,7 +920,7 @@ describe("public Plugin lifecycle", () => {
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },

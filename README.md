@@ -270,6 +270,7 @@ amplio init
 amplio add plugin hono
 amplio add event billing.reconciliation
 amplio add plugin resend --event http.request
+amplio add plugin ai-sdk --event http.request
 amplio diff plugin resend
 amplio update plugin resend
 amplio remove plugin resend
@@ -280,6 +281,10 @@ amplio doctor --strict
 
 Generated telemetry is TypeScript and remains ordinary editable source. The CLI does not overwrite
 an existing open-code file unless `--force` is explicit.
+
+The AI SDK Plugin emits normalized provider/model categories, bounded generation settings, usage,
+aggregate lifecycle counts, timings, and outcome. It does not copy system prompts, messages,
+generated content, tool payloads, embeddings, raw provider/model IDs, headers, metadata, or errors.
 
 ## Philosophy
 

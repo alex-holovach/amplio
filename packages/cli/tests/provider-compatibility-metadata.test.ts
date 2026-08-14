@@ -54,7 +54,7 @@ function exclusiveUpperBoundary(range: string): string {
 describe("registry Plugin provider compatibility metadata", () => {
   it("declares exact minimum and latest tested provider versions for every Plugin", async () => {
     const plugins = await readPluginItems();
-    expect(plugins).toHaveLength(7);
+    expect(plugins).toHaveLength(8);
 
     for (const plugin of plugins) {
       const ranges = Object.entries(plugin.providerRanges);
@@ -153,7 +153,7 @@ describe("registry Plugin provider compatibility metadata", () => {
       }>;
     };
 
-    expect(matrix.include).toHaveLength(14);
+    expect(matrix.include).toHaveLength(16);
     for (const plugin of await readPluginItems()) {
       const [provider, versions] = Object.entries(
         plugin.testedProviderVersions!,

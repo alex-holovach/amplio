@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.16",
+    "@useamplio/amplio@^0.1.0-alpha.17",
     "@trpc/server@^11.0.0"
   ],
   "meta": {
@@ -14,7 +14,7 @@
       "kind": "plugin",
       "role": "contributor",
       "recipeVersion": "1.0.0",
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": {
         "@trpc/server": ">=11 <12"
       },

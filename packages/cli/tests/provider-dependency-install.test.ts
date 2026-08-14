@@ -32,7 +32,7 @@ const ResendPlugin: RegistryItem = {
   kind: "plugin",
   role: "contributor",
   recipeVersion: "1.0.0",
-  coreRange: ">=0.1.0-alpha.16 <1",
+  coreRange: ">=0.1.0-alpha.17 <1",
   providerRanges: { resend: ">=4 <5" },
   dependencies: ["zod", "@useamplio/amplio", "resend@^4.0.0"],
   provider: {
@@ -50,7 +50,7 @@ const ExpressPlugin: RegistryItem = {
   kind: "plugin",
   role: "boundary",
   recipeVersion: "1.0.0",
-  coreRange: ">=0.1.0-alpha.16 <1",
+  coreRange: ">=0.1.0-alpha.17 <1",
   providerRanges: { express: ">=4 <6" },
   dependencies: ["express@^4.21.2", "@useamplio/amplio"],
   devDependencies: ["@types/express@^5.0.0"],
@@ -74,7 +74,7 @@ async function makeProject(
         name: "provider-fixture",
         private: true,
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
           ...(providerRange ? { resend: providerRange } : {}),
         },
@@ -160,7 +160,7 @@ describe("Plugin provider dependency install", () => {
           name: "dev-only-runtime-fixture",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             resend: "^4.2.0",
           },
           devDependencies: {
@@ -192,7 +192,7 @@ describe("Plugin provider dependency install", () => {
       devDependencies: Record<string, string>;
     };
     expect(pkg.dependencies).toMatchObject({
-      "@useamplio/amplio": "0.1.0-alpha.16",
+      "@useamplio/amplio": "0.1.0-alpha.17",
       zod: "^3.24.0 || ^4.0.0",
       resend: "^4.2.0",
     });
@@ -209,7 +209,7 @@ describe("Plugin provider dependency install", () => {
           name: "dev-only-provider-fixture",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             zod: "^3.24.2",
           },
           devDependencies: { resend: "^4.2.0" },
@@ -247,7 +247,7 @@ describe("Plugin provider dependency install", () => {
           name: "express-dependency-fixture",
           private: true,
           type: "module",
-          dependencies: { "@useamplio/amplio": "0.1.0-alpha.16" },
+          dependencies: { "@useamplio/amplio": "0.1.0-alpha.17" },
         },
         null,
         2,
@@ -403,7 +403,7 @@ describe("Plugin provider dependency install", () => {
           private: true,
           packageManager: "pnpm@10.0.0",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             zod: "^3.24.2",
           },
         },

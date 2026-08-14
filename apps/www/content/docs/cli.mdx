@@ -105,12 +105,12 @@ files, and symlinks escaping the project fail before writes. Selection does not 
 binding checks or choose between multiple supported seams inside the same file. Once active, a
 Plugin cannot be retargeted implicitly; remove and reinstall it explicitly.
 
-Hono, Fastify, constructor, Better Auth, and tRPC recipes can be wired into a selected file. Next.js
-and Express use verified manual adoption: copy the recipe with `--source-only`, attach its documented
-route wrapper, then rerun `add plugin` with `--target`. The CLI verifies the exact native route and
-records the customer-owned seam without rewriting it. `doctor --strict` re-verifies adopted wiring.
-Removal never rewrites it and refuses to delete Plugin source until its live import or reference is
-detached.
+Hono, Fastify, constructor, Better Auth, tRPC, and AI SDK telemetry recipes use authenticated native
+seams. The AI SDK seam is the generated runtime and does not require `--target`. Next.js and Express
+use verified manual adoption: copy the recipe with `--source-only`, attach its documented route
+wrapper, then rerun `add plugin` with `--target`. The CLI verifies the exact native route and records
+the customer-owned seam without rewriting it. `doctor --strict` re-verifies adopted wiring. Removal
+never rewrites it and refuses to delete Plugin source until its live import or reference is detached.
 
 ```bash
 npx @useamplio/cli@alpha add plugin next --source-only
@@ -121,6 +121,77 @@ npx @useamplio/cli@alpha add plugin express --source-only
 # spread ...withAmplioRoute("/stable/route", ...handlers) into that same Express route
 npx @useamplio/cli@alpha add plugin express --target src/app.ts
 ```
+
+### AI SDK
+
+AI SDK 7 exposes one native telemetry integration seam for promise-based generation, embeddings, and
+reranking. Install and mount the Plugin under an existing root Event:
+
+```bash
+npx @useamplio/cli@alpha add plugin ai-sdk --event http.request
+```
+
+The command installs the editable recipe and writes an explicit startup registration:
+
+```ts
+// telemetry/runtime.ts
+import { registerTelemetry } from "ai";
+import { AiSdkPlugin } from "./plugins/ai-sdk.js";
+
+registerTelemetry(AiSdkPlugin());
+```
+
+Application code continues calling `generateText`, `embed`, `embedMany`, and `rerank` from `ai`.
+`streamText` needs the Plugin's explicit wrapper because AI SDK starts global stream telemetry after
+the function has already returned. The wrapper composes the native completion, abort, and error
+callbacks without consuming the stream or replacing the returned result:
+
+```ts
+import { streamText } from "ai";
+import { AiSdkPlugin } from "./telemetry/plugins/ai-sdk.js";
+
+const observedStreamText = AiSdkPlugin.streamText(streamText);
+const result = observedStreamText({ model, prompt });
+```
+
+An unwrapped `streamText` call remains completely untouched and does not claim an incomplete AI
+Event. The Plugin records the operation, a fixed provider category and model family, bounded
+generation settings, output kind, finish reason, token usage, aggregate item/step/tool/result
+counts, bounded performance timings, duration, and outcome. Numeric settings are range-checked,
+rounded, or bucketed before they enter the Event.
+
+```json
+{
+  "@event": "ai.operation",
+  "@event_version": 2,
+  "operation": "generate_text",
+  "provider": "openai",
+  "model_family": "gpt-5",
+  "max_retries": 2,
+  "max_output_tokens": 1024,
+  "reasoning_effort": "low",
+  "output_kind": "text",
+  "tool_count": 3,
+  "finish_reason": "stop",
+  "input_tokens": 418,
+  "output_tokens": 96,
+  "step_count": 2,
+  "tool_call_count": 1,
+  "duration_ms": 842,
+  "success": true
+}
+```
+
+Provider and model values are normalized to fixed low-cardinality enums; raw provider/model IDs are
+never copied. The Plugin also excludes call/function IDs, raw seeds, system prompts, prompts,
+messages, generated content, reasoning text, tool names/definitions/arguments/results, embeddings,
+documents, queries, URLs, headers, provider options/metadata, request/response bodies, and raw
+errors.
+
+This recipe supports `ai >=7 <8`. AI SDK 7 is ESM-only and requires Node.js 22 or newer, which is a
+stronger requirement than Amplio core. Per-call `telemetry: { isEnabled: false }` disables the
+integration, and a per-call `telemetry.integrations` list replaces global integrations for that
+call.
 
 ## Diff, update, or remove a Plugin
 

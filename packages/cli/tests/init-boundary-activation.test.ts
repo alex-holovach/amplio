@@ -27,7 +27,7 @@ describe("init boundary activation", () => {
           name: "hono-collision",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -70,7 +70,7 @@ describe("init boundary activation", () => {
         name: "configured-hono",
         private: true,
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           hono: "^4.7.4",
           zod: "^3.24.2",
         },
@@ -133,7 +133,7 @@ describe("init boundary activation", () => {
             name: "managed-hono",
             private: true,
             dependencies: {
-              "@useamplio/amplio": "0.1.0-alpha.16",
+              "@useamplio/amplio": "0.1.0-alpha.17",
               hono: "^4.7.4",
               zod: "^3.24.2",
             },
@@ -183,7 +183,7 @@ describe("init boundary activation", () => {
           name: "customized-hono",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -232,7 +232,7 @@ describe("init boundary activation", () => {
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -287,7 +287,7 @@ app.get("/health", (context) => context.json({ ok: true }));
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -351,7 +351,7 @@ export const app = new Hono();
           name: "hono-api",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -403,7 +403,7 @@ export const app = new Hono();
           name: "hono-api",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -452,7 +452,7 @@ export const app = new Hono();
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -502,7 +502,7 @@ export const app = new Hono();
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },
@@ -552,7 +552,7 @@ export const app = new Hono();
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },

@@ -31,7 +31,7 @@ describe("fresh generated project", () => {
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             zod: "^3.24.2",
           },

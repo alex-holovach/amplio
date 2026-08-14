@@ -18,6 +18,7 @@ const REQUIRED_BASE_ITEMS = [
   "plugin-next",
   "plugin-trpc",
   "plugin-better-auth",
+  "plugin-ai-sdk",
   "plugin-resend",
   "runtime",
   "sink-console",
@@ -151,6 +152,47 @@ describe("vNext registry build", () => {
       'from "@useamplio/amplio/plugin"',
     );
     expect(resend.files?.[0]?.content).toContain("export const ResendPlugin");
+
+    const aiSdk = JSON.parse(
+      await readFile(
+        path.join(repoRoot, "public/r/plugin-ai-sdk.json"),
+        "utf8",
+      ),
+    );
+    expect(aiSdk.title).toBe("AI SDK Plugin");
+    expect(aiSdk.files?.[0]?.target).toBe("~/telemetry/plugins/ai-sdk.ts");
+    expect(aiSdk.files?.[0]?.content).toContain("export const AiSdkPlugin");
+    expect(aiSdk.files?.[0]?.content).toContain('id: "ai.operation"');
+    expect(aiSdk.files?.[0]?.content).toContain("version: 2");
+    expect(aiSdk.files?.[0]?.content).toContain("model_family");
+    expect(aiSdk.files?.[0]?.content).toContain("MAX_AGGREGATE_COUNT");
+    expect(aiSdk.files?.[0]?.content).not.toContain("call_id");
+    expect(aiSdk.meta?.amplio).toMatchObject({
+      recipeVersion: "1.1.0",
+      events: [
+        {
+          id: "ai.operation",
+          version: 2,
+          semanticDigest: expect.stringMatching(/^sha256-[a-f0-9]{64}$/),
+        },
+      ],
+      nativeTransform: {
+        version: 2,
+        digest: expect.stringMatching(/^sha256-[a-f0-9]{64}$/),
+      },
+      privacy: {
+        includes: expect.arrayContaining([
+          expect.stringMatching(/provider/u),
+          expect.stringMatching(/model family/u),
+        ]),
+        excludes: expect.arrayContaining([
+          "prompts",
+          "messages",
+          "generated content",
+          "raw errors",
+        ]),
+      },
+    });
   });
 
   it("publishes the hardened HTTP, Next, and OTLP contracts", async () => {
@@ -276,9 +318,14 @@ describe("vNext registry build", () => {
     for (const item of manifest.items.filter(
       (candidate) => candidate.kind === "plugin",
     )) {
-      expect(item.nativeTransform?.version, `${item.name} native version`).toBe(
-        1,
-      );
+      expect(
+        item.nativeTransform?.version,
+        `${item.name} native version`,
+      ).toEqual(expect.any(Number));
+      expect(
+        item.nativeTransform?.version,
+        `${item.name} positive native version`,
+      ).toBeGreaterThan(0);
       const generated = JSON.parse(
         await readFile(
           path.join(repoRoot, "public/r", `${item.name}.json`),
@@ -310,7 +357,7 @@ describe("vNext registry build", () => {
         metadata?.nativeTransform,
         `${item.name} native transform`,
       ).toEqual({
-        version: 1,
+        version: item.nativeTransform?.version,
         digest: expect.stringMatching(/^sha256-[a-f0-9]{64}$/),
       });
     }

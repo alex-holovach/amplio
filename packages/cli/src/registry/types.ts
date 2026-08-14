@@ -28,6 +28,12 @@ export type RegistryPluginProvider =
       instrumenter: string;
       seam: "better-auth-plugin";
       factory: "betterAuth";
+    }
+  | {
+      package: string;
+      instrumenter: string;
+      seam: "telemetry-registration";
+      registrar: "registerTelemetry";
     };
 
 export interface RegistryItem {

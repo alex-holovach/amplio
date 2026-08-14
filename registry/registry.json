@@ -11,7 +11,7 @@
       "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "files": [
         {
@@ -30,7 +30,7 @@
       "type": "registry:lib",
       "dependencies": [
         "hono@^4.7.4",
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "registryDependencies": [
         "@useamplio/event-http-request",
@@ -41,7 +41,7 @@
           "kind": "plugin",
           "role": "boundary",
           "recipeVersion": "1.0.0",
-          "coreRange": ">=0.1.0-alpha.16 <1",
+          "coreRange": ">=0.1.0-alpha.17 <1",
           "providerRanges": {
             "hono": ">=4 <5"
           },
@@ -105,7 +105,7 @@
       "type": "registry:lib",
       "dependencies": [
         "express@^4.21.2",
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "devDependencies": [
         "@types/express@^5.0.0"
@@ -119,7 +119,7 @@
           "kind": "plugin",
           "role": "boundary",
           "recipeVersion": "1.0.0",
-          "coreRange": ">=0.1.0-alpha.16 <1",
+          "coreRange": ">=0.1.0-alpha.17 <1",
           "providerRanges": {
             "express": ">=4 <6"
           },
@@ -183,7 +183,7 @@
       "type": "registry:lib",
       "dependencies": [
         "fastify@^5.2.1",
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "registryDependencies": [
         "@useamplio/event-http-request",
@@ -194,7 +194,7 @@
           "kind": "plugin",
           "role": "boundary",
           "recipeVersion": "1.0.0",
-          "coreRange": ">=0.1.0-alpha.16 <1",
+          "coreRange": ">=0.1.0-alpha.17 <1",
           "providerRanges": {
             "fastify": ">=5 <6"
           },
@@ -258,7 +258,7 @@
       "type": "registry:lib",
       "dependencies": [
         "next@^15.2.4",
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "registryDependencies": [
         "@useamplio/event-http-request",
@@ -269,7 +269,7 @@
           "kind": "plugin",
           "role": "boundary",
           "recipeVersion": "1.0.0",
-          "coreRange": ">=0.1.0-alpha.16 <1",
+          "coreRange": ">=0.1.0-alpha.17 <1",
           "providerRanges": {
             "next": ">=15 <17"
           },
@@ -333,7 +333,7 @@
       "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.16",
+        "@useamplio/amplio@^0.1.0-alpha.17",
         "@trpc/server@^11.0.0"
       ],
       "meta": {
@@ -341,7 +341,7 @@
           "kind": "plugin",
           "role": "contributor",
           "recipeVersion": "1.0.0",
-          "coreRange": ">=0.1.0-alpha.16 <1",
+          "coreRange": ">=0.1.0-alpha.17 <1",
           "providerRanges": {
             "@trpc/server": ">=11 <12"
           },
@@ -421,7 +421,7 @@
       "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.16",
+        "@useamplio/amplio@^0.1.0-alpha.17",
         "better-auth@^1.2.1"
       ],
       "meta": {
@@ -429,14 +429,14 @@
           "kind": "plugin",
           "role": "contributor",
           "recipeVersion": "1.0.0",
-          "coreRange": ">=0.1.0-alpha.16 <1",
+          "coreRange": ">=0.1.0-alpha.17 <1",
           "providerRanges": {
             "better-auth": ">=1.2.1 <2"
           },
           "testedProviderVersions": {
             "better-auth": {
               "minimum": "1.2.1",
-              "latest": "1.6.28"
+              "latest": "1.6.29"
             }
           },
           "events": [
@@ -504,13 +504,120 @@
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "plugin-ai-sdk",
+      "title": "AI SDK Plugin",
+      "description": "AI SDK contributor Plugin using native telemetry for promise operations and an exact-result streamText wrapper for streamed completion.",
+      "type": "registry:lib",
+      "dependencies": [
+        "zod",
+        "@useamplio/amplio@^0.1.0-alpha.17",
+        "ai@^7.0.0"
+      ],
+      "meta": {
+        "amplio": {
+          "kind": "plugin",
+          "role": "contributor",
+          "recipeVersion": "1.1.0",
+          "coreRange": ">=0.1.0-alpha.17 <1",
+          "providerRanges": {
+            "ai": ">=7 <8"
+          },
+          "testedProviderVersions": {
+            "ai": {
+              "minimum": "7.0.0",
+              "latest": "7.0.65"
+            }
+          },
+          "events": [
+            {
+              "id": "ai.operation",
+              "version": 2,
+              "semanticDigest": "sha256-949d07b9d9746a501d77d1db4f44f4ebb057dde60cc86970fc42800750ec6604"
+            }
+          ],
+          "semanticDigest": "sha256-7e7d17cacd6a1e0d568bcf53976ed2182d9e86fcb86003a88350133fcf2d250e",
+          "nativeTransform": {
+            "version": 2,
+            "digest": "sha256-9ef4b184cc162c40f4ec909a5501facf52608542bf8565d41ef07faa776d0a9e"
+          },
+          "placement": {
+            "branch": "ai"
+          },
+          "provider": {
+            "package": "ai",
+            "instrumenter": "AiSdkPlugin",
+            "seam": "telemetry-registration",
+            "registrar": "registerTelemetry"
+          },
+          "wiringActions": [
+            {
+              "type": "mount-event-subtree",
+              "description": "Mount AiSdkPlugin.events under the ai branch."
+            },
+            {
+              "type": "register-telemetry",
+              "export": "AiSdkPlugin",
+              "description": "Register AiSdkPlugin() once through AI SDK's native registerTelemetry startup seam."
+            }
+          ],
+          "privacy": {
+            "includes": [
+              "operation",
+              "normalized provider category",
+              "normalized model family",
+              "bounded generation settings",
+              "finish_reason",
+              "token counts",
+              "aggregate item, step, tool, and result counts",
+              "bounded timeout and performance durations",
+              "duration_ms",
+              "success"
+            ],
+            "excludes": [
+              "call ids",
+              "function ids",
+              "raw provider ids",
+              "raw model ids",
+              "raw seeds",
+              "prompts",
+              "system prompts",
+              "messages",
+              "generated content",
+              "reasoning text",
+              "tool names",
+              "tool arguments",
+              "tool results",
+              "embedding values",
+              "documents",
+              "queries",
+              "headers",
+              "provider options",
+              "provider metadata",
+              "request bodies",
+              "response bodies",
+              "raw errors"
+            ]
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "registry/plugins/ai-sdk.ts",
+          "target": "~/telemetry/plugins/ai-sdk.ts",
+          "type": "registry:lib",
+          "content": "import { event } from \"@useamplio/amplio\";\nimport { plugin } from \"@useamplio/amplio/plugin\";\nimport type { streamText, Telemetry } from \"ai\";\nimport { z } from \"zod\";\n\nconst Operation = z.enum([\n  \"generate_text\",\n  \"stream_text\",\n  \"generate_object\",\n  \"stream_object\",\n  \"embed\",\n  \"embed_many\",\n  \"rerank\",\n  \"other\",\n]);\n\nconst FinishReason = z.enum([\n  \"stop\",\n  \"length\",\n  \"content_filter\",\n  \"tool_calls\",\n  \"error\",\n  \"other\",\n]);\n\nconst ReasoningEffort = z.enum([\n  \"provider-default\",\n  \"none\",\n  \"minimal\",\n  \"low\",\n  \"medium\",\n  \"high\",\n  \"xhigh\",\n]);\n\nconst Provider = z.enum([\n  \"openai\",\n  \"anthropic\",\n  \"google\",\n  \"azure_openai\",\n  \"amazon_bedrock\",\n  \"vertex\",\n  \"mistral\",\n  \"cohere\",\n  \"xai\",\n  \"groq\",\n  \"deepseek\",\n  \"perplexity\",\n  \"together\",\n  \"fireworks\",\n  \"cerebras\",\n  \"replicate\",\n  \"huggingface\",\n  \"gateway\",\n  \"other\",\n]);\n\nconst ModelFamily = z.enum([\n  \"gpt-5\",\n  \"gpt-4.1\",\n  \"gpt-4o\",\n  \"o-series\",\n  \"claude-opus\",\n  \"claude-sonnet\",\n  \"claude-haiku\",\n  \"gemini\",\n  \"llama\",\n  \"mistral\",\n  \"command\",\n  \"grok\",\n  \"deepseek\",\n  \"qwen\",\n  \"embedding\",\n  \"rerank\",\n  \"other\",\n]);\n\nconst OutputKind = z.enum([\n  \"text\",\n  \"object\",\n  \"array\",\n  \"enum\",\n  \"choice\",\n  \"json\",\n  \"no_schema\",\n  \"other\",\n]);\n\nconst MAX_TOKEN_COUNT = 1_000_000_000;\nconst MAX_AGGREGATE_COUNT = 1_000_000;\nconst MAX_RETRIES = 100;\nconst MAX_DURATION_MS = 31_536_000_000;\nconst MAX_SCAN_ITEMS = 1_024;\n\nconst AiOperation = event({\n  id: \"ai.operation\",\n  version: 2,\n  schema: z.object({\n    operation: Operation,\n    provider: Provider.optional(),\n    model_family: ModelFamily.optional(),\n    max_retries: z.number().int().nonnegative().max(MAX_RETRIES).optional(),\n    max_output_tokens: z\n      .number()\n      .int()\n      .positive()\n      .max(MAX_TOKEN_COUNT)\n      .optional(),\n    temperature: z.number().finite().min(0).max(2).optional(),\n    top_p: z.number().finite().min(0).max(1).optional(),\n    top_k: z.number().finite().nonnegative().max(1_000_000).optional(),\n    presence_penalty: z.number().finite().min(-2).max(2).optional(),\n    frequency_penalty: z.number().finite().min(-2).max(2).optional(),\n    seeded: z.boolean().optional(),\n    reasoning_effort: ReasoningEffort.optional(),\n    stop_sequence_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    output_kind: OutputKind.optional(),\n    tool_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    timeout_ms: z.number().int().nonnegative().max(MAX_DURATION_MS).optional(),\n    step_timeout_ms: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_DURATION_MS)\n      .optional(),\n    chunk_timeout_ms: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_DURATION_MS)\n      .optional(),\n    tool_timeout_ms: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_DURATION_MS)\n      .optional(),\n    finish_reason: FinishReason.optional(),\n    input_tokens: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_TOKEN_COUNT)\n      .optional(),\n    output_tokens: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_TOKEN_COUNT)\n      .optional(),\n    total_tokens: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_TOKEN_COUNT)\n      .optional(),\n    cached_input_tokens: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_TOKEN_COUNT)\n      .optional(),\n    cache_write_input_tokens: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_TOKEN_COUNT)\n      .optional(),\n    text_tokens: z.number().int().nonnegative().max(MAX_TOKEN_COUNT).optional(),\n    reasoning_tokens: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_TOKEN_COUNT)\n      .optional(),\n    step_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    tool_call_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    tool_result_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    warning_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    model_call_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    content_part_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    file_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    source_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    response_message_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    item_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    result_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    requested_result_count: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_AGGREGATE_COUNT)\n      .optional(),\n    provider_response_ms: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_DURATION_MS)\n      .optional(),\n    step_time_ms: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_DURATION_MS)\n      .optional(),\n    tool_execution_ms: z\n      .number()\n      .int()\n      .nonnegative()\n      .max(MAX_DURATION_MS)\n      .optional(),\n  }),\n  timing: \"duration\",\n  cardinality: { many: { max: 32 } },\n  maxDurationMs: 5 * 60_000,\n});\n\ntype JsonRecord = Record<string, unknown>;\n\nfunction record(value: unknown): JsonRecord | undefined {\n  return value !== null && typeof value === \"object\"\n    ? (value as JsonRecord)\n    : undefined;\n}\n\nfunction property(value: unknown, key: string): unknown {\n  try {\n    return record(value)?.[key];\n  } catch {\n    return undefined;\n  }\n}\n\nfunction callId(value: unknown): string | undefined {\n  const candidate = property(value, \"callId\");\n  return typeof candidate === \"string\" && candidate.length <= 128\n    ? candidate\n    : undefined;\n}\n\nfunction count(value: unknown, max = MAX_TOKEN_COUNT): number | undefined {\n  return typeof value === \"number\" &&\n    Number.isSafeInteger(value) &&\n    value >= 0 &&\n    value <= max\n    ? value\n    : undefined;\n}\n\nfunction arrayLength(value: unknown): number | undefined {\n  try {\n    return Array.isArray(value)\n      ? count(value.length, MAX_AGGREGATE_COUNT)\n      : undefined;\n  } catch {\n    return undefined;\n  }\n}\n\nfunction isArray(value: unknown): boolean | undefined {\n  try {\n    return Array.isArray(value);\n  } catch {\n    return undefined;\n  }\n}\n\nfunction boundedDecimal(\n  value: unknown,\n  minimum: number,\n  maximum: number,\n): number | undefined {\n  if (\n    typeof value !== \"number\" ||\n    !Number.isFinite(value) ||\n    value < minimum ||\n    value > maximum\n  ) {\n    return undefined;\n  }\n  return Math.round(value * 100) / 100;\n}\n\nconst TIMEOUT_BUCKETS_MS = [\n  100,\n  250,\n  500,\n  1_000,\n  2_000,\n  3_000,\n  4_000,\n  5_000,\n  8_000,\n  10_000,\n  15_000,\n  30_000,\n  60_000,\n  120_000,\n  300_000,\n  600_000,\n  1_800_000,\n  3_600_000,\n  21_600_000,\n  86_400_000,\n  604_800_000,\n  2_592_000_000,\n  MAX_DURATION_MS,\n] as const;\n\nconst OUTPUT_TOKEN_BUCKETS = [\n  64,\n  128,\n  256,\n  512,\n  1_024,\n  2_048,\n  4_096,\n  8_192,\n  16_384,\n  32_768,\n  65_536,\n  131_072,\n  262_144,\n  524_288,\n  1_000_000,\n  10_000_000,\n  100_000_000,\n  MAX_TOKEN_COUNT,\n] as const;\n\nconst TOP_K_BUCKETS = [\n  1,\n  2,\n  4,\n  8,\n  16,\n  32,\n  40,\n  50,\n  64,\n  100,\n  128,\n  256,\n  512,\n  1_024,\n  4_096,\n  16_384,\n  65_536,\n  MAX_AGGREGATE_COUNT,\n] as const;\n\nfunction positiveIntegerBucket(\n  value: unknown,\n  boundaries: readonly number[],\n): number | undefined {\n  if (typeof value !== \"number\" || !Number.isSafeInteger(value) || value <= 0) {\n    return undefined;\n  }\n  return boundaries.find((boundary) => value <= boundary);\n}\n\nfunction timeoutBucketMs(value: unknown): number | undefined {\n  if (typeof value !== \"number\" || !Number.isFinite(value) || value < 0) {\n    return undefined;\n  }\n  if (value === 0) return 0;\n  return TIMEOUT_BUCKETS_MS.find((boundary) => value <= boundary);\n}\n\nfunction measuredDurationMs(value: unknown): number | undefined {\n  if (\n    typeof value !== \"number\" ||\n    !Number.isFinite(value) ||\n    value < 0 ||\n    value > MAX_DURATION_MS\n  ) {\n    return undefined;\n  }\n  return Math.round(value);\n}\n\nfunction sumDuration(total: number, value: unknown): number | undefined {\n  const candidate = measuredDurationMs(value);\n  if (candidate === undefined || total + candidate > MAX_DURATION_MS) {\n    return undefined;\n  }\n  return total + candidate;\n}\n\nfunction provider(value: unknown): z.infer<typeof Provider> | undefined {\n  if (typeof value !== \"string\" || value.length === 0 || value.length > 128) {\n    return undefined;\n  }\n  const normalized = value.toLowerCase();\n  const category = normalized.split(/[.:/]/u, 1)[0]?.replace(/_/gu, \"-\");\n  if (category === \"azure\" || category === \"azure-openai\") {\n    return \"azure_openai\";\n  }\n  if (category === \"bedrock\" || category === \"amazon-bedrock\") {\n    return \"amazon_bedrock\";\n  }\n  if (category === \"vertex\" || category === \"vertex-ai\") return \"vertex\";\n  if (category === \"anthropic\") return \"anthropic\";\n  if (category === \"openai\") return \"openai\";\n  if (category === \"google\") return \"google\";\n  if (category === \"mistral\") return \"mistral\";\n  if (category === \"cohere\") return \"cohere\";\n  if (category === \"xai\") return \"xai\";\n  if (category === \"groq\") return \"groq\";\n  if (category === \"deepseek\") return \"deepseek\";\n  if (category === \"perplexity\") return \"perplexity\";\n  if (category === \"together\") return \"together\";\n  if (category === \"fireworks\") return \"fireworks\";\n  if (category === \"cerebras\") return \"cerebras\";\n  if (category === \"replicate\") return \"replicate\";\n  if (category === \"huggingface\") return \"huggingface\";\n  if (category === \"gateway\") return \"gateway\";\n  return \"other\";\n}\n\nfunction modelFamily(value: unknown): z.infer<typeof ModelFamily> | undefined {\n  if (typeof value !== \"string\" || value.length === 0 || value.length > 128) {\n    return undefined;\n  }\n  const normalized = value.toLowerCase();\n  if (/^gpt-5(?:$|[-.:/])/u.test(normalized)) return \"gpt-5\";\n  if (/^gpt-4\\.1(?:$|[-.:/])/u.test(normalized)) return \"gpt-4.1\";\n  if (/^gpt-4o(?:$|[-.:/])/u.test(normalized)) return \"gpt-4o\";\n  if (/^o[134](?:$|[-.:/])/u.test(normalized)) return \"o-series\";\n  if (\n    /^claude(?:$|[-.:/])/u.test(normalized) &&\n    /(?:^|-)opus(?:-|$)/u.test(normalized)\n  ) {\n    return \"claude-opus\";\n  }\n  if (\n    /^claude(?:$|[-.:/])/u.test(normalized) &&\n    /(?:^|-)sonnet(?:-|$)/u.test(normalized)\n  ) {\n    return \"claude-sonnet\";\n  }\n  if (\n    /^claude(?:$|[-.:/])/u.test(normalized) &&\n    /(?:^|-)haiku(?:-|$)/u.test(normalized)\n  ) {\n    return \"claude-haiku\";\n  }\n  if (/^gemini(?:$|[-.:/])/u.test(normalized)) return \"gemini\";\n  if (/^llama(?:$|[-.:/])/u.test(normalized)) return \"llama\";\n  if (/^(?:mistral|mixtral)(?:$|[-.:/])/u.test(normalized)) {\n    return \"mistral\";\n  }\n  if (/^command(?:$|[-.:/])/u.test(normalized)) return \"command\";\n  if (/^grok(?:$|[-.:/])/u.test(normalized)) return \"grok\";\n  if (/^deepseek(?:$|[-.:/])/u.test(normalized)) return \"deepseek\";\n  if (/^qwen(?:$|[-.:/])/u.test(normalized)) return \"qwen\";\n  if (/^(?:text-)?embedding(?:$|[-.:/])/u.test(normalized)) return \"embedding\";\n  if (/^rerank(?:$|[-.:/])/u.test(normalized)) return \"rerank\";\n  return \"other\";\n}\n\nfunction outputKind(\n  value: unknown,\n  currentOperation: z.infer<typeof Operation>,\n): z.infer<typeof OutputKind> | undefined {\n  const name = property(value, \"name\");\n  const parsed = OutputKind.safeParse(name);\n  if (parsed.success) return parsed.data;\n  return currentOperation === \"generate_text\" ||\n    currentOperation === \"stream_text\"\n    ? \"text\"\n    : undefined;\n}\n\nfunction objectKeyCount(value: unknown): number | undefined {\n  const candidate = record(value);\n  if (!candidate) return undefined;\n  try {\n    let total = 0;\n    for (const key in candidate) {\n      if (!Object.prototype.hasOwnProperty.call(candidate, key)) continue;\n      total += 1;\n      if (total > MAX_SCAN_ITEMS) return undefined;\n    }\n    return total;\n  } catch {\n    return undefined;\n  }\n}\n\nfunction reasoningEffort(\n  value: unknown,\n): z.infer<typeof ReasoningEffort> | undefined {\n  const parsed = ReasoningEffort.safeParse(value);\n  return parsed.success ? parsed.data : undefined;\n}\n\nfunction operation(value: unknown): z.infer<typeof Operation> {\n  switch (value) {\n    case \"ai.generateText\":\n      return \"generate_text\";\n    case \"ai.generateObject\":\n      return \"generate_object\";\n    case \"ai.embed\":\n      return \"embed\";\n    case \"ai.embedMany\":\n      return \"embed_many\";\n    case \"ai.rerank\":\n      return \"rerank\";\n    case \"ai.streamText\":\n    case \"ai.streamObject\":\n      return \"other\";\n    default:\n      return \"other\";\n  }\n}\n\nfunction finishReason(\n  value: unknown,\n): z.infer<typeof FinishReason> | undefined {\n  const unified =\n    typeof value === \"string\" ? value : property(value, \"unified\");\n  switch (unified) {\n    case \"stop\":\n    case \"length\":\n    case \"error\":\n    case \"other\":\n      return unified;\n    case \"content-filter\":\n      return \"content_filter\";\n    case \"tool-calls\":\n      return \"tool_calls\";\n    default:\n      return undefined;\n  }\n}\n\nfunction optionalCount(\n  key: string,\n  value: unknown,\n  max = MAX_TOKEN_COUNT,\n): JsonRecord {\n  const candidate = count(value, max);\n  return candidate === undefined ? {} : { [key]: candidate };\n}\n\nfunction optionalIntegerBucket(\n  key: string,\n  value: unknown,\n  boundaries: readonly number[],\n): JsonRecord {\n  const candidate = positiveIntegerBucket(value, boundaries);\n  return candidate === undefined ? {} : { [key]: candidate };\n}\n\nfunction optionalDecimal(\n  key: string,\n  value: unknown,\n  minimum: number,\n  maximum: number,\n): JsonRecord {\n  const candidate = boundedDecimal(value, minimum, maximum);\n  return candidate === undefined ? {} : { [key]: candidate };\n}\n\nfunction optionalTimeout(key: string, value: unknown): JsonRecord {\n  const candidate = timeoutBucketMs(value);\n  return candidate === undefined ? {} : { [key]: candidate };\n}\n\nfunction performanceTotals(steps: unknown): {\n  providerResponseMs?: number;\n  stepTimeMs?: number;\n  toolExecutionMs?: number;\n} {\n  let length: number;\n  try {\n    if (!Array.isArray(steps)) return {};\n    length = steps.length;\n  } catch {\n    return {};\n  }\n  if (length > MAX_SCAN_ITEMS) return {};\n\n  let providerResponseMs = 0;\n  let stepTimeMs = 0;\n  let toolExecutionMs = 0;\n  let hasProviderResponse = false;\n  let hasStepTime = false;\n  let hasToolExecution = false;\n  let scannedToolTimings = 0;\n\n  for (let index = 0; index < length; index += 1) {\n    const performance = property(property(steps, String(index)), \"performance\");\n    const response = measuredDurationMs(\n      property(performance, \"responseTimeMs\"),\n    );\n    if (response !== undefined) {\n      const next = sumDuration(providerResponseMs, response);\n      if (next === undefined) return {};\n      providerResponseMs = next;\n      hasProviderResponse = true;\n    }\n    const step = measuredDurationMs(property(performance, \"stepTimeMs\"));\n    if (step !== undefined) {\n      const next = sumDuration(stepTimeMs, step);\n      if (next === undefined) return {};\n      stepTimeMs = next;\n      hasStepTime = true;\n    }\n    const timings = record(property(performance, \"toolExecutionMs\"));\n    if (!timings) continue;\n    try {\n      for (const key in timings) {\n        if (!Object.prototype.hasOwnProperty.call(timings, key)) continue;\n        scannedToolTimings += 1;\n        if (scannedToolTimings > MAX_SCAN_ITEMS) return {};\n        const next = sumDuration(toolExecutionMs, property(timings, key));\n        if (next === undefined) return {};\n        toolExecutionMs = next;\n        hasToolExecution = true;\n      }\n    } catch {\n      return {};\n    }\n  }\n\n  return {\n    ...(hasProviderResponse ? { providerResponseMs } : {}),\n    ...(hasStepTime ? { stepTimeMs } : {}),\n    ...(hasToolExecution || length > 0 ? { toolExecutionMs } : {}),\n  };\n}\n\nfunction endProjection(value: unknown): JsonRecord {\n  const usage = property(value, \"usage\");\n  const inputTokens =\n    count(property(usage, \"inputTokens\")) ?? count(property(usage, \"tokens\"));\n  const outputTokens = count(property(usage, \"outputTokens\"));\n  const totalTokens = count(property(usage, \"totalTokens\"));\n  const inputTokenDetails = property(usage, \"inputTokenDetails\");\n  const outputTokenDetails = property(usage, \"outputTokenDetails\");\n  const steps = property(value, \"steps\");\n  const toolCalls = property(value, \"toolCalls\");\n  const embedding = property(value, \"embedding\");\n  const ranking = property(value, \"ranking\");\n  const reason = finishReason(property(value, \"finishReason\"));\n  const { providerResponseMs, stepTimeMs, toolExecutionMs } =\n    performanceTotals(steps);\n  const warningCount = arrayLength(property(value, \"warnings\"));\n  const toolResultCount = arrayLength(property(value, \"toolResults\"));\n  const contentPartCount = arrayLength(property(value, \"content\"));\n  const fileCount = arrayLength(property(value, \"files\"));\n  const sourceCount = arrayLength(property(value, \"sources\"));\n  const responseMessageCount = arrayLength(property(value, \"responseMessages\"));\n  const modelCallCount = arrayLength(steps);\n  const embeddingLength = arrayLength(embedding);\n  const firstEmbeddingIsArray =\n    embeddingLength === undefined || embeddingLength === 0\n      ? undefined\n      : isArray(property(embedding, \"0\"));\n\n  return {\n    ...(reason ? { finish_reason: reason } : {}),\n    ...optionalCount(\"input_tokens\", inputTokens),\n    ...optionalCount(\"output_tokens\", outputTokens),\n    ...optionalCount(\n      \"total_tokens\",\n      totalTokens ??\n        (inputTokens !== undefined && outputTokens !== undefined\n          ? count(inputTokens + outputTokens)\n          : undefined),\n    ),\n    ...optionalCount(\n      \"cached_input_tokens\",\n      property(inputTokenDetails, \"cacheReadTokens\"),\n    ),\n    ...optionalCount(\n      \"cache_write_input_tokens\",\n      property(inputTokenDetails, \"cacheWriteTokens\"),\n    ),\n    ...optionalCount(\"text_tokens\", property(outputTokenDetails, \"textTokens\")),\n    ...optionalCount(\n      \"reasoning_tokens\",\n      property(outputTokenDetails, \"reasoningTokens\"),\n    ),\n    ...(modelCallCount === undefined\n      ? {}\n      : { model_call_count: modelCallCount }),\n    ...(modelCallCount === undefined ? {} : { step_count: modelCallCount }),\n    ...(arrayLength(toolCalls) === undefined\n      ? {}\n      : { tool_call_count: arrayLength(toolCalls) }),\n    ...(toolResultCount === undefined\n      ? {}\n      : { tool_result_count: toolResultCount }),\n    ...(warningCount === undefined ? {} : { warning_count: warningCount }),\n    ...(contentPartCount === undefined\n      ? {}\n      : { content_part_count: contentPartCount }),\n    ...(fileCount === undefined ? {} : { file_count: fileCount }),\n    ...(sourceCount === undefined ? {} : { source_count: sourceCount }),\n    ...(responseMessageCount === undefined\n      ? {}\n      : { response_message_count: responseMessageCount }),\n    ...(providerResponseMs === undefined\n      ? {}\n      : { provider_response_ms: providerResponseMs }),\n    ...(stepTimeMs === undefined ? {} : { step_time_ms: stepTimeMs }),\n    ...(toolExecutionMs === undefined\n      ? {}\n      : { tool_execution_ms: toolExecutionMs }),\n    ...(embeddingLength === undefined\n      ? {}\n      : embeddingLength === 0\n        ? { result_count: 0 }\n        : firstEmbeddingIsArray === true\n          ? { result_count: embeddingLength }\n          : firstEmbeddingIsArray === false\n            ? { result_count: 1 }\n            : {}),\n    ...(arrayLength(ranking) === undefined\n      ? {}\n      : { result_count: arrayLength(ranking) }),\n  };\n}\n\nexport const AiSdkPlugin = plugin({\n  id: \"ai-sdk\",\n  events: { operations: AiOperation },\n  instrument({ events, begin }) {\n    const start = (\n      value: unknown,\n      currentOperation: z.infer<typeof Operation>,\n    ) => {\n      const inputValue = property(value, \"value\");\n      const documents = property(value, \"documents\");\n      const model = property(value, \"model\");\n      const output = property(value, \"output\");\n      const tools = property(value, \"tools\");\n      const timeout = property(value, \"timeout\");\n      const timeoutOptions = record(timeout);\n      const effort = reasoningEffort(property(value, \"reasoning\"));\n      const stopSequences = property(value, \"stopSequences\");\n      const currentProvider = provider(\n        property(value, \"provider\") ?? property(model, \"provider\"),\n      );\n      const currentModelFamily = modelFamily(\n        property(value, \"modelId\") ?? property(model, \"modelId\"),\n      );\n      const currentOutputKind = outputKind(output, currentOperation);\n      const currentToolCount =\n        objectKeyCount(tools) ?? (tools === undefined ? 0 : undefined);\n      const stopSequenceCount = arrayLength(stopSequences);\n      const itemCount =\n        currentOperation === \"embed\"\n          ? 1\n          : currentOperation === \"embed_many\"\n            ? arrayLength(inputValue)\n            : currentOperation === \"rerank\"\n              ? arrayLength(documents)\n              : undefined;\n      return begin(\n        events.operations,\n        {\n          operation: currentOperation,\n          ...(currentProvider ? { provider: currentProvider } : {}),\n          ...(currentModelFamily ? { model_family: currentModelFamily } : {}),\n          ...optionalCount(\n            \"max_retries\",\n            property(value, \"maxRetries\"),\n            MAX_RETRIES,\n          ),\n          ...optionalIntegerBucket(\n            \"max_output_tokens\",\n            property(value, \"maxOutputTokens\"),\n            OUTPUT_TOKEN_BUCKETS,\n          ),\n          ...optionalDecimal(\n            \"temperature\",\n            property(value, \"temperature\"),\n            0,\n            2,\n          ),\n          ...optionalDecimal(\"top_p\", property(value, \"topP\"), 0, 1),\n          ...optionalIntegerBucket(\n            \"top_k\",\n            property(value, \"topK\"),\n            TOP_K_BUCKETS,\n          ),\n          ...optionalDecimal(\n            \"presence_penalty\",\n            property(value, \"presencePenalty\"),\n            -2,\n            2,\n          ),\n          ...optionalDecimal(\n            \"frequency_penalty\",\n            property(value, \"frequencyPenalty\"),\n            -2,\n            2,\n          ),\n          ...(typeof property(value, \"seed\") === \"number\" &&\n          Number.isSafeInteger(property(value, \"seed\"))\n            ? { seeded: true }\n            : {}),\n          ...(effort ? { reasoning_effort: effort } : {}),\n          ...(stopSequenceCount === undefined\n            ? {}\n            : { stop_sequence_count: stopSequenceCount }),\n          ...(currentOutputKind ? { output_kind: currentOutputKind } : {}),\n          ...(currentToolCount === undefined\n            ? {}\n            : { tool_count: currentToolCount }),\n          ...optionalTimeout(\n            \"timeout_ms\",\n            typeof timeout === \"number\"\n              ? timeout\n              : property(timeoutOptions, \"totalMs\"),\n          ),\n          ...optionalTimeout(\n            \"step_timeout_ms\",\n            property(timeoutOptions, \"stepMs\"),\n          ),\n          ...optionalTimeout(\n            \"chunk_timeout_ms\",\n            property(timeoutOptions, \"chunkMs\"),\n          ),\n          ...optionalTimeout(\n            \"tool_timeout_ms\",\n            property(timeoutOptions, \"toolMs\"),\n          ),\n          ...(itemCount === undefined ? {} : { item_count: itemCount }),\n          ...optionalCount(\n            \"requested_result_count\",\n            property(value, \"topN\"),\n            MAX_AGGREGATE_COUNT,\n          ),\n        },\n        { retainParent: true },\n      );\n    };\n    type Handle = ReturnType<typeof start>;\n    const active = new Map<\n      string,\n      { handle: Handle; timeout: ReturnType<typeof setTimeout> }\n    >();\n\n    const take = (value: unknown): Handle | undefined => {\n      const id = callId(value);\n      if (!id) return;\n      const entry = active.get(id);\n      if (!entry) return;\n      active.delete(id);\n      clearTimeout(entry.timeout);\n      return entry.handle;\n    };\n\n    const integration: Telemetry = {\n      onStart(value) {\n        const id = callId(value);\n        if (!id) return;\n        const currentOperation = operation(property(value, \"operationId\"));\n        if (currentOperation === \"other\") return;\n        const previous = active.get(id);\n        if (previous) return;\n        while (!active.has(id) && active.size >= 1_024) {\n          const oldestId = active.keys().next().value as string | undefined;\n          if (!oldestId) break;\n          const oldest = active.get(oldestId);\n          active.delete(oldestId);\n          if (oldest) {\n            clearTimeout(oldest.timeout);\n            oldest.handle.cancel(\"ai_overflow\");\n          }\n        }\n        const handle = start(value, currentOperation);\n        const timeout = setTimeout(() => {\n          active.delete(id);\n          handle.cancel(\"ai_timeout\");\n        }, 5 * 60_000);\n        timeout.unref?.();\n        active.set(id, { handle, timeout });\n      },\n      onEnd(value) {\n        const handle = take(value);\n        if (!handle) return;\n        const projected = endProjection(value);\n        handle.end(projected, {\n          success: projected.finish_reason !== \"error\",\n        });\n      },\n      onAbort(value) {\n        take(value)?.cancel(\"ai_aborted\");\n      },\n      onError(value) {\n        take(value)?.fail(property(value, \"error\"));\n      },\n    };\n\n    type StreamTextFunction = typeof streamText;\n    type Instrumenter = (() => Telemetry) & {\n      streamText<F extends StreamTextFunction>(implementation: F): F;\n    };\n    const streamTextWrappers = new WeakMap<\n      StreamTextFunction,\n      StreamTextFunction\n    >();\n    const createAiSdkTelemetry = (() => integration) as Instrumenter;\n    createAiSdkTelemetry.streamText = <F extends StreamTextFunction>(\n      implementation: F,\n    ): F => {\n      const existingWrapper = streamTextWrappers.get(implementation);\n      if (existingWrapper) return existingWrapper as F;\n      const wrapped = function (this: unknown, ...args: unknown[]): unknown {\n        const supplied = record(args[0]);\n        if (!supplied) {\n          return Reflect.apply(\n            implementation as (...values: unknown[]) => unknown,\n            this,\n            args,\n          );\n        }\n        const telemetry =\n          record(property(supplied, \"telemetry\")) ??\n          record(property(supplied, \"experimental_telemetry\"));\n        const configuredIntegrations = property(telemetry, \"integrations\");\n        const selectedIntegrations =\n          configuredIntegrations === undefined\n            ? undefined\n            : Array.isArray(configuredIntegrations)\n              ? configuredIntegrations\n              : [configuredIntegrations];\n        if (\n          property(telemetry, \"isEnabled\") === false ||\n          (selectedIntegrations !== undefined &&\n            !selectedIntegrations.includes(integration))\n        ) {\n          return Reflect.apply(\n            implementation as (...values: unknown[]) => unknown,\n            this,\n            args,\n          );\n        }\n        const handle = start(supplied, \"stream_text\");\n        const existingEnd =\n          typeof supplied.onEnd === \"function\"\n            ? supplied.onEnd\n            : typeof supplied.onFinish === \"function\"\n              ? supplied.onFinish\n              : undefined;\n        const existingAbort =\n          typeof supplied.onAbort === \"function\" ? supplied.onAbort : undefined;\n        const existingError =\n          typeof supplied.onError === \"function\" ? supplied.onError : undefined;\n        const invoke = (callback: unknown, value: unknown): unknown =>\n          Reflect.apply(\n            callback as (...values: unknown[]) => unknown,\n            undefined,\n            [value],\n          );\n        const options = {\n          ...supplied,\n          onEnd: async (value: unknown) => {\n            try {\n              const result = existingEnd\n                ? await invoke(existingEnd, value)\n                : undefined;\n              const projected = endProjection(value);\n              handle.end(projected, {\n                success: projected.finish_reason !== \"error\",\n              });\n              return result;\n            } catch (error) {\n              handle.fail(error);\n              throw error;\n            }\n          },\n          onAbort: async (value: unknown) => {\n            try {\n              const result = existingAbort\n                ? await invoke(existingAbort, value)\n                : undefined;\n              handle.cancel(\"ai_aborted\");\n              return result;\n            } catch (error) {\n              handle.fail(error);\n              throw error;\n            }\n          },\n          onError: async (value: unknown) => {\n            try {\n              const result = existingError\n                ? await invoke(existingError, value)\n                : console.error(property(value, \"error\"));\n              handle.fail(property(value, \"error\"));\n              return result;\n            } catch (error) {\n              handle.fail(error);\n              throw error;\n            }\n          },\n        };\n        try {\n          return Reflect.apply(\n            implementation as (...values: unknown[]) => unknown,\n            this,\n            [options, ...args.slice(1)],\n          );\n        } catch (error) {\n          handle.fail(error);\n          throw error;\n        }\n      };\n      const typedWrapper = wrapped as F;\n      streamTextWrappers.set(implementation, typedWrapper);\n      streamTextWrappers.set(typedWrapper, typedWrapper);\n      return typedWrapper;\n    };\n    return createAiSdkTelemetry;\n  },\n});\n"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
       "name": "plugin-resend",
       "title": "Resend Plugin",
       "description": "Resend contributor Plugin with privacy-safe email send observations.",
       "type": "registry:lib",
       "dependencies": [
         "zod",
-        "@useamplio/amplio@^0.1.0-alpha.16",
+        "@useamplio/amplio@^0.1.0-alpha.17",
         "resend@^4.0.0"
       ],
       "meta": {
@@ -518,7 +625,7 @@
           "kind": "plugin",
           "role": "contributor",
           "recipeVersion": "1.0.0",
-          "coreRange": ">=0.1.0-alpha.16 <1",
+          "coreRange": ">=0.1.0-alpha.17 <1",
           "providerRanges": {
             "resend": ">=4 <5"
           },
@@ -594,7 +701,7 @@
       "description": "Init-only Amplio runtime configuration.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "registryDependencies": [
         "@useamplio/sink-console"
@@ -615,7 +722,7 @@
       "description": "Console sink that prints Event records as JSON.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "files": [
         {
@@ -633,7 +740,7 @@
       "description": "JSONL sink for local Event verification.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "files": [
         {
@@ -651,7 +758,7 @@
       "description": "OTLP sink that exports Event records over OpenTelemetry.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "files": [
         {
@@ -669,7 +776,7 @@
       "description": "Resource enricher for bounded deployment name, version, and region attributes.",
       "type": "registry:lib",
       "dependencies": [
-        "@useamplio/amplio@^0.1.0-alpha.16"
+        "@useamplio/amplio@^0.1.0-alpha.17"
       ],
       "files": [
         {

@@ -238,6 +238,7 @@ interface PluginTools<Events extends EventTree> {
   begin<E extends DurationEventFrom<Events>>(
     event: E,
     input?: DeepPartial<EventInput<E>>,
+    options?: { readonly retainParent?: boolean },
   ): ObservationHandle<EventInput<E>>;
 }
 ```
@@ -260,6 +261,12 @@ interface ObservationHandle<Node> {
 
 `end`, `fail`, and `cancel` settle at most once. Cancellation records a stable non-sensitive code;
 it never cancels or throws into provider code.
+
+`retainParent: true` is an advanced lifecycle option for work that begins synchronously inside a
+root but completes after ordinary code has returned, such as a lazily consumed response stream. It
+MUST NOT delay or replace the application return. It defers only Event delivery until the retained
+observation settles, and the observation deadline remains mandatory and finite. The default is
+`false`; ordinary pending children are still omitted when the root closes.
 
 Outside an active declaring Event, Plugin calls execute provider code normally and perform no
 semantic write. Development diagnostics distinguish no active root, undeclared Event, closed root,

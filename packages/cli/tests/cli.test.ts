@@ -52,7 +52,7 @@ describe("vNext CLI commands", () => {
     "aborts init with zero writes when %s is incompatible",
     async (dependencyName, incompatibleRange, error) => {
       const cwd = await makeProject({
-        "@useamplio/amplio": "0.1.0-alpha.16",
+        "@useamplio/amplio": "0.1.0-alpha.17",
         zod: "^3.24.2",
         [dependencyName]: incompatibleRange,
       });
@@ -88,7 +88,7 @@ describe("vNext CLI commands", () => {
 
   it("initializes only runtime, Event, sink, and supported detected Plugin paths", async () => {
     const cwd = await makeProject({
-      "@useamplio/amplio": "0.1.0-alpha.16",
+      "@useamplio/amplio": "0.1.0-alpha.17",
       hono: "^4.7.4",
       zod: "^3.24.2",
     });

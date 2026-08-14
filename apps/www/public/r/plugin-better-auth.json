@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "dependencies": [
     "zod",
-    "@useamplio/amplio@^0.1.0-alpha.16",
+    "@useamplio/amplio@^0.1.0-alpha.17",
     "better-auth@^1.2.1"
   ],
   "meta": {
@@ -14,14 +14,14 @@
       "kind": "plugin",
       "role": "contributor",
       "recipeVersion": "1.0.0",
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": {
         "better-auth": ">=1.2.1 <2"
       },
       "testedProviderVersions": {
         "better-auth": {
           "minimum": "1.2.1",
-          "latest": "1.6.28"
+          "latest": "1.6.29"
         }
       },
       "events": [

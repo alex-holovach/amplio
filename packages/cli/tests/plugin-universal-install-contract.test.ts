@@ -57,7 +57,7 @@ async function makeCompatibleProject(item: RegistryItem): Promise<string> {
         private: true,
         type: "module",
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           [provider]: versions.minimum,
           zod: "^3.24.2",
         },

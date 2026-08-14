@@ -5,7 +5,7 @@
   "description": "OTLP sink that exports Event records over OpenTelemetry.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.16"
+    "@useamplio/amplio@^0.1.0-alpha.17"
   ],
   "files": [
     {

@@ -1,6 +1,6 @@
 {
   "name": "@useamplio/amplio",
-  "version": "0.1.0-alpha.16",
+  "version": "0.1.0-alpha.17",
   "description": "Composable semantic runtime for open-code wide events",
   "type": "module",
   "license": "MIT",

@@ -19,12 +19,14 @@ type PluginEvent<Events extends EventTree> = Extract<
   EventFromTree<Events>,
   EventDefinition
 >;
-type EventByTiming<E, Timing extends "instant" | "duration"> =
-  E extends EventDefinition
-    ? E["timing"] extends Timing
-      ? E
-      : never
-    : never;
+type EventByTiming<
+  E,
+  Timing extends "instant" | "duration",
+> = E extends EventDefinition
+  ? E["timing"] extends Timing
+    ? E
+    : never
+  : never;
 type InstantPluginEvent<Events extends EventTree> = EventByTiming<
   PluginEvent<Events>,
   "instant"
@@ -48,6 +50,7 @@ export interface PluginTools<Events extends EventTree> {
   begin<E extends DurationPluginEvent<Events>>(
     definition: E,
     input?: DeepPartial<EventInput<E>>,
+    options?: { readonly retainParent?: boolean },
   ): ObservationHandle<EventInput<E>>;
 }
 
@@ -85,7 +88,9 @@ export function plugin<
     begin: beginNestedEvent,
   });
   if (typeof instrumenter !== "function") {
-    throw new Error(`plugin "${options.id}" instrument() must return a function`);
+    throw new Error(
+      `plugin "${options.id}" instrument() must return a function`,
+    );
   }
 
   Object.defineProperty(instrumenter, "events", {

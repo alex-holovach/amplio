@@ -38,7 +38,7 @@ if printf '%s' "$*" | grep -q '@useamplio/cli'; then
   printf '{"lockfileVersion":3,"phase":"cli"}\n' > package-lock.json
   exit 31
 fi
-node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("package.json","utf8"));p.dependencies={...p.dependencies,"@useamplio/amplio":"^0.1.0-alpha.16",zod:"^3.24.0"};fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\\n")'
+node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("package.json","utf8"));p.dependencies={...p.dependencies,"@useamplio/amplio":"^0.1.0-alpha.17",zod:"^3.24.0"};fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\\n")'
 printf '{"lockfileVersion":3,"phase":"runtime"}\n' > package-lock.json
 `,
     );
@@ -93,9 +93,9 @@ const fs = require("fs");
 const args = process.argv[2];
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 if (args.includes("@useamplio/cli")) {
-  pkg.devDependencies = { ...pkg.devDependencies, "@useamplio/cli": "0.1.0-alpha.16" };
+  pkg.devDependencies = { ...pkg.devDependencies, "@useamplio/cli": "0.1.0-alpha.17" };
 } else {
-  pkg.dependencies = { ...pkg.dependencies, "@useamplio/amplio": "^0.1.0-alpha.16", zod: "^3.24.0" };
+  pkg.dependencies = { ...pkg.dependencies, "@useamplio/amplio": "^0.1.0-alpha.17", zod: "^3.24.0" };
 }
 fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\\n");
 fs.writeFileSync("../../pnpm-lock.yaml", "lockfileVersion: '9.0'\\nmarker: changed\\n");

@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "dependencies": [
     "express@^4.21.2",
-    "@useamplio/amplio@^0.1.0-alpha.16"
+    "@useamplio/amplio@^0.1.0-alpha.17"
   ],
   "devDependencies": [
     "@types/express@^5.0.0"
@@ -20,7 +20,7 @@
       "kind": "plugin",
       "role": "boundary",
       "recipeVersion": "1.0.0",
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": {
         "express": ">=4 <6"
       },

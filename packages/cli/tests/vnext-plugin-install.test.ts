@@ -44,7 +44,7 @@ const makeHonoProject = async (): Promise<string> => {
         private: true,
         type: "module",
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           hono: "^4.7.4",
           resend: "^4.0.0",
           zod: "^3.24.2",
@@ -194,7 +194,7 @@ export const resend = new Resend(process.env.RESEND_API_KEY);
         /^\.amplio\/bases\/sha256-[a-f0-9]{64}\.json$/,
       ),
       stateArchive: ".amplio/installs/resend.json",
-      coreRange: ">=0.1.0-alpha.16 <1",
+      coreRange: ">=0.1.0-alpha.17 <1",
       peers: { resend: ">=4 <5" },
       events: [{ id: "resend.send", version: 1 }],
       privacyDigest: expect.stringMatching(/^sha256-[a-f0-9]{64}$/),
@@ -269,7 +269,7 @@ export const resend = new Resend(process.env.RESEND_API_KEY);
           name: "cold-resend-app",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             resend: "^4.0.0",
           },
@@ -1030,7 +1030,7 @@ export const resend = new Resend(apiKey());
     await expect(
       runAddPlugin("resend", { cwd, event: "http.request" }),
     ).rejects.toThrow(
-      'Core dependency "@useamplio/amplio" range "^1.0.0" is outside supported range ">=0.1.0-alpha.16 <1"',
+      'Core dependency "@useamplio/amplio" range "^1.0.0" is outside supported range ">=0.1.0-alpha.17 <1"',
     );
     await expect(
       Promise.all(tracked.map((file) => readFile(file, "utf8"))),
@@ -1067,7 +1067,7 @@ export const resend = new Resend(apiKey());
       await writeFile(
         path.join(installedCoreDirectory, "package.json"),
         `${JSON.stringify(
-          { name: "@useamplio/amplio", version: "0.1.0-alpha.16" },
+          { name: "@useamplio/amplio", version: "0.1.0-alpha.17" },
           null,
           2,
         )}\n`,
@@ -1137,7 +1137,7 @@ export const resend = new Resend(apiKey());
       });
       if (installedVersion) {
         await expect(install).rejects.toThrow(
-          `Core dependency "@useamplio/amplio" spec "workspace:*" resolves to installed version "${installedVersion}", outside supported range ">=0.1.0-alpha.16 <1"`,
+          `Core dependency "@useamplio/amplio" spec "workspace:*" resolves to installed version "${installedVersion}", outside supported range ">=0.1.0-alpha.17 <1"`,
         );
       } else {
         await expect(install).rejects.toThrow(
@@ -1624,7 +1624,7 @@ export const adminProcedure = t.procedure;
           name: "next-app",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             next: "^15.2.4",
             resend: "^4.0.0",
             zod: "^3.24.2",
@@ -1702,7 +1702,7 @@ export const adminProcedure = t.procedure;
           name: "next-adopted-app",
           private: true,
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             next: "^15.2.4",
             zod: "^3.24.2",
           },
@@ -1830,7 +1830,7 @@ export const GET = handler;
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             express: "^4.21.2",
             zod: "^3.24.2",
           },
@@ -1939,7 +1939,7 @@ export { app };
             private: true,
             type: "module",
             dependencies: {
-              "@useamplio/amplio": "0.1.0-alpha.16",
+              "@useamplio/amplio": "0.1.0-alpha.17",
               [provider]: version,
               zod: "^3.24.2",
             },

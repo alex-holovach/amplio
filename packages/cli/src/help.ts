@@ -62,6 +62,7 @@ Options:
 Examples:
   amplio add event order.placed
   amplio add plugin resend --event http.request
+  amplio add plugin ai-sdk --event http.request
   amplio add plugin resend --event http.request --target src/email.ts
   amplio add plugin next --target app/api/health/route.ts
   amplio add sink otlp --dry-run

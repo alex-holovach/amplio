@@ -419,6 +419,7 @@ interface EventFrame {
   >;
   instrumentationFailed: boolean;
   closed: boolean;
+  deferredDelivery?: { success: boolean; error?: unknown };
   readonly startedAt: number;
 }
 
@@ -428,6 +429,7 @@ interface EventAttachment {
   readonly parent: EventFrame;
   readonly target: EventTarget;
   readonly accepted: boolean;
+  readonly retainParent: boolean;
   readonly index?: number;
   settled: boolean;
 }
@@ -641,9 +643,16 @@ const addDiagnostic = (
 const reserveAttachment = (
   parent: EventFrame,
   target: EventTarget,
+  retainParent = false,
 ): EventAttachment => {
   if (parent.closed || parent.shadow) {
-    return { parent, target, accepted: false, settled: false };
+    return {
+      parent,
+      target,
+      accepted: false,
+      retainParent: false,
+      settled: false,
+    };
   }
   const count = parent.seen.get(target.definition) ?? 0;
   parent.seen.set(target.definition, count + 1);
@@ -658,12 +667,19 @@ const reserveAttachment = (
           target.definition,
         );
       }
-      return { parent, target, accepted: false, settled: false };
+      return {
+        parent,
+        target,
+        accepted: false,
+        retainParent: false,
+        settled: false,
+      };
     }
     const attachment: EventAttachment = {
       parent,
       target,
       accepted: true,
+      retainParent,
       settled: false,
     };
     parent.pending.add(attachment);
@@ -681,7 +697,13 @@ const reserveAttachment = (
       max,
       dropped: (current?.dropped ?? 0) + 1,
     });
-    return { parent, target, accepted: false, settled: false };
+    return {
+      parent,
+      target,
+      accepted: false,
+      retainParent: false,
+      settled: false,
+    };
   }
 
   const index = values.length;
@@ -691,6 +713,7 @@ const reserveAttachment = (
     parent,
     target,
     accepted: true,
+    retainParent,
     index,
     settled: false,
   };
@@ -701,6 +724,7 @@ const reserveAttachment = (
 const closeFrame = (frame: EventFrame): void => {
   if (frame.closed) return;
   frame.closed = true;
+  frame.deferredDelivery = undefined;
   if (frame.ownsGeneration) releaseSinkGeneration(frame.config);
   for (const attachment of frame.pending) {
     const path = attachmentPath(attachment);
@@ -1223,24 +1247,34 @@ const attachFinalized = (
     });
     return;
   }
-  if (!value) {
-    addDiagnostic(
-      parent,
-      "nested_event_dropped",
-      attachmentPath(attachment),
-      target.definition,
-    );
-    return;
-  }
   try {
-    const maxOccurrenceBytes = eventLimit(
-      parent,
-      "maxOccurrenceBytes",
-      DEFAULT_MAX_OCCURRENCE_BYTES,
-    );
-    if (
-      Buffer.byteLength(JSON.stringify(value), "utf8") > maxOccurrenceBytes
-    ) {
+    if (!value) {
+      addDiagnostic(
+        parent,
+        "nested_event_dropped",
+        attachmentPath(attachment),
+        target.definition,
+      );
+      return;
+    }
+    try {
+      const maxOccurrenceBytes = eventLimit(
+        parent,
+        "maxOccurrenceBytes",
+        DEFAULT_MAX_OCCURRENCE_BYTES,
+      );
+      if (
+        Buffer.byteLength(JSON.stringify(value), "utf8") > maxOccurrenceBytes
+      ) {
+        addDiagnostic(
+          parent,
+          "occurrence_oversize",
+          attachmentPath(attachment),
+          target.definition,
+        );
+        return;
+      }
+    } catch {
       addDiagnostic(
         parent,
         "occurrence_oversize",
@@ -1249,23 +1283,17 @@ const attachFinalized = (
       );
       return;
     }
-  } catch {
-    addDiagnostic(
-      parent,
-      "occurrence_oversize",
-      attachmentPath(attachment),
-      target.definition,
-    );
-    return;
-  }
-  const attached = hoistChildMetadata(attachment, value);
-  if (attachment.index === undefined) {
-    setAtPath(parent.children, target.path, attached);
-    return;
-  }
-  const values = getAtPath(parent.children, target.path);
-  if (Array.isArray(values)) {
-    values[attachment.index] = attached;
+    const attached = hoistChildMetadata(attachment, value);
+    if (attachment.index === undefined) {
+      setAtPath(parent.children, target.path, attached);
+      return;
+    }
+    const values = getAtPath(parent.children, target.path);
+    if (Array.isArray(values)) {
+      values[attachment.index] = attached;
+    }
+  } finally {
+    maybeDeliverDeferred(parent);
   }
 };
 
@@ -1292,6 +1320,17 @@ const expireAttachment = (
   attachment: EventAttachment,
 ): void => {
   if (attachment.settled) return;
+  if (attachment.accepted && attachment.retainParent) {
+    const timeout = Object.assign(new Error("Event observation timed out"), {
+      [TrustedErrorCode]: "event_timeout",
+    });
+    try {
+      attachFinalized(attachment, finalizeFrame(occurrence, false, timeout));
+    } catch {
+      attachFinalized(attachment, undefined);
+    }
+    return;
+  }
   attachment.settled = true;
   attachment.parent.pending.delete(attachment);
   closeFrame(occurrence);
@@ -1303,6 +1342,7 @@ const expireAttachment = (
       attachment.target.definition,
     );
   }
+  maybeDeliverDeferred(attachment.parent);
 };
 
 const sameSerializedValue = (left: unknown, right: unknown): boolean => {
@@ -1768,11 +1808,24 @@ const nullPrototypeClone = <Value>(value: Value): Value => {
   return output as Value;
 };
 
-const deliverFrame = (
+function maybeDeliverDeferred(frame: EventFrame): void {
+  const deferred = frame.deferredDelivery;
+  if (
+    !deferred ||
+    frame.closed ||
+    [...frame.pending].some((attachment) => attachment.retainParent)
+  ) {
+    return;
+  }
+  frame.deferredDelivery = undefined;
+  deliverFrame(frame, deferred.success, deferred.error);
+}
+
+function deliverFrame(
   frame: EventFrame,
   success: boolean,
   error?: unknown,
-): void => {
+): void {
   const config = frame.config;
   if (!config.service || !config.env || config.sinks.length === 0) {
     closeFrame(frame);
@@ -1781,6 +1834,11 @@ const deliverFrame = (
       stage: "configuration",
       event: frame.definition.id,
     });
+    return;
+  }
+
+  if ([...frame.pending].some((attachment) => attachment.retainParent)) {
+    frame.deferredDelivery ??= { success, error };
     return;
   }
 
@@ -1941,7 +1999,7 @@ const deliverFrame = (
         }),
     });
   }
-};
+}
 
 const reportInactiveObservation = (
   definition: EventDefinition,
@@ -2138,6 +2196,7 @@ const inertObservationHandle = <
 export function beginNestedEvent<E extends EventDefinition>(
   definition: E,
   input?: DeepPartial<EventInput<E>>,
+  options?: { readonly retainParent?: boolean },
 ): ObservationHandle<EventInput<E>> {
   if (definition.timing !== "duration") {
     return inertObservationHandle<EventInput<E>>();
@@ -2149,7 +2208,11 @@ export function beginNestedEvent<E extends EventDefinition>(
     return inertObservationHandle<EventInput<E>>();
   }
 
-  const attachment = reserveAttachment(parent, target);
+  const attachment = reserveAttachment(
+    parent,
+    target,
+    options?.retainParent === true,
+  );
   const occurrence = makeFrame(
     definition,
     parent.rootDefinition,

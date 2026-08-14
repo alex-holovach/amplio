@@ -113,6 +113,34 @@ const RequestWithPayment = event({
   tree: { payment: PaymentPlugin.events },
 });
 
+const RetainedCall = event({
+  id: "provider.retained_call",
+  version: 1,
+  schema: z.object({ operation: z.string() }),
+  timing: "duration",
+  cardinality: { many: { max: 4 } },
+});
+
+const RetainedPlugin = plugin({
+  id: "retained",
+  events: { calls: RetainedCall },
+  instrument({ events, begin }) {
+    return () =>
+      (begin as unknown as (...args: unknown[]) => ReturnType<typeof begin>)(
+        events.calls,
+        { operation: "stream" },
+        { retainParent: true },
+      );
+  },
+});
+
+const RequestWithRetainedCall = event({
+  id: "http.request_with_retained_call",
+  version: 1,
+  schema: z.object({ request_id: z.string() }),
+  tree: { provider: RetainedPlugin.events },
+});
+
 const PlainRequest = event({
   id: "http.plain_request",
   version: 1,
@@ -525,6 +553,79 @@ describe("Plugin tools contract", () => {
         ],
       },
     });
+  });
+
+  it("begin() can retain parent delivery without delaying the application return", () => {
+    const delivered: SinkRecord[] = [];
+    init({
+      service: "stream-api",
+      env: "test",
+      sinks: [(record) => delivered.push(record)],
+    });
+
+    let observation!: ReturnType<typeof RetainedPlugin>;
+    const applicationResult = { stream: "identity" };
+    const request = RequestWithRetainedCall.handle(
+      () => {
+        observation = RetainedPlugin();
+        return applicationResult;
+      },
+      { input: () => ({ request_id: "req_retained" }) },
+    );
+
+    expect(request()).toBe(applicationResult);
+    expect(delivered).toEqual([]);
+
+    observation.end();
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]).toMatchObject({
+      request_id: "req_retained",
+      provider: {
+        calls: [{ operation: "stream", success: true }],
+      },
+      success: true,
+    });
+  });
+
+  it("bounds retained parent delivery by the nested Event deadline", () => {
+    vi.useFakeTimers();
+    try {
+      const delivered: SinkRecord[] = [];
+      init({
+        service: "stream-api",
+        env: "test",
+        sinks: [(record) => delivered.push(record)],
+        eventRuntime: { limits: { maxEventDurationMs: 25 } },
+      });
+
+      const request = RequestWithRetainedCall.handle(
+        () => {
+          RetainedPlugin();
+          return { stream: "never-settled" };
+        },
+        { input: () => ({ request_id: "req_retained_timeout" }) },
+      );
+
+      expect(request()).toEqual({ stream: "never-settled" });
+      expect(delivered).toEqual([]);
+      vi.runAllTimers();
+      expect(delivered).toHaveLength(1);
+      expect(delivered[0]).toMatchObject({
+        request_id: "req_retained_timeout",
+        provider: {
+          calls: [
+            {
+              operation: "stream",
+              success: false,
+              error: { type: "Error", code: "event_timeout" },
+            },
+          ],
+        },
+        success: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("all tools are application-safe and inert outside a declaring root", () => {

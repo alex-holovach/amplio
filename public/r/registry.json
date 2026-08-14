@@ -46,6 +46,12 @@
       "description": "Better Auth contributor Plugin using native after hooks for privacy-safe sign-in and sign-up semantics."
     },
     {
+      "name": "plugin-ai-sdk",
+      "type": "registry:lib",
+      "title": "AI SDK Plugin",
+      "description": "AI SDK contributor Plugin using native telemetry for promise operations and an exact-result streamText wrapper for streamed completion."
+    },
+    {
       "name": "plugin-resend",
       "type": "registry:lib",
       "title": "Resend Plugin",

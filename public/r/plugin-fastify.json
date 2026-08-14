@@ -6,7 +6,7 @@
   "type": "registry:lib",
   "dependencies": [
     "fastify@^5.2.1",
-    "@useamplio/amplio@^0.1.0-alpha.16"
+    "@useamplio/amplio@^0.1.0-alpha.17"
   ],
   "registryDependencies": [
     "@useamplio/event-http-request",
@@ -17,7 +17,7 @@
       "kind": "plugin",
       "role": "boundary",
       "recipeVersion": "1.0.0",
-      "coreRange": ">=0.1.0-alpha.16 <1",
+      "coreRange": ">=0.1.0-alpha.17 <1",
       "providerRanges": {
         "fastify": ">=5 <6"
       },

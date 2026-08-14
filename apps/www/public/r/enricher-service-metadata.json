@@ -5,7 +5,7 @@
   "description": "Resource enricher for bounded deployment name, version, and region attributes.",
   "type": "registry:lib",
   "dependencies": [
-    "@useamplio/amplio@^0.1.0-alpha.16"
+    "@useamplio/amplio@^0.1.0-alpha.17"
   ],
   "files": [
     {

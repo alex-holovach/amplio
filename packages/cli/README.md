@@ -63,12 +63,17 @@ The selected file must still contain exactly one authenticated supported seam; `
 guess between multiple seams in the same file or weaken provider binding checks. An active Plugin
 cannot be silently retargeted—remove and reinstall it explicitly.
 
-Hono, Fastify, constructor, Better Auth, and tRPC recipes can be wired into the selected file.
-Next.js and Express remain explicit: first copy with `--source-only`, attach the documented wrapper
-by hand, then rerun active installation with `--target`. Amplio verifies that exact native route and
-records its wiring as customer-owned without rewriting it. `doctor --strict` re-verifies adopted
-wiring. Removal never rewrites customer-owned code and refuses to delete Plugin source while a live
-import or reference remains; detach it, then retry removal.
+Hono, Fastify, constructor, Better Auth, tRPC, and AI SDK telemetry recipes use authenticated native
+seams. The AI SDK recipe registers once in `telemetry/runtime.ts`; promise operations need no call
+rewrite, while streamed completion uses the recipe's explicit exact-result `streamText` wrapper.
+Its Event includes normalized provider/model categories, bounded generation settings, usage and
+aggregate lifecycle metrics; it never copies prompts, generated content, tool payloads, embeddings,
+raw provider/model IDs, headers, metadata, or raw errors.
+Next.js and Express remain explicit: first copy with `--source-only`, attach the
+documented wrapper by hand, then rerun active installation with `--target`. Amplio verifies that
+exact native route and records its wiring as customer-owned without rewriting it. `doctor --strict`
+re-verifies adopted wiring. Removal never rewrites customer-owned code and refuses to delete Plugin
+source while a live import or reference remains; detach it, then retry removal.
 
 Commit `telemetry/`, `amplio.json`, and `.amplio/` together. The lifecycle cache contains source
 snapshots, never runtime Event data, and is required for reproducible update and removal on another

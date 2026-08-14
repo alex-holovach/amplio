@@ -18,7 +18,7 @@ describe("operational recipe activation", () => {
       `${JSON.stringify(
         {
           name: "sink-app",
-          dependencies: { "@useamplio/amplio": "0.1.0-alpha.16" },
+          dependencies: { "@useamplio/amplio": "0.1.0-alpha.17" },
         },
         null,
         2,
@@ -50,7 +50,7 @@ describe("operational recipe activation", () => {
       `${JSON.stringify(
         {
           name: "enricher-app",
-          dependencies: { "@useamplio/amplio": "0.1.0-alpha.16" },
+          dependencies: { "@useamplio/amplio": "0.1.0-alpha.17" },
         },
         null,
         2,

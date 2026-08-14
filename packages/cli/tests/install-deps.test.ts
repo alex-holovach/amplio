@@ -14,7 +14,7 @@ describe("ensureRuntimeDependencies", () => {
     });
     expect(result).toBe("manual");
     expect(log.mock.calls.flat().join("\n")).toContain(
-      "pnpm add @useamplio/amplio@^0.1.0-alpha.16 zod@^3.24.0",
+      "pnpm add @useamplio/amplio@^0.1.0-alpha.17 zod@^3.24.0",
     );
     log.mockRestore();
   });
@@ -26,7 +26,7 @@ describe("ensureRuntimeDependencies", () => {
       JSON.stringify({
         name: "x",
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
         },
       }),
@@ -52,7 +52,7 @@ describe("ensureRuntimeDependencies", () => {
     });
     expect(result).toBe("skipped");
     expect(log.mock.calls.flat().join("\n")).toContain(
-      "npm install @useamplio/amplio@^0.1.0-alpha.16 zod@^3.24.0 --no-audit --no-fund",
+      "npm install @useamplio/amplio@^0.1.0-alpha.17 zod@^3.24.0 --no-audit --no-fund",
     );
     log.mockRestore();
     // package.json unchanged
@@ -69,7 +69,7 @@ describe("ensureRuntimeDependencies", () => {
       JSON.stringify({
         name: "x",
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
         },
       }),
@@ -83,7 +83,7 @@ describe("ensureRuntimeDependencies", () => {
     });
     expect(result).toBe("skipped");
     expect(log.mock.calls.flat().join("\n")).toContain(
-      "npm install -D @useamplio/cli@0.1.0-alpha.16 --no-audit --no-fund",
+      "npm install -D @useamplio/cli@0.1.0-alpha.17 --no-audit --no-fund",
     );
     log.mockRestore();
   });
@@ -95,7 +95,7 @@ describe("ensureRuntimeDependencies", () => {
       JSON.stringify({
         name: "x",
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
         },
         devDependencies: { "@useamplio/cli": "0.1.0" },
@@ -121,8 +121,8 @@ describe("ensureRuntimeDependencies", () => {
           name: "x",
           dependencies: {},
           devDependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
-            "@useamplio/cli": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
+            "@useamplio/cli": "0.1.0-alpha.17",
             zod: "^3.24.2",
           },
         },
@@ -160,11 +160,11 @@ exit 0
 
     const pkg = JSON.parse(await readFile(packagePath, "utf8"));
     expect(pkg.dependencies).toEqual({
-      "@useamplio/amplio": "0.1.0-alpha.16",
+      "@useamplio/amplio": "0.1.0-alpha.17",
       zod: "^3.24.2",
     });
     expect(pkg.devDependencies).toEqual({
-      "@useamplio/cli": "0.1.0-alpha.16",
+      "@useamplio/cli": "0.1.0-alpha.17",
     });
     expect(await readFile(installMarker, "utf8")).toBe("called\n");
   });
@@ -196,7 +196,7 @@ exit 0
       {
         name: "x",
         devDependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
         },
       },
@@ -229,7 +229,7 @@ exit 0
       {
         name: "x",
         devDependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
         },
       },
@@ -274,7 +274,7 @@ exit 23
       JSON.stringify({
         name: "x",
         dependencies: {
-          "@useamplio/amplio": "0.1.0-alpha.16",
+          "@useamplio/amplio": "0.1.0-alpha.17",
           zod: "^3.24.2",
         },
         devDependencies: { "@useamplio/cli": "0.1.0-alpha.15" },
@@ -288,7 +288,7 @@ exit 23
         withCliDevDependency: true,
       }),
     ).rejects.toThrow(
-      /CLI dependency.*alpha\.15.*outside supported range.*alpha\.16/i,
+      /CLI dependency.*alpha\.15.*outside supported range.*alpha\.17/i,
     );
   });
 
@@ -304,7 +304,7 @@ exit 23
     async (dependencyName, incompatibleRange, error) => {
       const cwd = await mkdtemp(path.join(tmpdir(), "amplio-deps-"));
       const dependencies = {
-        "@useamplio/amplio": "0.1.0-alpha.16",
+        "@useamplio/amplio": "0.1.0-alpha.17",
         zod: "^3.24.2",
         [dependencyName]: incompatibleRange,
       };
@@ -337,7 +337,7 @@ exit 23
       }),
     );
     for (const [dependencyName, version] of [
-      ["@useamplio/amplio", "0.1.0-alpha.16"],
+      ["@useamplio/amplio", "0.1.0-alpha.17"],
       ["zod", "4.1.0"],
     ] as const) {
       const packageDirectory = path.join(cwd, "node_modules", dependencyName);

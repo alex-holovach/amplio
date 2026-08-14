@@ -33,7 +33,7 @@ describe("vNext public CLI command", () => {
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             hono: "^4.7.4",
             resend: "^4.0.0",
             zod: "^3.24.2",
@@ -111,7 +111,7 @@ describe("vNext public CLI command", () => {
           private: true,
           type: "module",
           dependencies: {
-            "@useamplio/amplio": "0.1.0-alpha.16",
+            "@useamplio/amplio": "0.1.0-alpha.17",
             resend: "^4.0.0",
             zod: "^3.24.2",
           },
